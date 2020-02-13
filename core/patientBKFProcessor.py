@@ -137,35 +137,44 @@ class PatientProcessor:
                     bkf.addSNode(BKB_S_node(statConditionComp, statConditionTrue, 0.0, [(mutGeneComp, iNodeGeneMut)]))
                     # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=False
                     bkf.addSNode(BKB_S_node(statConditionComp, statConditionFalse, 1.0, [(mutGeneComp, iNodeGeneMut)]))
-
             self.bkfs.append(bkf)
 
     def BKFsToFile(self, outDirect):
+        allBKFHashNames = list()
         for i in range(0, len(self.bkfs)):
-            #bkf = BKB(name=pat.patientID + '_BKF')
-            assert self.bkfs[i].name.split("_")[0] == self.patients[i].patientID, "Data name mismatch"
-            self.bkfs[i].save(outDirect + self.bkfs[i].name)
+            #i matches the self.patients to self.bkfs.
+            allBKFHashNames.append(self.BKFHash(i))
+            self.bkfs[i].save(outDirect + str(self.bkfs[i].name))
+        # write all patient BKF hashs to file
+        with open(outDirect + "patientHashNames", 'w') as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+            writer.writerow(allBKFHashNames)
 
-            #form patient data
-            patientData = "Patient ID:" + self.patients[i].patientID  + "\nCancer Type:" + self.patients[i].cancerType + "\nPatient Genes:"
-            for gene in self.patients[i].mutatedGenes:
-                patientData += gene + ","
-            patientData = patientData[:len(patientData)-1]
 
-            #form clinical data
-            if self.clinicalCollected:
-                patientData += "\nAge at diagnosis:" + self.patients[i].ageDiagnos + "\nGender:" + self.patients[i].gender + "\nSurvival time:" + self.patients[i].survivalTime
+    def BKFHash(self, bkfPatientIndex):
+        patientName = list()
+        #patientID
+        patientName.append(("Patient_ID",self.patients[bkfPatientIndex].patientID))
+        #patient Cancer type
+        patientName.append(("Cancer_Type",self.patients[bkfPatientIndex].cancerType))
+        #patient mutated Genes
+        patientName.append(("Patient_Genes",((gene) for gene in self.patients[bkfPatientIndex].mutatedGenes)))
+        #patient mutated Gene Reads
+        patientName.append(("Patient_Gene_Reads",((geneRead) for geneRead in self.patients[bkfPatientIndex].mutatedGeneReads)))
+        #patient age of diagnosis
+        patientName.append(("Age_of_Diagnosis",self.patients[bkfPatientIndex].ageDiagnos))
+        #patient gender
+        patientName.append(("Gender",self.patients[bkfPatientIndex].gender))
+        #patient survival time
+        patientName.append(("Survival_Time",self.patients[bkfPatientIndex].survivalTime))
 
-            with open('patientBKFs/' + self.bkfs[i].name, 'r+') as f:
-                content = f.read()
-                f.seek(0,0)
-                f.write(patientData.rstrip('\r\n') + '\nBKF:\n' + content)
-            #G = self.bkfs[i].makeGraph(layout='neato')
-            #plt.savefig(outDirect + self.bkfs[i].name, format='PNG')
+        patientHashName = hash(tuple(patientName))
+        self.bkfs[bkfPatientIndex].name = patientHashName
+        return patientHashName
 
 if __name__ == '__main__':
     PP = PatientProcessor()
     PP.processPatientGeneData('data/wxs.csv', 'data/rnaseq_fpkm_uq_primary_tumor.csv', 'data/geneReadsStats.csv')
     PP.processClinicalData('data/clinical.csv')
     PP.processPatientBKF()
-    PP.BKFsToFile('patientBKFsPNGs/')
+    PP.BKFsToFile('patientBKFs/')
