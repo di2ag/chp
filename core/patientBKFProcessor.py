@@ -140,15 +140,16 @@ class PatientProcessor:
             self.bkfs.append(bkf)
 
     def BKFsToFile(self, outDirect):
-        allBKFHashNames = list()
+        allBKFHashNames = dict()
         for i in range(0, len(self.bkfs)):
             #i matches the self.patients to self.bkfs.
-            allBKFHashNames.append(self.BKFHash(i))
+            hashVal, hashItem = self.BKFHash(i)
+            allBKFHashNames[hashVal] = hashItem
             self.bkfs[i].save(outDirect + str(self.bkfs[i].name))
         # write all patient BKF hashs to file
-        with open(outDirect + "patientHashNames", 'w') as f:
-            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-            writer.writerow(allBKFHashNames)
+        w = csv.writer(open(outDirect + "patientHashDict.csv", "w"))
+        for key, val in allBKFHashNames.items():
+            w.writerow([key,val])
 
 
     def BKFHash(self, bkfPatientIndex):
@@ -170,7 +171,7 @@ class PatientProcessor:
 
         patientHashName = hash(tuple(patientName))
         self.bkfs[bkfPatientIndex].name = patientHashName
-        return patientHashName
+        return patientHashName, patientName
 
 if __name__ == '__main__':
     PP = PatientProcessor()
