@@ -92,6 +92,47 @@ class TcgaDataHandler:
         return pop_gene_data
 
 
+class ReactomeDataHandler:
+    def __init__(self,
+                 r2g_file=None,
+                 p2p_file=None):
+        self.r2g_file = r2g_file
+        self.p2p_file = p2p_file
+
+    def buildPathwayBKB(self):
+        #-- Process Pathway BKFs
+        with open(pathways_file, 'r') as csv_file:
+            reader = csv.reader(csv_file)
+            bkf = BKB()
+            for row in reader:
+                tail = row[0]
+                head = row[1]
+                states = ['True', 'False']
+                if bkf.findComponent(tail) == -1:
+                    component_tail = BKB_component(tail)
+                    for state in states:
+                        component_tail.addINode(BKB_I_node(state, component_tail))
+                    bkf.addComponent(component_tail)
+                else:
+                    component_tail = bkf.findComponent(tail)
+
+                if bkf.findComponent(head) == -1:
+                    component_head = BKB_component(head)
+                    for state in states:
+                        component_head.addINode(BKB_I_node(state, component_head))
+                    bkf.addComponent(component_head)
+                else:
+                    component_head = bkf.findComponent(head)
+
+                for state1 in states:
+                    for state2 in states:
+                        bkf.addSNode(BKB_S_node(component_head,
+                                                component_head.findState(state1),
+                                                random.random(),
+                                                [(component_tail, component_tail.findState(state2))])
+                                    )
+
+
 if __name__ == '__main__':
     data_handler = TcgaDataHandler(
         tumor_rna_expression_file='/home/public/data/ncats/data_drop_02-11-2020/rnaseq_fpkm_uq_primary_tumor.csv'
