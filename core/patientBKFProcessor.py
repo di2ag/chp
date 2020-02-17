@@ -2,42 +2,41 @@ import csv
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb import BKB_S_node, BKB_component, BKB_I_node
 import matplotlib.pyplot as plt
+import pickle
 
 class PatientProcessor:
     def __init__(self):
-        # each patient BKF
+        # self.bkfs[i] and self.patients[i] reference each other
         self.bkfs = list()
         self.patients = list()
         self.clinicalCollected = False
 
     class Patient:
         # will need to account for mutatedReads
-        def __init__(self, patID, cancer, mutatedGenes):
+        def __init__(self, patientID, cancerType, mutatedGenes):
             # patient gene data
-            self.patientID = patID
-            self.cancerType = cancer
+            self.patientID = patientID
+            self.cancerType = cancerType
             self.mutatedGenes = mutatedGenes
             self.mutatedGeneReads = list()
-            self.geneReadsStats = list() #implement
 
             # clinical later
-            self.ageDiagnos = -1
-            self.gender = ""
-            self.survivalTime = -1
+            self.ageDiagnos = None
+            self.gender = None
+            self.survivalTime = None
 
             # add drug info later
             # add radiation info later
 
     # processes patient gene data
     def processPatientGeneData(self, patientMutGenes, patientMutReads, geneReadStats):
-        print("Reading file 1 - patient genes")
+        print("Reading patient files...")
         with open(patientMutGenes, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientGeneDict = dict()
             # row[0] = cancer type row[1] = patientID, row[6] = mutated gene
             rows = [(row[0],row[1],row[6]) for row in reader]
 
-        print("Processing file 1...")
         # create all patients
         mutatedPatGenes = list()
         # skip header
@@ -52,13 +51,9 @@ class PatientProcessor:
                 mutatedPatGenes = list()
             mutatedPatGenes.append(row[2])
         csv_file.close()
+        print("Patient files read.")
 
-        print("Reading file 2 - gene read stats")
-        #implement
-        print("Processing file 2...")
-        #implement
-
-        print("Reading file 3 - patient gene reads")
+        print("Reading patient gene fpkm reads...")
         # get gene reads from tumor tissue
 
         with open(patientMutReads, 'r') as csv_file:
@@ -67,7 +62,6 @@ class PatientProcessor:
             # row[1] = patientID, row[6] = gene, row[7] = reads
             for row in reader:
                 geneReadsDict[str(row[1])+str(row[6])] = row[7]
-        print("Processing file 3...")
         for p in self.patients:
             geneMismatch = []
             for gene in p.mutatedGenes[:]:
@@ -79,10 +73,11 @@ class PatientProcessor:
                     p.mutatedGenes.remove(gene)
             if len(geneMismatch) > 0:
                 print("Warning - Patient", p.patientID, "has", len(geneMismatch), "missing genes")
+        print("Patient gene fpkm reads read.")
 
     def processClinicalData(self, clinicalData):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
-        print("Reading clinical data...")
+        print("Reading patient clinical data...")
         with open(clinicalData, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientClinicalDict = dict()
@@ -99,12 +94,12 @@ class PatientProcessor:
             else:
                 print("WARNING - Patient", p, "clinical data does not exist")
         self.clinicalCollected = True
-        print("Clinical data processed")
+        print("Patient clinical data read.")
 
     # should be called after all Patient objects have been cosntructed
     def processPatientBKF(self):
-        print("Writing BKF files...")
         assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
+        print("Forming Patient BKFs...")
 
         for pat in self.patients:
             bkf = BKB(name=pat.patientID + '_BKF')
@@ -138,18 +133,23 @@ class PatientProcessor:
                     # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=False
                     bkf.addSNode(BKB_S_node(statConditionComp, statConditionFalse, 1.0, [(mutGeneComp, iNodeGeneMut)]))
             self.bkfs.append(bkf)
+        print("Patient BKFs formed.")
 
     def BKFsToFile(self, outDirect):
+        print("Writing patient BKFs to file...")
         allBKFHashNames = dict()
-        for i in range(0, len(self.bkfs)):
+        for i in range(0, len(self.patients)):
             #i matches the self.patients to self.bkfs.
             hashVal, hashItem = self.BKFHash(i)
             allBKFHashNames[hashVal] = hashItem
             self.bkfs[i].save(outDirect + str(self.bkfs[i].name))
         # write all patient BKF hashs to file
-        w = csv.writer(open(outDirect + "patientHashDict.csv", "w"))
-        for key, val in allBKFHashNames.items():
-            w.writerow([key,val])
+        with open(outDirect + 'patient_data.pk', 'wb') as f_:
+            pickle.dump(file=f_, obj=allBKFHashNames)
+        print("Patient BKFs written.")
+        #w = csv.writer(open(outDirect + "patientHashDict.csv", "w"))
+        #for key, val in allBKFHashNames.items():
+        #    w.writerow([key,val])
 
 
     def BKFHash(self, bkfPatientIndex):
@@ -159,9 +159,17 @@ class PatientProcessor:
         #patient Cancer type
         patientName.append(("Cancer_Type",self.patients[bkfPatientIndex].cancerType))
         #patient mutated Genes
-        patientName.append(("Patient_Genes",((gene) for gene in self.patients[bkfPatientIndex].mutatedGenes)))
+        #genes = ""
+        #for gene in self.patients[bkfPatientIndex].mutatedGenes:
+        #    genes += (gene + ",")
+        #patientName.append(("Patient_Genes",genes[:len(genes)-1]))
+        patientName.append(("Patient_Genes",tuple(self.patients[bkfPatientIndex].mutatedGenes)))
         #patient mutated Gene Reads
-        patientName.append(("Patient_Gene_Reads",((geneRead) for geneRead in self.patients[bkfPatientIndex].mutatedGeneReads)))
+        #geneReads = ""
+        #for geneRead in self.patients[bkfPatientIndex].mutatedGeneReads:
+        #    geneReads += (geneRead + ",")
+        #patientName.append(("Patient_Gene_Reads",geneReads[:len(geneReads)-1]))
+        patientName.append(("Patient_Gene_Reads",tuple(self.patients[bkfPatientIndex].mutatedGeneReads)))
         #patient age of diagnosis
         patientName.append(("Age_of_Diagnosis",self.patients[bkfPatientIndex].ageDiagnos))
         #patient gender
@@ -178,4 +186,4 @@ if __name__ == '__main__':
     PP.processPatientGeneData('data/wxs.csv', 'data/rnaseq_fpkm_uq_primary_tumor.csv', 'data/geneReadsStats.csv')
     PP.processClinicalData('data/clinical.csv')
     PP.processPatientBKF()
-    PP.BKFsToFile('patientBKFs/')
+    PP.BKFsToFile('testPatients/')
