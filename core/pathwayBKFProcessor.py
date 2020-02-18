@@ -65,4 +65,4 @@ if __name__ == '__main__':
     PP = PathwayProcessor()
     PP.processPathways('data/pathways_analysis.csv')
     PP.processPathwayBKF()
-    PP.BKFsToFile('pathwayBKFs/')
+    PP.BKFsToFile('PatientPathwayBKFs/')

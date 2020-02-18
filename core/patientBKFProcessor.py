@@ -35,14 +35,14 @@ class PatientProcessor:
             reader = csv.reader(csv_file)
             patientGeneDict = dict()
             # row[0] = cancer type row[1] = patientID, row[6] = mutated gene
+            next(reader)
             rows = [(row[0],row[1],row[6]) for row in reader]
 
         # create all patients
         mutatedPatGenes = list()
-        # skip header
-        cancerType = rows[1][0]
-        patID = rows[1][1]
-        for row in rows[1:]:
+        cancerType = rows[0][0]
+        patID = rows[0][1]
+        for row in rows:
             if patID != row[1]:
                 p = self.Patient(patID,cancerType,mutatedPatGenes)
                 self.patients.append(p)
@@ -60,13 +60,14 @@ class PatientProcessor:
             reader = csv.reader(csv_file)
             geneReadsDict = dict()
             # row[1] = patientID, row[6] = gene, row[7] = reads
+            next(reader)
             for row in reader:
-                geneReadsDict[str(row[1])+str(row[6])] = row[7]
+                geneReadsDict[str(row[1])+str(row[6])] = float(row[7])
         for p in self.patients:
             geneMismatch = []
             for gene in p.mutatedGenes[:]:
                 if str(p.patientID)+str(gene) in geneReadsDict:
-                    p.mutatedGeneReads.append(geneReadsDict[str(p.patientID)+str(gene)])
+                    p.mutatedGeneReads.append(geneReadsDict[p.patientID+gene])
                 #gene read information not found
                 else:
                     geneMismatch.append(gene)
@@ -82,8 +83,12 @@ class PatientProcessor:
             reader = csv.reader(csv_file)
             patientClinicalDict = dict()
             # row[0] = cancerType, row[1] = patientID, row[2] = age of diagnosis, row[3] = gender, row[7] = survival time
+            next(reader)
             for row in reader:
-                patientClinicalDict[str(row[0])+str(row[1])] = (str(row[2]),str(row[3]),str(row[7]))
+                ageDiag = int(float(row[2])) if 'DNP' not in row[2] else row[2]
+                gender = row[3]
+                survTime = int(float(row[7])) if 'DNP' not in row[7] else row[7]
+                patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender,survTime)
 
         for p in self.patients:
             if str(p.cancerType)+str(p.patientID) in patientClinicalDict:
@@ -102,8 +107,7 @@ class PatientProcessor:
         print("Forming Patient BKFs...")
 
         for pat in self.patients:
-            bkf = BKB(name=pat.patientID + '_BKF')
-
+            bkf = BKB(name = pat.patientID)
             for gene in pat.mutatedGenes:
                 # gene
                 mutGeneComp = BKB_component("mut_" + gene + "=")
@@ -138,52 +142,41 @@ class PatientProcessor:
     def BKFsToFile(self, outDirect):
         print("Writing patient BKFs to file...")
         allBKFHashNames = dict()
-        for i in range(0, len(self.patients)):
+        for i in range(0, 50):
             #i matches the self.patients to self.bkfs.
-            hashVal, hashItem = self.BKFHash(i)
-            allBKFHashNames[hashVal] = hashItem
+            patientHashVal, patientDict = self.BKFHash(i)
+            allBKFHashNames[patientHashVal] = patientDict
             self.bkfs[i].save(outDirect + str(self.bkfs[i].name))
         # write all patient BKF hashs to file
         with open(outDirect + 'patient_data.pk', 'wb') as f_:
             pickle.dump(file=f_, obj=allBKFHashNames)
         print("Patient BKFs written.")
-        #w = csv.writer(open(outDirect + "patientHashDict.csv", "w"))
-        #for key, val in allBKFHashNames.items():
-        #    w.writerow([key,val])
 
 
     def BKFHash(self, bkfPatientIndex):
-        patientName = list()
+        patientDict = dict()
         #patientID
-        patientName.append(("Patient_ID",self.patients[bkfPatientIndex].patientID))
+        patientDict["Patient_ID"] = self.patients[bkfPatientIndex].patientID
         #patient Cancer type
-        patientName.append(("Cancer_Type",self.patients[bkfPatientIndex].cancerType))
+        patientDict["Cancer_Type"] = self.patients[bkfPatientIndex].cancerType
         #patient mutated Genes
-        #genes = ""
-        #for gene in self.patients[bkfPatientIndex].mutatedGenes:
-        #    genes += (gene + ",")
-        #patientName.append(("Patient_Genes",genes[:len(genes)-1]))
-        patientName.append(("Patient_Genes",tuple(self.patients[bkfPatientIndex].mutatedGenes)))
+        patientDict["Patient_Genes"] = tuple(self.patients[bkfPatientIndex].mutatedGenes)
         #patient mutated Gene Reads
-        #geneReads = ""
-        #for geneRead in self.patients[bkfPatientIndex].mutatedGeneReads:
-        #    geneReads += (geneRead + ",")
-        #patientName.append(("Patient_Gene_Reads",geneReads[:len(geneReads)-1]))
-        patientName.append(("Patient_Gene_Reads",tuple(self.patients[bkfPatientIndex].mutatedGeneReads)))
+        patientDict["Patient_Gene_Reads"] = tuple(self.patients[bkfPatientIndex].mutatedGeneReads)
         #patient age of diagnosis
-        patientName.append(("Age_of_Diagnosis",self.patients[bkfPatientIndex].ageDiagnos))
+        patientDict["Age_of_Diagnosis"] = self.patients[bkfPatientIndex].ageDiagnos
         #patient gender
-        patientName.append(("Gender",self.patients[bkfPatientIndex].gender))
+        patientDict["Gender"] = self.patients[bkfPatientIndex].gender
         #patient survival time
-        patientName.append(("Survival_Time",self.patients[bkfPatientIndex].survivalTime))
+        patientDict["Survival_Time"] = self.patients[bkfPatientIndex].survivalTime
 
-        patientHashName = hash(tuple(patientName))
-        self.bkfs[bkfPatientIndex].name = patientHashName
-        return patientHashName, patientName
+        patientHashVal = hash(self.patients[bkfPatientIndex].patientID)
+        self.bkfs[bkfPatientIndex].name = patientHashVal
+        return patientHashVal, patientDict
 
 if __name__ == '__main__':
     PP = PatientProcessor()
     PP.processPatientGeneData('data/wxs.csv', 'data/rnaseq_fpkm_uq_primary_tumor.csv', 'data/geneReadsStats.csv')
     PP.processClinicalData('data/clinical.csv')
     PP.processPatientBKF()
-    PP.BKFsToFile('testPatients/')
+    PP.BKFsToFile('PatientPathwayBKFs/')
