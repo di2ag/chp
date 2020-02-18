@@ -10,7 +10,22 @@ class Query:
         self.type = type
         self.name = name
         self.meta_evidence = meta_evidence
+        self.result = None
+        self.bkb = None
 
-    def build_bkb_query(self):
-        raise NotImplementedError
-
+    def getReport(self):
+        string = '---- Query Details -----\n'
+        string += 'Demographic Evidence:\n'
+        for evid in self.meta_evidence:
+            string += '\t{} {} {}\n'.format(evid[0], evid[1], evid[2])
+        string += 'Evidence:\n'
+        for rvName, stateName in self.evidence.items():
+            string += '\t{} = {}\n'.format(rvName, stateName)
+        string += 'Targets:\n'
+        for target in self.targets:
+            string += '\t{}\n'.format(target)
+        print(string)
+        if self.result is not None:
+            self.result.summary()
+        else:
+            print('No results found.')
