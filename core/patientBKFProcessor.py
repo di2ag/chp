@@ -142,7 +142,7 @@ class PatientProcessor:
     def BKFsToFile(self, outDirect):
         print("Writing patient BKFs to file...")
         allBKFHashNames = dict()
-        for i in range(0, 50):
+        for i in range(0, len(self.bkfs)):
             #i matches the self.patients to self.bkfs.
             patientHashVal, patientDict = self.BKFHash(i)
             allBKFHashNames[patientHashVal] = patientDict
@@ -179,4 +179,4 @@ if __name__ == '__main__':
     PP.processPatientGeneData('data/wxs.csv', 'data/rnaseq_fpkm_uq_primary_tumor.csv', 'data/geneReadsStats.csv')
     PP.processClinicalData('data/clinical.csv')
     PP.processPatientBKF()
-    PP.BKFsToFile('PatientPathwayBKFs/')
+    PP.BKFsToFile('patientBKFs/')
