@@ -12,6 +12,7 @@ class Query:
         self.meta_evidence = meta_evidence
         self.result = None
         self.bkb = None
+        self.compute_time = -1
 
     def getReport(self):
         string = '---- Query Details -----\n'
@@ -27,5 +28,6 @@ class Query:
         print(string)
         if self.result is not None:
             self.result.summary()
+            print('Computed in {} sec.'.format(self.compute_time))
         else:
             print('No results found.')

@@ -5,6 +5,7 @@ import operator
 import tqdm
 import copy
 from concurrent.futures import ProcessPoolExecutor, wait
+import time
 
 from pybkb.core.cpp_base.reasoning import revision, updating
 from pybkb.core.common.bayesianKnowledgeBase import BKB_component, BKB_I_node, BKB_S_node
@@ -53,6 +54,7 @@ class Reasoner:
 
     def solve_query(self, query):
         print('Reasoning...')
+        start_time = time.time()
         if query.type == 'revision':
             res = revision(query.bkb,
                            query.evidence,
@@ -67,8 +69,9 @@ class Reasoner:
                            file_prefix=query.name)
         else:
             raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
-
+        compute_time = time.time() - start_time
         query.result = res
+        query.compute_time = compute_time
         return query
 
     def analyze_query(self, query):
