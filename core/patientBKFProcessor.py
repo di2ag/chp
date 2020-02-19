@@ -1,4 +1,7 @@
 import csv
+import tqdm
+import os
+
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb import BKB_S_node, BKB_component, BKB_I_node
 import matplotlib.pyplot as plt
@@ -30,7 +33,7 @@ class PatientProcessor:
 
     # processes patient gene data
     def processPatientGeneData(self, patientMutGenes, patientMutReads, geneReadStats):
-        print("Reading patient files...")
+        #print("Reading patient files...")
         with open(patientMutGenes, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientGeneDict = dict()
@@ -42,7 +45,7 @@ class PatientProcessor:
         mutatedPatGenes = list()
         cancerType = rows[0][0]
         patID = rows[0][1]
-        for row in rows:
+        for row in tqdm.tqdm(rows, desc='Reading patient files'):
             if patID != row[1]:
                 p = self.Patient(patID,cancerType,mutatedPatGenes)
                 self.patients.append(p)
@@ -51,9 +54,9 @@ class PatientProcessor:
                 mutatedPatGenes = list()
             mutatedPatGenes.append(row[2])
         csv_file.close()
-        print("Patient files read.")
+        #print("Patient files read.")
 
-        print("Reading patient gene fpkm reads...")
+        #print("Reading patient gene fpkm reads...")
         # get gene reads from tumor tissue
 
         with open(patientMutReads, 'r') as csv_file:
@@ -61,9 +64,12 @@ class PatientProcessor:
             geneReadsDict = dict()
             # row[1] = patientID, row[6] = gene, row[7] = reads
             next(reader)
+            pbar = tqdm.tqdm(total=os.path.getsize(patientMutReads), desc='Reading patient gene fpkm reads')
             for row in reader:
                 geneReadsDict[str(row[1])+str(row[6])] = float(row[7])
-        for p in self.patients:
+                pbar.update(len(''.join(row).encode('utf-8')))
+            pbar.close()
+        for p in tqdm.tqdm(self.patients, desc='Reading patient mutations'):
             geneMismatch = []
             for gene in p.mutatedGenes[:]:
                 if str(p.patientID)+str(gene) in geneReadsDict:
@@ -72,24 +78,26 @@ class PatientProcessor:
                 else:
                     geneMismatch.append(gene)
                     p.mutatedGenes.remove(gene)
-            if len(geneMismatch) > 0:
-                print("Warning - Patient", p.patientID, "has", len(geneMismatch), "missing genes")
-        print("Patient gene fpkm reads read.")
+            #if len(geneMismatch) > 0:
+                #print("Warning - Patient", p.patientID, "has", len(geneMismatch), "missing genes")
+        #print("Patient gene fpkm reads read.")
 
     def processClinicalData(self, clinicalData):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
-        print("Reading patient clinical data...")
+        #print("Reading patient clinical data...")
         with open(clinicalData, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientClinicalDict = dict()
             # row[0] = cancerType, row[1] = patientID, row[2] = age of diagnosis, row[3] = gender, row[7] = survival time
+            pbar = tqdm.tqdm(total=os.path.getsize(clinicalData), desc='Reading clinical data')
             next(reader)
             for row in reader:
                 ageDiag = int(float(row[2])) if 'DNP' not in row[2] else row[2]
                 gender = row[3]
                 survTime = int(float(row[7])) if 'DNP' not in row[7] else row[7]
                 patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender,survTime)
-
+                pbar.update(len(''.join(row).encode('utf-8')))
+            pbar.close()
         for p in self.patients:
             if str(p.cancerType)+str(p.patientID) in patientClinicalDict:
                 clinical = patientClinicalDict[str(p.cancerType)+str(p.patientID)]
@@ -99,14 +107,14 @@ class PatientProcessor:
             else:
                 print("WARNING - Patient", p, "clinical data does not exist")
         self.clinicalCollected = True
-        print("Patient clinical data read.")
+        #print("Patient clinical data read.")
 
     # should be called after all Patient objects have been cosntructed
     def processPatientBKF(self):
         assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
-        print("Forming Patient BKFs...")
+        #print("Forming Patient BKFs...")
 
-        for pat in self.patients:
+        for pat in tqdm.tqdm(self.patients, desc='Forming patient BKFs'):
             bkf = BKB(name = pat.patientID)
             for gene in pat.mutatedGenes:
                 # gene
@@ -137,7 +145,23 @@ class PatientProcessor:
                     # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=False
                     bkf.addSNode(BKB_S_node(statConditionComp, statConditionFalse, 1.0, [(mutGeneComp, iNodeGeneMut)]))
             self.bkfs.append(bkf)
-        print("Patient BKFs formed.")
+        #print("Patient BKFs formed.")
+
+    def SubsetBKFsToFile(self, outDirect, indices):
+        allBKFHashNames = dict()
+        bkf_files = list()
+        source_names = list()
+        for idx in indices:
+            patientHashVal, patientDict = self.BKFHash(idx)
+            allBKFHashNames[patientHashVal] = patientDict
+            bkf_files.append(outDirect + str(self.bkfs[idx].name))
+            self.bkfs[idx].save(outDirect + str(self.bkfs[idx].name))
+            source_names.append(str(self.bkfs[idx].name))
+        # write all patient BKF hashs to file
+        patient_data_file = outDirect + 'patient_data.pk'
+        with open(patient_data_file, 'wb') as f_:
+            pickle.dump(file=f_, obj=allBKFHashNames)
+        return bkf_files, source_names, patient_data_file
 
     def BKFsToFile(self, outDirect):
         print("Writing patient BKFs to file...")
@@ -146,7 +170,7 @@ class PatientProcessor:
             #i matches the self.patients to self.bkfs.
             patientHashVal, patientDict = self.BKFHash(i)
             allBKFHashNames[patientHashVal] = patientDict
-            self.bkfs[i].save(outDirect + str(self.bkfs[i].name))
+            self.bkfs[i].save(outDirect + str(self.bkfs[i].name) + '.bkf')
         # write all patient BKF hashs to file
         with open(outDirect + 'patient_data.pk', 'wb') as f_:
             pickle.dump(file=f_, obj=allBKFHashNames)

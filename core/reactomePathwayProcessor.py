@@ -1,4 +1,6 @@
 import csv
+import tqdm
+
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb import BKB_S_node, BKB_component, BKB_I_node
 
@@ -14,12 +16,12 @@ class ReactomePathwayProcessor:
             self.ID = ID
 
     def processHierarchyPathways(self, pathwaysDirectory):
-        print("Processing hierarchy pathways...")
+        #print("Processing hierarchy pathways...")
         with open(pathwaysDirectory, 'r') as csv_file:
             reader = csv.reader(csv_file)
             rows = [row for row in reader]
 
-        for row in rows:
+        for row in tqdm.tqdm(rows, desc='Processing hierarchy pathways'):
             tails = [row[0]]
             for tail in tails:
                 tail = tail.replace(" ", "_")
@@ -28,15 +30,15 @@ class ReactomePathwayProcessor:
             head = head.replace("/", "-")
             pathway = self.Pathway(tails,head,head+"_hier")
             self.pathways.append(pathway)
-        print("Hierarchy pathways processed")
+        #print("Hierarchy pathways processed")
 
     def processGenePathways(self, pathwaysDirectory):
-        print("Processing gene pathways...")
+        #print("Processing gene pathways...")
         with open(pathwaysDirectory, 'r') as csv_file:
             reader = csv.reader(csv_file)
             rows = [row for row in reader]
 
-        for row in rows:
+        for row in tqdm.tqdm(rows, desc='Processing gene pathways'):
             head = row[0].replace(" ", "_")
             head = head.replace("/", "-")
             tails = list()
@@ -52,12 +54,12 @@ class ReactomePathwayProcessor:
                 tail = tail.replace("/", "-")
             pathway = self.Pathway(tails,head, head+"_reaction")
             self.pathways.append(pathway)
-        print("Gene pathways Processed")
+        #print("Gene pathways Processed")
 
     def processPathwayBKF(self):
         assert len(self.pathways) > 0, "Have not processed pathways yet"
 
-        for pathway in self.pathways:
+        for pathway in tqdm.tqdm(self.pathways, desc='Processing pathway BKFs'):
             bkf = BKB(name=pathway.ID)
             if "_hier" in pathway.ID:
                 #head
@@ -95,8 +97,15 @@ class ReactomePathwayProcessor:
             self.bkfs.append(bkf)
 
     def BKFsToFile(self, outDirect):
+        bkf_files = list()
+        source_names = list()
         for bkf in self.bkfs:
-            bkf.save(outDirect + bkf.name)
+            file_name = outDirect + bkf.name + '.bkf'
+            bkf.save(file_name)
+            bkf_files.append(file_name)
+            source_names.append(str(bkf.name))
+
+        return bkf_files, source_names
 
 if __name__ == '__main__':
     PP = ReactomePathwayProcessor()

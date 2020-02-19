@@ -1,4 +1,6 @@
 import csv
+import tqdm
+
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb import BKB_S_node, BKB_component, BKB_I_node
 import matplotlib.pyplot as plt
@@ -14,13 +16,13 @@ class PathwayProcessor:
             self.genes = genes
 
     def processPathways(self, pathwaysFile):
-        print("reading pathways file...")
+        #print("reading pathways file...")
         with open(pathwaysFile, 'r') as csv_file:
             reader = csv.reader(csv_file)
             rows = [row for row in reader]
 
         headers = rows[0]
-        for row in rows[1:]:
+        for row in tqdm.tqdm(rows[1:], desc='Reading pathways file'):
             genes = list()
             pathwayName = row[0].replace("/","-")
             pathwayName = pathwayName.replace(" ","_")
@@ -36,7 +38,7 @@ class PathwayProcessor:
     def processPathwayBKF(self):
         assert len(self.pathways) > 0, "Have not processed pathways yet"
 
-        for pathway in self.pathways:
+        for pathway in tqdm.tqdm(self.pathways, desc='Processing pathway BKFs'):
             bkf = BKB(name=pathway.pathwayID)
 
             pathwayActiveComp = BKB_component(pathway.pathwayID + "_active=")
@@ -56,9 +58,16 @@ class PathwayProcessor:
             self.bkfs.append(bkf)
 
     def BKFsToFile(self, outDirect):
+        bkf_files = list()
+        source_names = list()
         for bkf in self.bkfs:
             print(bkf.name)
-            bkf.save(outDirect + bkf.name)
+            file_name = outDirect + bkf.name + '.bkf'
+            bkf.save(file_name)
+            bkf_files.append(file_name)
+            source_names.append(str(bkf.name))
+
+        return bkf_files, source_names
 
 
 if __name__ == '__main__':
