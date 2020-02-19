@@ -69,7 +69,7 @@ class PatientProcessor:
                 geneReadsDict[str(row[1])+str(row[6])] = float(row[7])
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
-        for p in tqdm.tqdm(self.patients, desc='Reading patient mutations'):
+        for p in tqdm.tqdm(self.patients[:], desc='Reading patient mutations'):
             geneMismatch = []
             for gene in p.mutatedGenes[:]:
                 if str(p.patientID)+str(gene) in geneReadsDict:
@@ -78,6 +78,9 @@ class PatientProcessor:
                 else:
                     geneMismatch.append(gene)
                     p.mutatedGenes.remove(gene)
+            #rare case where we've removed all genes for a patient
+            if len(p.mutatedGenes) == 0:
+                self.patients.remove(p)
             #if len(geneMismatch) > 0:
                 #print("Warning - Patient", p.patientID, "has", len(geneMismatch), "missing genes")
         #print("Patient gene fpkm reads read.")
@@ -187,12 +190,13 @@ class PatientProcessor:
         patientDict["Patient_Genes"] = tuple(self.patients[bkfPatientIndex].mutatedGenes)
         #patient mutated Gene Reads
         patientDict["Patient_Gene_Reads"] = tuple(self.patients[bkfPatientIndex].mutatedGeneReads)
-        #patient age of diagnosis
-        patientDict["Age_of_Diagnosis"] = self.patients[bkfPatientIndex].ageDiagnos
-        #patient gender
-        patientDict["Gender"] = self.patients[bkfPatientIndex].gender
-        #patient survival time
-        patientDict["Survival_Time"] = self.patients[bkfPatientIndex].survivalTime
+        if self.clinicalCollected:
+            #patient age of diagnosis
+            patientDict["Age_of_Diagnosis"] = self.patients[bkfPatientIndex].ageDiagnos
+            #patient gender
+            patientDict["Gender"] = self.patients[bkfPatientIndex].gender
+            #patient survival time
+            patientDict["Survival_Time"] = self.patients[bkfPatientIndex].survivalTime
 
         patientHashVal = hash(self.patients[bkfPatientIndex].patientID)
         self.bkfs[bkfPatientIndex].name = patientHashVal
@@ -201,6 +205,6 @@ class PatientProcessor:
 if __name__ == '__main__':
     PP = PatientProcessor()
     PP.processPatientGeneData('data/wxs.csv', 'data/rnaseq_fpkm_uq_primary_tumor.csv', 'data/geneReadsStats.csv')
-    PP.processClinicalData('data/clinical.csv')
+    #PP.processClinicalData('data/clinical.csv')
     PP.processPatientBKF()
-    PP.BKFsToFile('patientBKFs/')
+    PP.BKFsToFile('patientBKFs2/')
