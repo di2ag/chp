@@ -157,7 +157,7 @@ class PatientProcessor:
         for idx in indices:
             patientHashVal, patientDict = self.BKFHash(idx)
             allBKFHashNames[patientHashVal] = patientDict
-            bkf_files.append(outDirect + str(self.bkfs[idx].name))
+            bkf_files.append(outDirect + str(self.bkfs[idx].name) + '.bkf')
             self.bkfs[idx].save(outDirect + str(self.bkfs[idx].name) + '.bkf')
             source_names.append(str(self.bkfs[idx].name))
         # write all patient BKF hashs to file

@@ -4,8 +4,10 @@ import pickle
 import tqdm
 import argparse
 import csv
+import ast
 
-from pybkb.core.cpp_base.fusion import fuse
+from pybkb.core.cpp_base.fusion import fuse as cpp_fuse
+from pybkb.core.python_base.fusion import fuse as py_fuse
 from patientBKFProcessor import PatientProcessor
 from pathwayBKFProcessor import PathwayProcessor
 from reactomePathwayProcessor import ReactomePathwayProcessor
@@ -31,7 +33,8 @@ class DataDriver:
                                        pathway_file=self.config['pathway_file'],
                                        reactome_g2r_file=self.config['reactome_g2r_file'],
                                        reactome_p2p_file=self.config['reactome_p2p_file'],
-                                       working_dir=self.config['working_dir'])
+                                       working_dir=self.config['working_dir'],
+                                       cpp_fuse_option=ast.literal_eval(self.config['cpp_fuse_option']))
 
         self.dataHandler.readData()
 
@@ -111,7 +114,8 @@ class DataHandler:
                  pathway_file=None,
                  reactome_p2p_file=None,
                  reactome_g2r_file=None,
-                 working_dir='/tmp'):
+                 working_dir='/tmp',
+                 cpp_fuse_option=False):
 
         self.tumor_rna_expression_file = tumor_rna_expression_file
         self.normal_rna_expression_file = normal_rna_expression_file
@@ -123,6 +127,7 @@ class DataHandler:
         self.reactome_p2p_file = reactome_p2p_file
         self.reactome_g2r_file = reactome_g2r_file
         self.working_dir = working_dir
+        self.cpp_fuse_option = cpp_fuse_option
 
     def readTcgaData(self):
         self.patientProcessor = PatientProcessor()
@@ -158,24 +163,36 @@ class DataHandler:
 
     def fuse(self, patients, with_pathways=True):
         patient_indices = list()
+        patient_bkfs = list()
         for patient_name in patients:
             idx = self.patientProcessor.patients.index(patient_name)
             patient_indices.append(idx)
+            patient_bkfs.append(self.patientProcessor.bkfs[idx])
         patient_bkf_files, patient_source_names, dump_loc = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
 
         if with_pathways:
             pathway_bkf_files, pathway_source_names = self.pathwayProcessor.BKFsToFile(self.working_dir)
             reactome_bkf_files, reactome_source_names = self.reactomePathwayProcessor.BKFsToFile(self.working_dir)
+            pathway_bkfs = self.pathwayProcessor.bkfs
+            reactome_bkfs = self.reactomePathwayProcessor.bkfs
         else:
             pathway_bkf_files, pathway_source_names = (list(), list())
             reactome_bkf_files, reactome_source_names = (list(), list())
+            pathway_bkfs = list()
+            reactome_bkfs = list()
 
+        bkfs = patient_bkfs + pathway_bkfs + reactome_bkfs
         bkf_files = patient_bkf_files + pathway_bkf_files + reactome_bkf_files
         source_names = patient_source_names + pathway_source_names + reactome_source_names
 
-        fuse(bkf_files,
-             reliabilities=[1 for _ in range(len(bkf_files))],
-             source_names=source_names)
+        if self.cpp_fuse_option:
+            cpp_fuse(bkf_files,
+                 reliabilities=[1 for _ in range(len(bkf_files))],
+                 source_names=source_names)
+        else:
+            py_fuse(bkfs,
+                 reliabilities=[1 for _ in range(len(bkfs))],
+                 source_names=source_names)
         print('Patient data located at: {}'.format(dump_loc))
         return True
 

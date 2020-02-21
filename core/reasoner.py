@@ -17,10 +17,18 @@ class Reasoner:
 
         #-- Preprocess src hash values
         src_components = fused_bkb.getSrcComponents()
-        src_hashs = []
+        src_hashs = dict()
         for component in src_components:
-            src_hashs.extend([int(state.name.split('_')[-1]) for state in component.states])
-        self.src_hashs = set(src_hashs)
+            for idx in range(component.getNumberStates()):
+                state = component.getState(idx)
+                #-- Collect src numbers and string name or hash
+                src_num = int(state.name.split('_')[0][1:-1])
+                try:
+                    src_hashs[src_num] = int(''.join(state.name.split('_')[1:]))
+                except ValueError:
+                    src_hashs[src_num] = state.name
+        #self.src_hashs = set(src_hashs)
+        self.src_hashs = src_hashs
 
     #-- Should be source hash value followed by a dictionary of all available meta data. The file is assumed to be a pickle.
     def set_src_metadata(self, metadata_file):
@@ -101,14 +109,16 @@ class Reasoner:
                     raise ValueError('Unknown Condition')
                 count_true = 0
                 count_false = 0
-                for hash_key in self.src_hashs:
+                for src_num, src_hash in self.src_hashs.items():
                     try:
-                        if op(type(val)(self.metadata[hash_key][prop]), val):
-                            matched_srcs.append(hash_key)
+                        if op(type(val)(self.metadata[src_hash][prop]), val):
+                            matched_srcs.append(src_num)
                             count_true += 1
                         else:
                             count_false += 1
                     except ValueError:
+                        continue
+                    except KeyError:
                         continue
                 total = count_true + count_false
                 pop_stats[meta] = (count_true/total, count_false/total)
@@ -116,13 +126,18 @@ class Reasoner:
                 #-- Build Augmented BKB with attach metadata using frequency priors
                 #-- Construct new I-node for each meta evidence.
                 meta_component = BKB_component('{} {} {}'.format(prop, cond, val))
-                inode_true = BKB_I_node('True')
-                inode_false = BKB_I_node('False')
-                meta_component.addINode(inode_true)
-                meta_component.addINode(inode_false)
+                inode_true = BKB_I_node(init_name='True', init_component=meta_component)
+                inode_false = BKB_I_node(init_name='False', init_component=meta_component)
+                #meta_component.addINode(inode_true)
+                #meta_component.addINode(inode_false)
 
                 #-- Add component to BKB
                 bkb.addComponent(meta_component)
+                bkb.addComponentState(meta_component, inode_true)
+                bkb.addComponentState(meta_component, inode_false)
+
+                #print(meta_component.states)
+                #print(meta_component.getStateIndex(inode_true))
 
                 #-- Create prior S-nodes
                 bkb.addSNode(BKB_S_node(init_component=meta_component, init_state=inode_true, init_probability=pop_stats[meta][0]))
@@ -130,7 +145,8 @@ class Reasoner:
 
                 #-- Link source nodes
                 for component in tqdm.tqdm(src_components, desc='Linking {} Source Nodes'.format(prop)):
-                    for state in component.states:
+                    for idx in range(component.getNumberStates()):
+                        state = component.getState(idx)
                         cidx = bkb.getComponentIndex(component)
                         iidx = component.getStateIndex(state)
                         #-- There should only be a single s-node as these are source reliabilities.
@@ -138,8 +154,8 @@ class Reasoner:
                         src_reliab = src_s_node.probability
                         bkb.removeSNode(src_s_node)
 
-                        src_hash = int(state.name.split('_')[-1])
-                        if src_hash in matched_srcs:
+                        src_num = int(state.name.split('_')[0][1:-1])
+                        if src_num in matched_srcs:
                             bkb.addSNode(BKB_S_node(init_component=component, init_state=state, init_probability=src_reliab, init_tail=[(meta_component, inode_true)]))
                             bkb.addSNode(BKB_S_node(init_component=component, init_state=state, init_probability=0, init_tail=[(meta_component, inode_false)]))
                         else:

@@ -107,17 +107,19 @@ class Driver:
         while True:
             print('Choose Evidence:')
             time.sleep(1)
-            for j, component in enumerate(self.fused_bkb.components):
-                if 'sourceFusion' not in component.name:
-                    print('{})\t{}'.format(j, component.name))
-            print('{})\t{}'.format(j+1, 'Done selecting evidence.'))
+            for idx in range(self.fused_bkb.getNumberComponents()):
+                component = self.fused_bkb.getComponent(idx)
+                if not component.match('Source', contains=True) and not component.match('source', contains=True):
+                    print('{})\t{}'.format(idx, component.name))
+            print('{})\t{}'.format(idx+1, 'Done selecting evidence.'))
             compIdx = int(input('Your Choice: '))
-            if compIdx == j+1:
+            if compIdx == idx+1:
                 return evidence
             comp = self.fused_bkb.getComponent(compIdx)
             print('Choose your state:')
-            for j, state in enumerate(comp.states):
-                print('{})\t{}'.format(j, state.name))
+            for idx in range(comp.getNumberStates()):
+                state = comp.getState(idx)
+                print('{})\t{}'.format(idx, state.name))
             stateIdx = int(input('Your Choice: '))
             state = comp.getState(stateIdx)
             while True:
@@ -137,12 +139,13 @@ class Driver:
         while True:
             print('Choose Targets:')
             time.sleep(1)
-            for j, component in enumerate(self.fused_bkb.components):
-                if 'sourceFusion' not in component.name:
-                    print('{})\t{}'.format(j, component.name))
-            print('{})\t{}'.format(j+1, 'Done selecting targets.'))
+            for idx in range(self.fused_bkb.getNumberComponents()):
+                component = self.fused_bkb.getComponent(idx)
+                if not component.match('Source', contains=True) and not component.match('source', contains=True):
+                    print('{})\t{}'.format(idx, component.name))
+            print('{})\t{}'.format(idx+1, 'Done selecting targets.'))
             compIdx = int(input('Your Choice: '))
-            if compIdx == j+1:
+            if compIdx == idx+1:
                 return targets
             comp = self.fused_bkb.getComponent(compIdx)
             while True:
