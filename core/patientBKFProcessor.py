@@ -123,16 +123,19 @@ class PatientProcessor:
                 # gene
                 mutGeneComp = BKB_component("mut_" + gene + "=")
                 iNodeGeneMut = BKB_I_node('True',mutGeneComp)
-                mutGeneComp.addINode(iNodeGeneMut)
+                #mutGeneComp.addINode(iNodeGeneMut)
                 bkf.addComponent(mutGeneComp)
+                bkf.addComponentState(mutGeneComp, iNodeGeneMut)
 
                 # stat condition bin
                 statConditionComp = BKB_component("mu-STD>=" + gene + "<=mu+STD=")
                 statConditionTrue = BKB_I_node('True',statConditionComp)
                 statConditionFalse = BKB_I_node('False',statConditionComp)
-                statConditionComp.addINode(statConditionTrue)
-                statConditionComp.addINode(statConditionFalse)
+                #statConditionComp.addINode(statConditionTrue)
+                #statConditionComp.addINode(statConditionFalse)
                 bkf.addComponent(statConditionComp)
+                bkf.addComponentState(statConditionComp, statConditionTrue)
+                bkf.addComponentState(statConditionComp, statConditionFalse)
 
                 # form SNode  o---->[mut_<genename>=True]
                 bkf.addSNode(BKB_S_node(mutGeneComp, iNodeGeneMut, 1.0))

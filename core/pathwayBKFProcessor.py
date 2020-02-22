@@ -43,14 +43,16 @@ class PathwayProcessor:
 
             pathwayActiveComp = BKB_component(pathway.pathwayID + "_active=")
             pathwayActiveTrue = BKB_I_node('True',pathwayActiveComp)
-            pathwayActiveComp.addINode(pathwayActiveTrue)
+            #pathwayActiveComp.addINode(pathwayActiveTrue)
             bkf.addComponent(pathwayActiveComp)
+            bkf.addComponentState(pathwayActiveComp, pathwayActiveTrue)
 
             for gene in pathway.genes: #gene[0] = geneName, gene[1] = low value gene[2] = high value
                 statConditionComp = BKB_component("mu-STD>=" + gene[0] + "<=mu+STD=")
                 statConditionTrue = BKB_I_node('True', statConditionComp)
-                statConditionComp.addINode(statConditionTrue)
+                #statConditionComp.addINode(statConditionTrue)
                 bkf.addComponent(statConditionComp)
+                bkf.addComponentState(statConditionComp, statConditionTrue)
 
                 bkf.addSNode(BKB_S_node(statConditionComp, statConditionTrue, 1.0))
 
