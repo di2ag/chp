@@ -188,11 +188,13 @@ class DataHandler:
         if self.cpp_fuse_option:
             cpp_fuse(bkf_files,
                  reliabilities=[1 for _ in range(len(bkf_files))],
-                 source_names=source_names)
+                 source_names=source_names,
+                 working_dir=self.working_dir)
         else:
             py_fuse(bkfs,
                  reliabilities=[1 for _ in range(len(bkfs))],
-                 source_names=source_names)
+                 source_names=source_names,
+                 working_dir=self.working_dir)
         print('Patient data located at: {}'.format(dump_loc))
         return True
 
