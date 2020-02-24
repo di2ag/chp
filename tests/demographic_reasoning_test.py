@@ -3,15 +3,15 @@ import sys
 import random
 import itertools
 from operator import ge, le, eq
-random.seed(112)
+random.seed(116)
 
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
 from pybkb.core.python_base.fusion import fuse
 from pybkb.core.cpp_base.reasoning import updating
 
-PATIENTS = ['Patient_{}'.format(i) for i in range(5)]
-NUM_GENES = 2
+PATIENTS = ['Patient_{}'.format(i) for i in range(100)]
+NUM_GENES = 10
 
 bkfs = list()
 
@@ -28,15 +28,15 @@ for j, _ in enumerate(PATIENTS):
         bkf.addComponentState(comp, stateTrue)
         bkf.addComponentState(comp, stateFalse)
 
-        prob = random.choice([0,1])
-        s_node_prior_1 = BKB_S_node(init_component=comp,
-                                    init_state=stateTrue,
-                                    init_probability=prob)
-        s_node_prior_2 = BKB_S_node(init_component=comp,
-                                    init_state=stateFalse,
-                                    init_probability=1 - prob)
-        bkf.addSNode(s_node_prior_1)
-        bkf.addSNode(s_node_prior_2)
+        if random.choice([True, False]):
+            s_node_prior = BKB_S_node(init_component=comp,
+                                        init_state=stateTrue,
+                                        init_probability=1)
+        else:
+            s_node_prior = BKB_S_node(init_component=comp,
+                                        init_state=stateFalse,
+                                        init_probability=1)
+        bkf.addSNode(s_node_prior)
 
     bkfs.append(bkf)
 
@@ -60,9 +60,9 @@ patient_data = {patient: {'Gender': random.choice(GENDER_OPTIONS),
 print(patient_data)
 
 #-- Denote Demographic evidence.
-demo_ev = [('Age', ge, 50),
-           ('Gender', eq, 'Male'),
-           ('Survival', ge, 2)]
+demo_ev = [('Age', '>=', 50),
+           ('Gender', '==', 'Male'),
+           ('Survival', '>=', 2)]
 
 #-- Create Source component map
 src_components = fused_bkb.getSrcComponents()
@@ -76,233 +76,172 @@ for comp in src_components:
 
 print(patient_name_src_map)
 
+
+def process_operator(op):
+    if op == '>=':
+        return ge
+    elif op == '<=':
+        return le
+    elif op == '==':
+        return eq
+    else:
+        raise ValueError('Unknown Operator')
+
+def processDependencyHead(head, bkb):
+    head_ev, state = head
+    prop_head, op_str_head, val_head = head_ev
+    op_head = process_operator(op_str_head)
+
+    comp_head = bkb.findComponent('{} {} {}'.format(prop_head, op_str_head, val_head))
+    if state:
+        i_node_head = bkb.findINode(comp_head, 'True')
+    else:
+        i_node_head = bkb.findINode(comp_head, 'False')
+
+    return comp_head, i_node_head
+
+def processDependecyTail(tail, bkb):
+    processed_tail = list()
+    for tail_ in tail:
+        tail_ev, state = tail_
+        prop_tail, op_str_tail, val_tail = tail_ev
+        op_tail = process_operator(op_str_tail)
+
+        comp_tail = bkb.findComponent('{} {} {}'.format(prop_tail, op_str_tail, val_tail))
+        if state:
+            i_node_tail = bkb.findINode(comp_tail, 'True')
+        else:
+            i_node_tail = bkb.findINode(comp_tail, 'False')
+        processed_tail.append((comp_tail, i_node_tail))
+    return processed_tail
+
+def processOptionDependency(option, option_dependencies, bkb, src_population, src_population_data):
+    #-- Get consistent option combinations
+    tail_product = [combo for combo in itertools.product(option_dependencies, [True, False])]
+    tail_combos = list()
+    for combo in itertools.combinations(tail_product, r=len(option_dependencies)):
+        combo = list(combo)
+        prop_set = set()
+        for ev_state in combo:
+            ev_, state = ev_state
+            prop_, op_, val_ = ev_
+            prop_set.add(prop_)
+        if len(prop_set) == len(combo):
+            tail_combos.append(combo)
+    combos = [combo for combo in itertools.product([(option, True), (option, False)], tail_combos)]
+
+    #-- Calculate joint probabilities from data
+    counts = list()
+    for combo in combos:
+        head, tail = combo
+        #-- Put head and tail in one list
+        combo = [head] + tail
+        count = 0
+        for entity in src_population:
+            truth = list()
+            for ev_state in combo:
+                ev_, state = ev_state
+                prop_, op_str_, val_ = ev_
+                op_ = process_operator(op_str_)
+                res = op_(src_population_data[entity][prop_], val_)
+                truth.append(res == state)
+            if all(truth):
+                count += 1
+        counts.append(count)
+    probs = [float(count / len(src_population)) for count in counts]
+
+    #-- Setup each S-node
+    for j, combo in enumerate(combos):
+        head, tail = combo
+        #-- Process head
+        comp_head, i_node_head = processDependencyHead(head, bkb)
+        #-- Process Tail
+        processed_tail = processDependecyTail(tail, bkb)
+        #-- Add Snode
+        if probs[j] > 0:
+            bkb.addSNode(BKB_S_node(init_component=comp_head, init_state=i_node_head, init_probability=probs[j], init_tail=processed_tail))
+
+    return bkb
+
+def addDemographicOption(option, bkb, src_population, src_population_data, option_dependencies=list()):
+    prop, op_str, val = option
+    op = process_operator(op_str)
+    matched_srcs = set()
+    pop_count_true = 0
+    for entity in src_population:
+        if op(src_population_data[entity][prop], val):
+            matched_srcs.add(entity)
+            pop_count_true += 1
+    pop_stats[prop] = float(pop_count_true / len(src_population))
+
+    comp = BKB_component('{} {} {}'.format(prop, op_str, val))
+    inode_true = BKB_I_node(init_name='True', init_component=comp)
+    inode_false = BKB_I_node(init_name='False', init_component=comp)
+    bkb.addComponent(comp)
+    bkb.addComponentState(comp, inode_true)
+    bkb.addComponentState(comp, inode_false)
+
+    #-- Create option dictionary
+    options_dict = {comp.name: inode_true.name}
+
+    #-- If no chain rule dependencies, just add prior s-nodes
+    if len(option_dependencies) == 0:
+        snode_1 = BKB_S_node(init_component=comp, init_state=inode_true, init_probability=pop_stats[prop])
+        snode_2 = BKB_S_node(init_component=comp, init_state=inode_false, init_probability=1-pop_stats[prop])
+        bkb.addSNode(snode_1)
+        bkb.addSNode(snode_2)
+
+    #-- Process Dependencies
+    else:
+        bkb = processOptionDependency(option, option_dependencies, bkb, src_population, src_population_data)
+
+    return bkb, options_dict, matched_srcs
+
+def addSrcConnections(comp, inode_true, inode_false, bkb, matched_srcs, src_map):
+        #-- Attach to source nodes
+        src_components = bkb.getSrcComponents()
+        for entity_name, src_name in src_map.items():
+            for src_comp in src_components:
+                src_state = bkb.findINode(src_comp, src_name)
+
+                #-- Find Prior snode, capture probability and remove.
+                cidx = fused_bkb.getComponentIndex(src_comp)
+                iidx = src_comp.getStateIndex(src_state)
+                s_node = fused_bkb.S_nodes_by_head[cidx][iidx][0]
+                prob = s_node.probability
+                bkb.removeSNode(s_node)
+
+                if entity_name in matched_srcs:
+                    bkb.addSNode(BKB_S_node(init_component=src_comp,
+                                                  init_state=src_state,
+                                                  init_probability=prob,
+                                                  init_tail = [(comp, inode_true)]))
+                else:
+                    bkb.addSNode(BKB_S_node(init_component=src_comp,
+                                                  init_state=src_state,
+                                                  init_probability=prob,
+                                                  init_tail = [(comp, inode_false)]))
+        return bkb
+
 #-- Construct demographic evidence
 pop_stats = dict()
 evidence = dict()
 demo_ev.reverse()
 for i, ev in enumerate(demo_ev):
-    prop, op, val = ev
-    matched_patients = set()
-    pop_count_true = 0
-    for patient in PATIENTS:
-        if op(patient_data[patient][prop], val):
-            matched_patients.add(patient)
-            pop_count_true += 1
-    pop_stats[prop] = float(pop_count_true / len(PATIENTS))
+    fused_bkb, evidence_, matched_srcs = addDemographicOption(ev, fused_bkb, PATIENTS, patient_data, option_dependencies=demo_ev[:i])
+    evidence.update(evidence_)
 
-    if op == ge:
-        op_str = '>='
-    elif op == le:
-        op_str = '<='
-    else:
-        op_str = '=='
-
-    comp = BKB_component('{} {} {}'.format(prop, op_str, val))
-    inode_true = BKB_I_node(init_name='True', init_component=comp)
-    inode_false = BKB_I_node(init_name='False', init_component=comp)
-    fused_bkb.addComponent(comp)
-    fused_bkb.addComponentState(comp, inode_true)
-    fused_bkb.addComponentState(comp, inode_false)
-
-    #-- Set evidence
-    evidence[comp.name] = inode_true.name
-
-    #-- If this is last piece of evidence, make prior snodes. 
-    if i == 0:
-        #-- Add prior snode
-        snode_1 = BKB_S_node(init_component=comp, init_state=inode_true, init_probability=pop_stats[prop])
-        snode_2 = BKB_S_node(init_component=comp, init_state=inode_false, init_probability=1-pop_stats[prop])
-        fused_bkb.addSNode(snode_1)
-        fused_bkb.addSNode(snode_2)
+#-- Process Sources
+#-- If first piece of evidence connect to all patients.
+comp = fused_bkb.findComponent('{} {} {}'.format(ev[0], ev[1], ev[2]))
+inode_true = fused_bkb.findINode(comp, 'True')
+inode_false = fused_bkb.findINode(comp, 'False')
+fused_bkb = addSrcConnections(comp, inode_true, inode_false, fused_bkb, matched_srcs, patient_name_src_map)
 
 
-    #-- Connect pieces of demographic evidence or targets together via chain rule.
-    else:
-        #-- Collect all previous components
-        prev_comps = list()
-        for j in range(i):
-            ev_j = demo_ev[-j]
-            prop_j, op_j, val_j = ev_j
-
-            if op_j == ge:
-                op_str_j = '>='
-            elif op_j == le:
-                op_str_j = '<='
-            else:
-                op_str_j = '=='
-
-            prev_comps.append(fused_bkb.findComponent('{} {} {}'.format(prop_j, op_str_j, val_j)))
-
-
-        #-- Calculate joint probabilities from data
-        tail_product = [combo for combo in itertools.product(demo_ev[:i], [True, False])]
-        #print(tail_product)
-        tail_combos = list()
-        for combo in itertools.combinations(tail_product, r=i):
-            combo = list(combo)
-            #print(combo)
-            prop_set = set()
-            for ev_state in combo:
-                #print(ev_state)
-                ev_, state = ev_state
-                prop_, op_, val_ = ev_
-                prop_set.add(prop_)
-            if len(prop_set) == len(combo):
-                tail_combos.append(combo)
-        #print(tail_combos)
-        combos = [combo for combo in itertools.product([(ev, True), (ev, False)], tail_combos)]
-
-        print(combos)
-        counts = list()
-        for combo in combos:
-            head, tail = combo
-            #-- Put head and tail in one list
-            combo = [head] + tail
-            count = 0
-            for patient in PATIENTS:
-                truth = list()
-                for ev_state in combo:
-                    #print(ev_state)
-                    ev_, state = ev_state
-                    prop_, op_, val_ = ev_
-                    res = op_(patient_data[patient][prop_], val_)
-                    truth.append(res == state)
-                if all(truth):
-                    count += 1
-            counts.append(count)
-
-        probs = [float(count / len(PATIENTS)) for count in counts]
-        print(probs)
-        #-- Setup each S-node
-        for j, combo in enumerate(combos):
-            #print(combo)
-            head, tail = combo
-
-            #-- Process head
-            head_ev, state = head
-            prop_head, op_head, val_head = head_ev
-
-            if op_head == ge:
-                op_str_head = '>='
-            elif op_head == le:
-                op_str_head = '<='
-            else:
-                op_str_head = '=='
-
-            comp_head = fused_bkb.findComponent('{} {} {}'.format(prop_head, op_str_head, val_head))
-            if state:
-                i_node_head = fused_bkb.findINode(comp_head, 'True')
-            else:
-                i_node_head = fused_bkb.findINode(comp_head, 'False')
-
-            #print(comp_head.name)
-            #print(i_node_head.name)
-
-            #-- Process Tail
-            processed_tail = list()
-            for tail_ in tail:
-                tail_ev, state = tail_
-                prop_tail, op_tail, val_tail = tail_ev
-
-                if op_tail == ge:
-                    op_str_tail = '>='
-                elif op_tail == le:
-                    op_str_tail = '<='
-                else:
-                    op_str_tail = '=='
-
-                comp_tail = fused_bkb.findComponent('{} {} {}'.format(prop_tail, op_str_tail, val_tail))
-                if state:
-                    i_node_tail = fused_bkb.findINode(comp_tail, 'True')
-                else:
-                    i_node_tail = fused_bkb.findINode(comp_tail, 'False')
-                processed_tail.append((comp_tail, i_node_tail))
-            #print(processed_tail)
-            #-- Add Snode
-            if probs[j] > 0:
-                fused_bkb.addSNode(BKB_S_node(init_component=comp_head, init_state=i_node_head, init_probability=probs[j], init_tail=processed_tail))
-
-        #-- Process Sources
-        #-- If first piece of evidence connect to all patients.
-        if i == len(demo_ev) - 1:
-            #-- Attach to source nodes
-            for patient, src_name in patient_name_src_map.items():
-                for src_comp in src_components:
-                    src_state = fused_bkb.findINode(src_comp, src_name)
-
-                    #-- Find Prior snode, capture probability and remove.
-                    cidx = fused_bkb.getComponentIndex(src_comp)
-                    iidx = src_comp.getStateIndex(src_state)
-                    s_node = fused_bkb.S_nodes_by_head[cidx][iidx][0]
-                    fuse_prob = s_node.probability
-                    fused_bkb.removeSNode(s_node)
-
-                    if patient in matched_patients:
-                        fused_bkb.addSNode(BKB_S_node(init_component=src_comp,
-                                                      init_state=src_state,
-                                                      init_probability=fuse_prob,
-                                                      init_tail = [(comp, inode_true)]))
-                        #fused_bkb.addSNode(BKB_S_node(init_component=src_comp,
-                        #                              init_state=src_state,
-                        #                              init_probability=0,
-                        #                              init_tail = [(comp, inode_false)]))
-                    else:
-                        #fused_bkb.addSNode(BKB_S_node(init_component=src_comp,
-                        #                              init_state=src_state,
-                        #                              init_probability=0,
-                        #                              init_tail = [(comp, inode_true)]))
-                        fused_bkb.addSNode(BKB_S_node(init_component=src_comp,
-                                                      init_state=src_state,
-                                                      init_probability=fuse_prob,
-                                                      init_tail = [(comp, inode_false)]))
-
-
-
-
-        '''
-            #-- Treating as non-independent
-            count_i_j = 0
-            count_i_notj = 0
-            count_noti_j = 0
-            count_noti_notj = 0
-            count_j = 0
-            for patient in PATIENTS:
-                if op(patient_data[patient][prop], val) and op_j(patient_data[patient][prop_j], val_j):
-                    count_i_j += 1
-                    count_j += 1
-                elif op(patient_data[patient][prop], val) and not op_j(patient_data[patient][prop_j], val_j):
-                    count_i_notj += 1
-                elif not op(patient_data[patient][prop], val) and op_j(patient_data[patient][prop_j], val_j):
-                    count_noti_j += 1
-                    count_j += 1
-                else:
-                    count_noti_notj += 1
-            pop_stats[(prop, prop_j)] = (float(count_i_j / count_j),
-                                         float(count_i_notj / (len(PATIENTS) - count_j)),
-                                         float(count_noti_j / count_j),
-                                         float(count_noti_notj / (len(PATIENTS) - count_j)))
-
-            comp_j = fused_bkb.findComponent('{} {} {}'.format(prop_j, op_str_j, val_j))
-            #print([comp_name for comp_name in fused_bkb.components_index])
-            #print('{} {} {}'.format(prop_j, op_str_j, val_j))
-            inode_true_j = fused_bkb.findINode(comp_j, 'True')
-            inode_false_j = fused_bkb.findINode(comp_j, 'False')
-
-            #-- Add S-nodes
-            fused_bkb.addSNode(BKB_S_node(init_component=comp_j, init_state=inode_true_j, init_probability=pop_stats[(prop, prop_j)][0]/(2*(j+1)), init_tail=[(comp, inode_true)]))
-            fused_bkb.addSNode(BKB_S_node(init_component=comp_j, init_state=inode_false_j, init_probability=pop_stats[(prop, prop_j)][1]/(2*(j+1)), init_tail=[(comp, inode_true)]))
-            fused_bkb.addSNode(BKB_S_node(init_component=comp_j, init_state=inode_true_j, init_probability=pop_stats[(prop, prop_j)][2]/(2*(j+1)), init_tail=[(comp, inode_false)]))
-            fused_bkb.addSNode(BKB_S_node(init_component=comp_j, init_state=inode_false_j, init_probability=pop_stats[(prop, prop_j)][3]/(2*(j+1)), init_tail=[(comp, inode_false)]))
-
-        #-- Delete the last source_j's prior snodes
-        cidx = fused_bkb.getComponentIndex(comp_j)
-        for iidx in range(comp_j.getNumberStates()):
-            s_nodes = fused_bkb.S_nodes_by_head[cidx][iidx]
-            for s_node_ in s_nodes:
-                if s_node_.getNumberTail() == 0:
-                    fused_bkb.removeSNode(s_node_)
-'''
 #-- Set targets
+print('Evidence:')
+print(evidence)
 targets1 = ['Gene1_mutated']
 targets2 = ['Age >= 50']
 
