@@ -33,7 +33,8 @@ class Driver:
         print("Let's build a query!")
         meta_evidence = self.chooseDemoEvidence()
         evidence = self.chooseStandardEvidence()
-        targets = self.chooseTargets()
+        meta_targets = self.chooseDemoTargets()
+        targets = self.chooseStandardTargets()
 
         while True:
             print('Choose reasoning Type:\n1)\tRevision\n2)\tUpdating')
@@ -50,8 +51,9 @@ class Driver:
         query = Query(evidence=evidence,
                       targets=targets,
                       meta_evidence=meta_evidence,
+                      meta_targets=meta_targets,
                       type=reason_type)
-        print(meta_evidence)
+        #print(meta_evidence)
         query = self.reasoner.analyze_query(query)
         query.getReport()
         again = input('Do you wish to reason again? ([y],n): ') or 'y'
@@ -102,6 +104,48 @@ class Driver:
                     else:
                         print('Unrecognized selection.')
 
+    def chooseDemoTargets(self):
+        meta_targets = list()
+        while True:
+            print('Choose Demographic Targets:')
+            for j, label in enumerate(self.reasoner.metadata_labels):
+                print('{})\t{}'.format(j, label))
+            print('{})\tNo More Demographic Targets'.format(j+1))
+            rv = int(input('Your Choice: '))
+            if rv == j+1:
+                return meta_targets
+            else:
+                rvName = self.reasoner.metadata_labels[rv]
+                while True:
+                    op = input('Choose a operation ([==], >=, <=): ') or '=='
+                    if op == '==' or op == '>=' or op == '<=':
+                        print('Choose a value for demographic target.')
+                        range_ = self.reasoner.metadata_ranges[rvName]
+                        if type(range_) == set:
+                            for item  in range_:
+                                print('\t{}'.format(item))
+                        else:
+                            print('\tmin={}\n\tmax={}'.format(range_[0], range_[1]))
+                        state = input('Your choice: ')
+                        try:
+                            state = float(state)
+                        except:
+                            pass
+                        break
+                    else:
+                        print('Unrecognized operation!')
+                while True:
+                    print('This is your demographic choice:')
+                    print('\t{} {} {}'.format(rvName, op, state))
+                    correct = input('Is it correct? ([y], n): ') or 'y'
+                    if correct == 'y':
+                        meta_targets.append((rvName, op, state))
+                        break
+                    elif correct == 'n':
+                        break
+                    else:
+                        print('Unrecognized selection.')
+
     def chooseStandardEvidence(self):
         evidence = dict()
         while True:
@@ -134,7 +178,7 @@ class Driver:
                     print('Unrecognized selection.')
 
 
-    def chooseTargets(self):
+    def chooseStandardTargets(self):
         targets = list()
         while True:
             print('Choose Targets:')
