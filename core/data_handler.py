@@ -139,6 +139,9 @@ class DataHandler:
         if self.clinical_data_file is not None:
             self.patientProcessor.processClinicalData(self.clinical_data_file)
 
+        if self.radiation_data_file is not None:
+            self.patientProcessor.processRadiationData(self.radiation_data_file)
+
         self.patientProcessor.processPatientBKF()
 
     def readPathwayData(self):

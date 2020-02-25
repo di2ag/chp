@@ -56,7 +56,7 @@ class ReactomePathwayProcessor:
             self.pathways.append(pathway)
         #print("Gene pathways Processed")
 
-    def processPathwayBKF(self):
+    def processPathwayBKF(self, exhaustiveOr=False):
         assert len(self.pathways) > 0, "Have not processed pathways yet"
 
         for pathway in tqdm.tqdm(self.pathways, desc='Processing pathway BKFs'):
@@ -65,14 +65,12 @@ class ReactomePathwayProcessor:
                 #head
                 pathwayParentComp = BKB_component(pathway.head + "_active=")
                 pathwayParentTrue = BKB_I_node("True",pathwayParentComp)
-                #pathwayParentComp.addINode(pathwayParentTrue)
                 bkf.addComponent(pathwayParentComp)
                 bkf.addComponentState(pathwayParentComp, pathwayParentTrue)
 
                 #tail - should only be 1 for _hier bkfs
                 pathwayChildComp = BKB_component(pathway.tails[0] + "_active=")
                 pathwayChildTrue = BKB_I_node("True", pathwayChildComp)
-                #pathwayChildComp.addINode(pathwayChildTrue)
                 bkf.addComponent(pathwayChildComp)
                 bkf.addComponentState(pathwayChildComp, pathwayChildTrue)
 
@@ -80,25 +78,37 @@ class ReactomePathwayProcessor:
                 bkf.addSNode(BKB_S_node(pathwayChildComp, pathwayChildTrue, 1.0))
                 bkf.addSNode(BKB_S_node(pathwayParentComp, pathwayParentTrue, 1.0, [(pathwayChildComp, pathwayChildTrue)]))
             else:
-                #head
-                pathwayHierComp = BKB_component(pathway.head + "_active=")
-                pathwayHierTrue = BKB_I_node("True",pathwayHierComp)
-                #pathwayHierComp.addINode(pathwayHierTrue)
-                bkf.addComponent(pathwayHierComp)
-                bkf.addComponentState(pathwayHierComp, pathwayHierTrue)
 
-                #tails
-                for tail in pathway.tails:
-                    statConditionComp = BKB_component("mu-STD>=" + tail + "<=mu+STD=")
-                    statConditionTrue = BKB_I_node('True', statConditionComp)
-                    #statConditionComp.addINode(statConditionTrue)
-                    bkf.addComponent(statConditionComp)
-                    bkf.addComponentState(statConditionComp, statConditionTrue)
+                if exhaustiveOr:
+                    print("not implemented")
+                else:
+                    # pathway
+                    pathwayReactionComp = BKB_component(pathway.head + "_active=")
+                    pathwayReactionTrue = BKB_I_node("True",pathwayReactionComp)
+                    bkf.addComponent(pathwayReactionComp)
+                    bkf.addComponentState(pathwayReactionComp, pathwayReactionTrue)
 
-                    bkf.addSNode(BKB_S_node(statConditionComp, statConditionTrue, 1.0))
-                    bkf.addSNode(BKB_S_node(pathwayHierComp, pathwayHierTrue, 1.0, [(statConditionComp, statConditionTrue)]))
+                    # gene slector
+                    geneSelectorComp = BKB_component("Gene_combo=")
+                    bkf.addComponent(geneSelectorComp)
 
-            self.bkfs.append(bkf)
+                    #tails
+                    for tail in pathway.tails:
+                        geneCombo = BKB_I_node(tail,geneSelectorComp)
+                        bkf.addComponentState(geneSelectorComp, geneCombo)
+
+                        statConditionComp = BKB_component("mu-STD>=" + tail + "<=mu+STD=")
+                        statConditionTrue = BKB_I_node('True', statConditionComp)
+                        bkf.addComponent(statConditionComp)
+                        bkf.addComponentState(statConditionComp, statConditionTrue)
+
+                        bkf.addSNode(BKB_S_node(statConditionComp, statConditionTrue, 1.0))
+
+                        bkf.addSNode(BKB_S_node(geneSelectorComp, geneCombo, 1.0, [(statConditionComp, statConditionTrue)]))
+
+                        bkf.addSNode(BKB_S_node(pathwayReactionComp, pathwayReactionTrue, 1.0, [(geneSelectorComp, geneCombo)]))
+
+                self.bkfs.append(bkf)
 
     def BKFsToFile(self, outDirect):
         bkf_files = list()

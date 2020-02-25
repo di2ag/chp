@@ -13,6 +13,7 @@ class PatientProcessor:
         self.bkfs = list()
         self.patients = list()
         self.clinicalCollected = False
+        self.radiationCollected = False
 
     class Patient:
         # will need to account for mutatedReads
@@ -23,17 +24,23 @@ class PatientProcessor:
             self.mutatedGenes = mutatedGenes
             self.mutatedGeneReads = list()
 
-            # clinical later
+            # clinical data
             self.ageDiagnos = None
             self.gender = None
             self.survivalTime = None
 
+            # radiation data
+            self.therapyName = list()
+            self.therapySite = list()
+            self.radiationDose = list()
+            self.daysToTherapyStart = list()
+            self.daysToTherapyEnd = list()
+
             # add drug info later
-            # add radiation info later
 
     # processes patient gene data
     def processPatientGeneData(self, patientMutGenes, patientMutReads, geneReadStats):
-        #print("Reading patient files...")
+        # reading initial patient data
         with open(patientMutGenes, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientGeneDict = dict()
@@ -54,40 +61,33 @@ class PatientProcessor:
                 mutatedPatGenes = list()
             mutatedPatGenes.append(row[2])
         csv_file.close()
-        #print("Patient files read.")
 
-        #print("Reading patient gene fpkm reads...")
-        # get gene reads from tumor tissue
-
+        # reading gene reads
         with open(patientMutReads, 'r') as csv_file:
             reader = csv.reader(csv_file)
             geneReadsDict = dict()
-            # row[1] = patientID, row[6] = gene, row[7] = reads
+            # row[0] = CancerType row[1] = patientID, row[6] = gene, row[7] = reads
             next(reader)
             pbar = tqdm.tqdm(total=os.path.getsize(patientMutReads), desc='Reading patient gene fpkm reads')
             for row in reader:
-                geneReadsDict[str(row[1])+str(row[6])] = float(row[7])
+                geneReadsDict[str(row[0])+str(row[1])+str(row[6])] = float(row[7])
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
         for p in tqdm.tqdm(self.patients[:], desc='Reading patient mutations'):
             geneMismatch = []
             for gene in p.mutatedGenes[:]:
-                if str(p.patientID)+str(gene) in geneReadsDict:
-                    p.mutatedGeneReads.append(geneReadsDict[p.patientID+gene])
+                if p.cancerType + p.patientID + gene in geneReadsDict:
+                    p.mutatedGeneReads.append(geneReadsDict[p.cancerType+p.patientID+gene])
                 #gene read information not found
                 else:
                     geneMismatch.append(gene)
                     p.mutatedGenes.remove(gene)
-            #rare case where we've removed all genes for a patient
+            # rare case where we've removed all genes for a patient
             if len(p.mutatedGenes) == 0:
                 self.patients.remove(p)
-            #if len(geneMismatch) > 0:
-                #print("Warning - Patient", p.patientID, "has", len(geneMismatch), "missing genes")
-        #print("Patient gene fpkm reads read.")
 
     def processClinicalData(self, clinicalData):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
-        #print("Reading patient clinical data...")
         with open(clinicalData, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientClinicalDict = dict()
@@ -95,9 +95,13 @@ class PatientProcessor:
             pbar = tqdm.tqdm(total=os.path.getsize(clinicalData), desc='Reading clinical data')
             next(reader)
             for row in reader:
-                ageDiag = int(float(row[2])) if 'DNP' not in row[2] else row[2]
+                if 'DNP' in row[2]:
+                    continue
+                ageDiag = int(float(row[2]))
                 gender = row[3]
-                survTime = int(float(row[7])) if 'DNP' not in row[7] else row[7]
+                if 'DNP' in row[7]:
+                    continue
+                survTime = int(float(row[7]))
                 patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender,survTime)
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
@@ -107,10 +111,59 @@ class PatientProcessor:
                 p.ageDiagnos = clinical[0]
                 p.gender = clinical[1]
                 p.survivalTime = clinical[2]
-            else:
-                print("WARNING - Patient", p, "clinical data does not exist")
         self.clinicalCollected = True
-        #print("Patient clinical data read.")
+
+    def processRadiationData(self, radiationData):
+        assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
+        with open(radiationData, 'r') as csv_file:
+            reader = csv.reader(csv_file)
+            patientRadiationDict = dict()
+            # row[0] = cancerType, row[1] = patientID, row[2] = Therapy name, row[3] = therapy Site, row[4] = dose, row[5] = doseUnit, row[6] = days to start, row[7] = days to end
+            pbar = tqdm.tqdm(total=os.path.getsize(radiationData), desc='Reading radiation data')
+            next(reader)
+            for row in reader:
+                cancerType = row[0]
+                patID = row[1]
+                if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
+                    continue
+                therapyName = row[2]
+                if 'UNKNOWN' in row[3] or 'Discrepancy' in row[3] or 'DNP' in row[3]:
+                    continue
+                therapySite = row[3]
+                if 'UNKNOWN' in row[4] or 'Discrepancy' in row[4] or 'DNP' in row[4]:
+                    continue
+                dose = None
+                try:
+                    if row[5] == 'Gy':
+                        dose = int(float(row[4])) * 100 #conversion rate between cGy and Gy. Gy = 100 cGy 
+                    elif row[5] == 'cGy':
+                        dose = int(float(row[4]))
+                except:
+                    continue
+                if 'UNKNOWN' in row[6] or 'Discrepancy' in row[6] or 'DNP' in row[6]:
+                    continue
+                daysToStart = int(float(row[6]))
+                if 'UNKNOWN' in row[7] or 'Discrepancy' in row[7] or 'DNP' in row[7]:
+                    continue
+                daysToEnd = int(float(row[7]))
+                if cancerType + patID in patientRadiationDict:
+                    patientRadiationDict[cancerType + patID].append([therapyName, therapySite, dose, daysToStart, daysToEnd])
+                else:
+                    patientRadiationDict[cancerType + patID] = [therapyName, therapySite, dose, daysToStart, daysToEnd]
+                pbar.update(len(''.join(row).encode('utf-8')))
+            pbar.close()
+        for p in self.patients:
+            if p.cancerType + p.patientID in patientRadiationDict:
+                radiationData = patientRadiationDict[p.cancerType+p.patientID]
+                for rData in radiationData:
+                    p.therapyName.append(radiationData[0])
+                    p.therapySite.append(radiationData[1])
+                    p.radiationDose.append(radiationData[2])
+                    p.daysToTherapyStart.append(radiationData[3])
+                    p.daysToTherapyEnd.append(radiationData[4])
+
+        self.radiationCollected = True
+
 
     # should be called after all Patient objects have been cosntructed
     def processPatientBKF(self):
@@ -200,6 +253,18 @@ class PatientProcessor:
             patientDict["Gender"] = self.patients[bkfPatientIndex].gender
             #patient survival time
             patientDict["Survival_Time"] = self.patients[bkfPatientIndex].survivalTime
+        #patients can have no radiation data associated with them --------------------v
+        if self.radiationCollected and len(self.patients[bkfPatientIndex].therapyName) > 0:
+            # patient therapy name(s)
+            patientDict["Therapy_Name(s)"] = tuple(self.patients[bkfPatientIndex].therapyName)
+            # patient therapy site(s)
+            patientDict["Therapy_Site(s)"] = tuple(self.patients[bkfPatientIndex].therapySite)
+            # patient radiation dose(s)
+            patientDict["Radiation_Dose(s)"] = tuple(self.patients[bkfPatientIndex].radiationDose)
+            # patient days to therapy start
+            patientDict["Days_To_Therapy_Start(s)"] = tuple(self.patients[bkfPatientIndex].daysToTherapyStart)
+            # patient days to therapy end
+            patientDict["Days_To_Therapy_End(s)"] = tuple(self.patients[bkfPatientIndex].daysToTherapyEnd)
 
         patientHashVal = hash(self.patients[bkfPatientIndex].patientID)
         self.bkfs[bkfPatientIndex].name = patientHashVal
