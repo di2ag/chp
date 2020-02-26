@@ -63,40 +63,40 @@ class ReactomePathwayProcessor:
             bkf = BKB(name=pathway.ID)
             if "_hier" in pathway.ID:
                 #head
-                pathwayParentComp = BKB_component(pathway.head + "_active=")
-                pathwayParentTrue = BKB_I_node("True",pathwayParentComp)
+                #pathwayParentComp = BKB_component(pathway.head + "_active=")
+                #pathwayParentTrue = BKB_I_node("True",pathwayParentComp)
                 #pathwayParentComp.addINode(pathwayParentTrue)
-                bkf.addComponent(pathwayParentComp)
-                bkf.addComponentState(pathwayParentComp, pathwayParentTrue)
+                pathwayParentComp_idx = bkf.addComponent('{}_active='.format(pathway.head))
+                pathwayParentTrue_idx = bkf.addComponentState(pathwayParentComp_idx, 'True')
 
                 #tail - should only be 1 for _hier bkfs
-                pathwayChildComp = BKB_component(pathway.tails[0] + "_active=")
-                pathwayChildTrue = BKB_I_node("True", pathwayChildComp)
+                #pathwayChildComp = BKB_component(pathway.tails[0] + "_active=")
+                #pathwayChildTrue = BKB_I_node("True", pathwayChildComp)
                 #pathwayChildComp.addINode(pathwayChildTrue)
-                bkf.addComponent(pathwayChildComp)
-                bkf.addComponentState(pathwayChildComp, pathwayChildTrue)
+                pathwayChildComp_idx = bkf.addComponent('{}_active='.format(pathway.tails[0]))
+                pathwayChildTrue_idx = bkf.addComponentState(pathwayChildComp_idx, 'True')
 
                 #S-node
-                bkf.addSNode(BKB_S_node(pathwayChildComp, pathwayChildTrue, 1.0))
-                bkf.addSNode(BKB_S_node(pathwayParentComp, pathwayParentTrue, 1.0, [(pathwayChildComp, pathwayChildTrue)]))
+                bkf.addSNode(BKB_S_node(pathwayChildComp_idx, pathwayChildTrue_idx, 1.0))
+                bkf.addSNode(BKB_S_node(pathwayParentComp_idx, pathwayParentTrue_idx, 1.0, [(pathwayChildComp_idx, pathwayChildTrue_idx)]))
             else:
                 #head
-                pathwayHierComp = BKB_component(pathway.head + "_active=")
-                pathwayHierTrue = BKB_I_node("True",pathwayHierComp)
+                #pathwayHierComp = BKB_component(pathway.head + "_active=")
+                #pathwayHierTrue = BKB_I_node("True",pathwayHierComp)
                 #pathwayHierComp.addINode(pathwayHierTrue)
-                bkf.addComponent(pathwayHierComp)
-                bkf.addComponentState(pathwayHierComp, pathwayHierTrue)
+                pathwayHierComp_idx = bkf.addComponent('{}_active='.format(pathway.head))
+                pathwayHierTrue_idx = bkf.addComponentState(pathwayHierComp_idx, 'True')
 
                 #tails
                 for tail in pathway.tails:
-                    statConditionComp = BKB_component("mu-STD>=" + tail + "<=mu+STD=")
-                    statConditionTrue = BKB_I_node('True', statConditionComp)
+                    #statConditionComp = BKB_component("mu-STD>=" + tail + "<=mu+STD=")
+                    #statConditionTrue = BKB_I_node('True', statConditionComp)
                     #statConditionComp.addINode(statConditionTrue)
-                    bkf.addComponent(statConditionComp)
-                    bkf.addComponentState(statConditionComp, statConditionTrue)
+                    statConditionComp_idx = bkf.addComponent('mu-STD<={}<=mu+STD'.format(tail))
+                    statConditionTrue_idx = bkf.addComponentState(statConditionComp_idx, 'True')
 
-                    bkf.addSNode(BKB_S_node(statConditionComp, statConditionTrue, 1.0))
-                    bkf.addSNode(BKB_S_node(pathwayHierComp, pathwayHierTrue, 1.0, [(statConditionComp, statConditionTrue)]))
+                    bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionTrue_idx, 1.0))
+                    bkf.addSNode(BKB_S_node(pathwayHierComp_idx, pathwayHierTrue_idx, 1.0, [(statConditionComp_idx, statConditionTrue_idx)]))
 
             self.bkfs.append(bkf)
 
@@ -104,10 +104,10 @@ class ReactomePathwayProcessor:
         bkf_files = list()
         source_names = list()
         for bkf in self.bkfs:
-            file_name = outDirect + bkf.name + '.bkf'
+            file_name = outDirect + bkf.getName() + '.bkf'
             bkf.save(file_name)
             bkf_files.append(file_name)
-            source_names.append(str(bkf.name))
+            source_names.append(str(bkf.getName()))
 
         return bkf_files, source_names
 

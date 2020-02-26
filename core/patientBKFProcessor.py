@@ -121,35 +121,35 @@ class PatientProcessor:
             bkf = BKB(name = pat.patientID)
             for gene in pat.mutatedGenes:
                 # gene
-                mutGeneComp = BKB_component("mut_" + gene + "=")
-                iNodeGeneMut = BKB_I_node('True',mutGeneComp)
+                #mutGeneComp = BKB_component("mut_" + gene + "=")
+                #iNodeGeneMut = BKB_I_node('True',mutGeneComp)
                 #mutGeneComp.addINode(iNodeGeneMut)
-                bkf.addComponent(mutGeneComp)
-                bkf.addComponentState(mutGeneComp, iNodeGeneMut)
+                mutGeneComp_idx = bkf.addComponent('mut_{}='.format(gene))
+                iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
 
                 # stat condition bin
-                statConditionComp = BKB_component("mu-STD>=" + gene + "<=mu+STD=")
-                statConditionTrue = BKB_I_node('True',statConditionComp)
-                statConditionFalse = BKB_I_node('False',statConditionComp)
+                #statConditionComp = BKB_component("mu-STD>=" + gene + "<=mu+STD=")
+                #statConditionTrue = BKB_I_node('True',statConditionComp)
+                #statConditionFalse = BKB_I_node('False',statConditionComp)
                 #statConditionComp.addINode(statConditionTrue)
                 #statConditionComp.addINode(statConditionFalse)
-                bkf.addComponent(statConditionComp)
-                bkf.addComponentState(statConditionComp, statConditionTrue)
-                bkf.addComponentState(statConditionComp, statConditionFalse)
+                statConditionComp_idx = bkf.addComponent('mut-STD>={}<=mu+STD'.format(gene))
+                statConditionTrue_idx = bkf.addComponentState(statConditionComp_idx, 'True')
+                #statConditionFalse_idx = bkf.addComponentState(statConditionComp_idx, 'False')
 
                 # form SNode  o---->[mut_<genename>=True]
-                bkf.addSNode(BKB_S_node(mutGeneComp, iNodeGeneMut, 1.0))
+                bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
 
                 if True: #add stat condition given data, i.e. compare patient gene reads vs the population mean and std
                     # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=True
-                    bkf.addSNode(BKB_S_node(statConditionComp, statConditionTrue, 1.0, [(mutGeneComp, iNodeGeneMut)]))
+                    bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionTrue_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
                     # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=False
-                    bkf.addSNode(BKB_S_node(statConditionComp, statConditionFalse, 0.0, [(mutGeneComp, iNodeGeneMut)]))
+                    #bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionFalse_idx, 0.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
                 else:
                     # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=True
-                    bkf.addSNode(BKB_S_node(statConditionComp, statConditionTrue, 0.0, [(mutGeneComp, iNodeGeneMut)]))
+                    #bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionTrue_idx, 0.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
                     # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=False
-                    bkf.addSNode(BKB_S_node(statConditionComp, statConditionFalse, 1.0, [(mutGeneComp, iNodeGeneMut)]))
+                    bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionFalse_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
             self.bkfs.append(bkf)
         #print("Patient BKFs formed.")
 
@@ -160,9 +160,9 @@ class PatientProcessor:
         for idx in indices:
             patientHashVal, patientDict = self.BKFHash(idx)
             allBKFHashNames[patientHashVal] = patientDict
-            bkf_files.append(outDirect + str(self.bkfs[idx].name) + '.bkf')
-            self.bkfs[idx].save(outDirect + str(self.bkfs[idx].name) + '.bkf')
-            source_names.append(str(self.bkfs[idx].name))
+            bkf_files.append(outDirect + str(patientHashVal) + '.bkf')
+            self.bkfs[idx].save(outDirect + str(patientHashVal) + '.bkf')
+            source_names.append(str(patientHashVal))
         # write all patient BKF hashs to file
         patient_data_file = outDirect + 'patient_data.pk'
         with open(patient_data_file, 'wb') as f_:
@@ -176,7 +176,7 @@ class PatientProcessor:
             #i matches the self.patients to self.bkfs.
             patientHashVal, patientDict = self.BKFHash(i)
             allBKFHashNames[patientHashVal] = patientDict
-            self.bkfs[i].save(outDirect + str(self.bkfs[i].name) + '.bkf')
+            self.bkfs[i].save(outDirect + str(self.bkfs[i].getName()) + '.bkf')
         # write all patient BKF hashs to file
         with open(outDirect + 'patient_data.pk', 'wb') as f_:
             pickle.dump(file=f_, obj=allBKFHashNames)
@@ -202,12 +202,14 @@ class PatientProcessor:
             patientDict["Survival_Time"] = self.patients[bkfPatientIndex].survivalTime
 
         patientHashVal = hash(self.patients[bkfPatientIndex].patientID)
-        self.bkfs[bkfPatientIndex].name = patientHashVal
+        #self.bkfs[bkfPatientIndex].name = patientHashVal
         return patientHashVal, patientDict
 
 if __name__ == '__main__':
     PP = PatientProcessor()
-    PP.processPatientGeneData('data/wxs.csv', 'data/rnaseq_fpkm_uq_primary_tumor.csv', 'data/geneReadsStats.csv')
+    PP.processPatientGeneData('/home/public/data/ncats/data_drop_02-11-2020/wxs.csv',
+                              '/home/public/data/ncats/data_drop_02-11-2020/rnaseq_fpkm_uq_primary_tumor.csv',
+                              '/home/public/data/ncats/data_drop_02-11-2020/geneReadsStats.csv')
     #PP.processClinicalData('data/clinical.csv')
     PP.processPatientBKF()
-    PP.BKFsToFile('patientBKFs2/')
+    PP.BKFsToFile('BKFs/')

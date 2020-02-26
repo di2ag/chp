@@ -201,7 +201,7 @@ class DataHandler:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_file', default=os.path.join(os.getcwd(), 'data_driver.config'), type=str)
+    parser.add_argument('--config_file', default=os.path.join(os.getcwd(), 'data_handler.config'), type=str)
 
     args = parser.parse_args()
 

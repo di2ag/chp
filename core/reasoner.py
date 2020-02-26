@@ -8,26 +8,30 @@ import copy
 from concurrent.futures import ProcessPoolExecutor, wait
 import time
 
-from pybkb.core.cpp_base.reasoning import revision, updating
+from pybkb.core.cpp_base.reasoning import revision as cpp_revision
+from pybkb.core.cpp_base.reasoning import updating as cpp_updating
+from pybkb.core.python_base.reasoning import updating as py_updating
 from pybkb.core.common.bayesianKnowledgeBase import BKB_component, BKB_I_node, BKB_S_node
 
 class Reasoner:
-    def __init__(self, fused_bkb, patients):
+    def __init__(self, fused_bkb, patients, cpp_reasoning=False):
         self.fused_bkb = fused_bkb
         self.patients = patients
+        self.cpp_reasoning = cpp_reasoning
 
         #-- Preprocess src hash values
-        src_components = fused_bkb.getSrcComponents()
+        src_component_indices = fused_bkb.getSrcComponents()
         src_hashs = dict()
-        for component in src_components:
-            for idx in range(component.getNumberStates()):
-                state = component.getState(idx)
+        for comp_idx in src_component_indices:
+            for state_idx in range(fused_bkb.getNumberComponentINodes(comp_idx)):
+                state_name = fused_bkb.getComponentINodeName(comp_idx, state_idx)
                 #-- Collect src numbers and string name or hash
-                src_num = int(state.name.split('_')[0][1:-1])
+                src_num = int(state_name.split('_')[0][1:-1])
                 try:
-                    src_hashs[src_num] = int(''.join(state.name.split('_')[1:]))
+                    src_hashs[src_num] = int(''.join(state_name.split('_')[1:]))
                 except ValueError:
-                    src_hashs[src_num] = state.name
+                    continue
+                    #src_hashs[src_num] = state_name
         #self.src_hashs = set(src_hashs)
         self.src_hashs = src_hashs
 
@@ -64,20 +68,30 @@ class Reasoner:
     def solve_query(self, query):
         print('Reasoning...')
         start_time = time.time()
-        if query.type == 'revision':
-            res = revision(query.bkb,
-                           query.evidence,
-                           marginal_evidence=query.marginal_evidence,
-                           targets=query.targets,
-                           file_prefix=query.name)
-        elif query.type == 'updating':
-            res = updating(query.bkb,
-                           query.evidence,
-                           marginal_evidence=query.marginal_evidence,
-                           targets=query.targets,
-                           file_prefix=query.name)
+        if self.cpp_reasoning:
+            if query.type == 'revision':
+                res = cpp_revision(query.bkb,
+                               query.evidence,
+                               marginal_evidence=query.marginal_evidence,
+                               targets=query.targets,
+                               file_prefix=query.name)
+            elif query.type == 'updating':
+                res = cpp_updating(query.bkb,
+                               query.evidence,
+                               marginal_evidence=query.marginal_evidence,
+                               targets=query.targets,
+                               file_prefix=query.name)
+            else:
+                raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
         else:
-            raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
+            if query.type == 'revision':
+                raise NotImplementedError('Python Revision is not currently implemented.')
+            elif query.type == 'updating':
+                res = py_updating(query.bkb,
+                               query.evidence,
+                               query.targets)
+            else:
+                raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
         compute_time = time.time() - start_time
         query.result = res
         query.compute_time = compute_time
@@ -85,7 +99,7 @@ class Reasoner:
 
     def process_metaVariables(self, bkb, meta_variables):
         #-- Get all src components
-        src_components = bkb.getSrcComponents()
+        #src_components = bkb.getSrcComponents()
 
         #-- Collect source hashs that match metadata as well as population stats
         transformed_meta = dict()
@@ -96,10 +110,10 @@ class Reasoner:
 
         #-- Process Sources
         #-- If first piece of evidence connect to all patients.
-        comp = bkb.findComponent('{} {} {}'.format(meta[0], meta[1], meta[2]))
-        inode_true = bkb.findINode(comp, 'True')
-        inode_false = bkb.findINode(comp, 'False')
-        bkb = _addSrcConnections(comp, inode_true, inode_false, bkb, matched_srcs, self.src_hashs)
+        comp_idx = bkb.getComponentIndex('{} {} {}'.format(meta[0], meta[1], meta[2]))
+        inode_true_idx = bkb.getComponentINodeIndex(comp_idx, 'True')
+        inode_false_idx = bkb.getComponentINodeIndex(comp_idx, 'False')
+        bkb = _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, self.src_hashs)
         return transformed_meta, bkb
 
     def analyze_query(self, query):
@@ -145,13 +159,13 @@ def _processDependencyHead(head, bkb):
     prop_head, op_str_head, val_head = head_ev
     op_head = _process_operator(op_str_head)
 
-    comp_head = bkb.findComponent('{} {} {}'.format(prop_head, op_str_head, val_head))
+    comp_head_idx = bkb.getComponentIndex('{} {} {}'.format(prop_head, op_str_head, val_head))
     if state:
-        i_node_head = bkb.findINode(comp_head, 'True')
+        i_node_head_idx = bkb.getComponentINodeIndex(comp_head_idx, 'True')
     else:
-        i_node_head = bkb.findINode(comp_head, 'False')
+        i_node_head_idx = bkb.getComponentINodeIndex(comp_head_idx, 'False')
 
-    return comp_head, i_node_head
+    return comp_head_idx, i_node_head_idx
 
 def _processDependecyTail(tail, bkb):
     processed_tail = list()
@@ -160,12 +174,12 @@ def _processDependecyTail(tail, bkb):
         prop_tail, op_str_tail, val_tail = tail_ev
         op_tail = _process_operator(op_str_tail)
 
-        comp_tail = bkb.findComponent('{} {} {}'.format(prop_tail, op_str_tail, val_tail))
+        comp_tail_idx = bkb.getComponentIndex('{} {} {}'.format(prop_tail, op_str_tail, val_tail))
         if state:
-            i_node_tail = bkb.findINode(comp_tail, 'True')
+            i_node_tail_idx = bkb.getComponentINodeIndex(comp_tail_idx, 'True')
         else:
-            i_node_tail = bkb.findINode(comp_tail, 'False')
-        processed_tail.append((comp_tail, i_node_tail))
+            i_node_tail_idx = bkb.getComponentINodeIndex(comp_tail_idx, 'False')
+        processed_tail.append((comp_tail_idx, i_node_tail_idx))
     return processed_tail
 
 def _processOptionDependency(option, option_dependencies, bkb, src_population, src_population_data):
@@ -207,12 +221,12 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
     for j, combo in enumerate(combos):
         head, tail = combo
         #-- Process head
-        comp_head, i_node_head = _processDependencyHead(head, bkb)
+        comp_head_idx, i_node_head_idx = _processDependencyHead(head, bkb)
         #-- Process Tail
         processed_tail = _processDependecyTail(tail, bkb)
         #-- Add Snode
         if probs[j] > 0:
-            bkb.addSNode(BKB_S_node(init_component=comp_head, init_state=i_node_head, init_probability=probs[j], init_tail=processed_tail))
+            bkb.addSNode(BKB_S_node(init_component_index=comp_head_idx, init_state_index=i_node_head_idx, init_probability=probs[j], init_tail=processed_tail))
 
     return bkb
 
@@ -227,20 +241,21 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
             pop_count_true += 1
     prob = float(pop_count_true / len(src_population))
 
-    comp = BKB_component('{} {} {}'.format(prop, op_str, val))
-    inode_true = BKB_I_node(init_name='True', init_component=comp)
-    inode_false = BKB_I_node(init_name='False', init_component=comp)
-    bkb.addComponent(comp)
-    bkb.addComponentState(comp, inode_true)
-    bkb.addComponentState(comp, inode_false)
+    #comp = BKB_component('{} {} {}'.format(prop, op_str, val))
+    #inode_true = BKB_I_node(init_name='True', init_component=comp)
+    #inode_false = BKB_I_node(init_name='False', init_component=comp)
+    
+    comp_idx = bkb.addComponent('{} {} {}'.format(prop, op_str, val))
+    inode_true_idx = bkb.addComponentState(comp_idx, 'True')
+    inode_false_idx = bkb.addComponentState(comp_idx, 'False')
 
     #-- Create option dictionary
-    options_dict = {comp.name: inode_true.name}
+    options_dict = {bkb.getComponentName(comp_idx): bkb.getComponentINodeName(comp_idx, inode_true_idx)}
 
     #-- If no chain rule dependencies, just add prior s-nodes
     if len(option_dependencies) == 0:
-        snode_1 = BKB_S_node(init_component=comp, init_state=inode_true, init_probability=prob)
-        snode_2 = BKB_S_node(init_component=comp, init_state=inode_false, init_probability=1-prob)
+        snode_1 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_true_idx, init_probability=prob)
+        snode_2 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_false_idx, init_probability=1-prob)
         bkb.addSNode(snode_1)
         bkb.addSNode(snode_2)
 
@@ -250,31 +265,48 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
 
     return bkb, options_dict, matched_srcs
 
-def _addSrcConnections(comp, inode_true, inode_false, bkb, matched_srcs, src_population):
+def _constructSNodesByHead(bkb):
+    S_nodes_by_head = dict()
+    for snode in bkb.getAllSNodes():
+        (cidx, iidx) = snode.getHead()
+        try:
+            S_nodes_by_head[cidx]
+        except KeyError:
+            S_nodes_by_head[cidx] = dict()
+        try:
+            S_nodes_by_head[cidx][iidx].append(snode)
+        except KeyError:
+            S_nodes_by_head[cidx][iidx] = list()
+            S_nodes_by_head[cidx][iidx].append(snode)
+    return S_nodes_by_head
+
+def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_population):
     #-- Attach to source nodes
-    src_components = bkb.getSrcComponents()
+    src_component_indices = bkb.getSrcComponents()
+    S_nodes_by_head = _constructSNodesByHead(bkb)
+
     for entity_name, src_name in src_population.items():
-        for src_comp in src_components:
+        for src_comp_idx in src_component_indices:
             try:
-                src_state = bkb.findINode(src_comp, str(src_name), contains=True)
+                src_state_idx = bkb.findINode(src_comp_idx, str(src_name), contains=True)
 
                 #-- Find Prior snode, capture probability and remove.
-                cidx = bkb.getComponentIndex(src_comp)
-                iidx = src_comp.getStateIndex(src_state)
-                s_node = bkb.S_nodes_by_head[cidx][iidx][0]
+                #cidx = bkb.getComponentIndex(src_comp)
+                #iidx = src_comp.getStateIndex(src_state)
+                s_node = bkb.S_nodes_by_head[src_comp_idx][src_state_idx][0]
             except AttributeError:
                 continue
             prob = s_node.probability
             bkb.removeSNode(s_node)
 
             if entity_name in matched_srcs:
-                bkb.addSNode(BKB_S_node(init_component=src_comp,
-                                              init_state=src_state,
+                bkb.addSNode(BKB_S_node(init_component_index=src_comp_idx,
+                                              init_state_index=src_state_idx,
                                               init_probability=prob,
-                                              init_tail = [(comp, inode_true)]))
+                                              init_tail = [(comp_idx, inode_true_idx)]))
             else:
-                bkb.addSNode(BKB_S_node(init_component=src_comp,
-                                              init_state=src_state,
+                bkb.addSNode(BKB_S_node(init_component_index=src_comp_idx,
+                                              init_state_index=src_state_idx,
                                               init_probability=prob,
-                                              init_tail = [(comp, inode_false)]))
+                                              init_tail = [(comp_idx, inode_false_idx)]))
     return bkb

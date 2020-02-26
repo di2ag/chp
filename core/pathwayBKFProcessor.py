@@ -41,33 +41,32 @@ class PathwayProcessor:
         for pathway in tqdm.tqdm(self.pathways, desc='Processing pathway BKFs'):
             bkf = BKB(name=pathway.pathwayID)
 
-            pathwayActiveComp = BKB_component(pathway.pathwayID + "_active=")
-            pathwayActiveTrue = BKB_I_node('True',pathwayActiveComp)
+            #pathwayActiveComp = BKB_component(pathway.pathwayID + "_active=")
+            #pathwayActiveTrue = BKB_I_node('True',pathwayActiveComp)
             #pathwayActiveComp.addINode(pathwayActiveTrue)
-            bkf.addComponent(pathwayActiveComp)
-            bkf.addComponentState(pathwayActiveComp, pathwayActiveTrue)
+            pathwayActiveComp_idx = bkf.addComponent('{}_active='.format(pathway.pathwayID))
+            pathwayActiveTrue_idx = bkf.addComponentState(pathwayActiveComp_idx, 'True')
 
             for gene in pathway.genes: #gene[0] = geneName, gene[1] = low value gene[2] = high value
-                statConditionComp = BKB_component("mu-STD>=" + gene[0] + "<=mu+STD=")
-                statConditionTrue = BKB_I_node('True', statConditionComp)
+                #statConditionComp = BKB_component("mu-STD>=" + gene[0] + "<=mu+STD=")
+                #statConditionTrue = BKB_I_node('True', statConditionComp)
                 #statConditionComp.addINode(statConditionTrue)
-                bkf.addComponent(statConditionComp)
-                bkf.addComponentState(statConditionComp, statConditionTrue)
+                statConditionComp_idx = bkf.addComponent('mu-STD<={}<=mu+STD'.format(gene[0]))
+                statConditionTrue_idx = bkf.addComponentState(statConditionComp_idx,'True')
 
-                bkf.addSNode(BKB_S_node(statConditionComp, statConditionTrue, 1.0))
+                bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionTrue_idx, 1.0))
 
-                bkf.addSNode(BKB_S_node(pathwayActiveComp, pathwayActiveTrue, 1.0, [(statConditionComp, statConditionTrue)]))
+                bkf.addSNode(BKB_S_node(pathwayActiveComp_idx, pathwayActiveTrue_idx, 1.0, [(statConditionComp_idx, statConditionTrue_idx)]))
             self.bkfs.append(bkf)
 
     def BKFsToFile(self, outDirect):
         bkf_files = list()
         source_names = list()
         for bkf in self.bkfs:
-            print(bkf.name)
-            file_name = outDirect + bkf.name + '.bkf'
+            file_name = outDirect + bkf.getName() + '.bkf'
             bkf.save(file_name)
             bkf_files.append(file_name)
-            source_names.append(str(bkf.name))
+            source_names.append(str(bkf.getName()))
 
         return bkf_files, source_names
 

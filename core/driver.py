@@ -151,26 +151,26 @@ class Driver:
         while True:
             print('Choose Evidence:')
             time.sleep(1)
-            for idx in range(self.fused_bkb.getNumberComponents()):
-                component = self.fused_bkb.getComponent(idx)
-                if not component.match('Source', contains=True) and not component.match('source', contains=True):
-                    print('{})\t{}'.format(idx, component.name))
-            print('{})\t{}'.format(idx+1, 'Done selecting evidence.'))
+            for comp_idx in self.fused_bkb.getAllComponentIndices():
+                comp_name = self.fused_bkb.getComponentName(comp_idx)
+                if not 'Source' in comp_name and not 'source' in comp_name:
+                    print('{})\t{}'.format(comp_idx, comp_name))
+            print('{})\t{}'.format(comp_idx+1, 'Done selecting evidence.'))
             compIdx = int(input('Your Choice: '))
-            if compIdx == idx+1:
+            if compIdx == comp_idx+1:
                 return evidence
-            comp = self.fused_bkb.getComponent(compIdx)
             print('Choose your state:')
-            for idx in range(comp.getNumberStates()):
-                state = comp.getState(idx)
-                print('{})\t{}'.format(idx, state.name))
+            for state_idx in self.fused_bkb.getAllComponentINodeIndices(compIdx):
+                state_name = self.fused_bkb.getComponentINodeName(compIdx, state_idx)
+                print('{})\t{}'.format(state_idx, state_name))
             stateIdx = int(input('Your Choice: '))
-            state = comp.getState(stateIdx)
+            compName = self.fused_bkb.getComponentName(compIdx)
+            stateName = self.fused_bkb.getComponentINodeName(compIdx, stateIdx)
             while True:
-                print('This is your evidence choice:\n\t{} = {}'.format(comp.name, state.name))
+                print('This is your evidence choice:\n\t{} = {}'.format(compName, stateName))
                 correct = input('Is that correct? ([y],n): ') or 'y'
                 if correct == 'y':
-                    evidence.update({comp.name: state.name})
+                    evidence.update({compName: stateName})
                     break
                 elif correct == 'n':
                     break
@@ -183,20 +183,20 @@ class Driver:
         while True:
             print('Choose Targets:')
             time.sleep(1)
-            for idx in range(self.fused_bkb.getNumberComponents()):
-                component = self.fused_bkb.getComponent(idx)
-                if not component.match('Source', contains=True) and not component.match('source', contains=True):
-                    print('{})\t{}'.format(idx, component.name))
-            print('{})\t{}'.format(idx+1, 'Done selecting targets.'))
+            for comp_idx in self.fused_bkb.getAllComponentIndices():
+                comp_name = self.fused_bkb.getComponentName(comp_idx)
+                if not 'Source' in comp_name and not 'source' in comp_name:
+                    print('{})\t{}'.format(comp_idx, comp_name))
+            print('{})\t{}'.format(comp_idx+1, 'Done selecting targets.'))
             compIdx = int(input('Your Choice: '))
-            if compIdx == idx+1:
+            if compIdx == comp_idx+1:
                 return targets
-            comp = self.fused_bkb.getComponent(compIdx)
+            compName = self.fused_bkb.getComponentName(compIdx)
             while True:
-                print('This is your target choice:\n\t{}'.format(comp.name))
+                print('This is your target choice:\n\t{}'.format(compName))
                 correct = input('Is that correct? ([y],n): ') or 'y'
                 if correct == 'y':
-                    targets.append(comp.name)
+                    targets.append(compName)
                     break
                 elif correct == 'n':
                     break
