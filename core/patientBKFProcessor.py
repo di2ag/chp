@@ -14,6 +14,9 @@ class PatientProcessor:
         self.patients = list()
         self.clinicalCollected = False
         self.radiationCollected = False
+        self.radNameOnly = True
+        self.drugCollected = False
+        self.drugNameOnly = True
 
     class Patient:
         # will need to account for mutatedReads
@@ -37,6 +40,10 @@ class PatientProcessor:
             self.daysToTherapyEnd = list()
 
             # add drug info later
+            self.drugName = list()
+            self.drugDose = list()
+            self.daysToDrugStart = list()
+            self.daysToDrugEnd = list()
 
     # processes patient gene data
     def processPatientGeneData(self, patientMutGenes, patientMutReads, geneReadStats):
@@ -113,8 +120,9 @@ class PatientProcessor:
                 p.survivalTime = clinical[2]
         self.clinicalCollected = True
 
-    def processRadiationData(self, radiationData):
+    def processRadiationData(self, radiationData, radNameOnly=True):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
+        self.radNameOnly = radNameOnly
         with open(radiationData, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientRadiationDict = dict()
@@ -122,48 +130,127 @@ class PatientProcessor:
             pbar = tqdm.tqdm(total=os.path.getsize(radiationData), desc='Reading radiation data')
             next(reader)
             for row in reader:
-                cancerType = row[0]
-                patID = row[1]
-                if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
-                    continue
-                therapyName = row[2]
-                if 'UNKNOWN' in row[3] or 'Discrepancy' in row[3] or 'DNP' in row[3]:
-                    continue
-                therapySite = row[3]
-                if 'UNKNOWN' in row[4] or 'Discrepancy' in row[4] or 'DNP' in row[4]:
-                    continue
-                dose = None
-                try:
-                    if row[5] == 'Gy':
-                        dose = int(float(row[4])) * 100 #conversion rate between cGy and Gy. Gy = 100 cGy 
-                    elif row[5] == 'cGy':
-                        dose = int(float(row[4]))
-                except:
-                    continue
-                if 'UNKNOWN' in row[6] or 'Discrepancy' in row[6] or 'DNP' in row[6]:
-                    continue
-                daysToStart = int(float(row[6]))
-                if 'UNKNOWN' in row[7] or 'Discrepancy' in row[7] or 'DNP' in row[7]:
-                    continue
-                daysToEnd = int(float(row[7]))
-                if cancerType + patID in patientRadiationDict:
-                    patientRadiationDict[cancerType + patID].append([therapyName, therapySite, dose, daysToStart, daysToEnd])
+                if radNameOnly:
+                    cancerType = row[0]
+                    patID = row[1]
+                    if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
+                        continue
+                    therapyName = row[2]
+                    if cancerType + patID in patientRadiationDict:
+                        patientRadiationDict[cancerType + patID].append(therapyName)
+                    else:
+                        patientRadiationDict[cancerType + patID] = [therapyName]
+                    pbar.update(len(''.join(row).encode('utf-8')))
                 else:
-                    patientRadiationDict[cancerType + patID] = [therapyName, therapySite, dose, daysToStart, daysToEnd]
+                    cancerType = row[0]
+                    patID = row[1]
+                    if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
+                        continue
+                    therapyName = row[2]
+                    if 'UNKNOWN' in row[3] or 'Discrepancy' in row[3] or 'DNP' in row[3]:
+                        continue
+                    therapySite = row[3]
+                    if 'UNKNOWN' in row[4] or 'Discrepancy' in row[4] or 'DNP' in row[4]:
+                        continue
+                    dose = None
+                    try:
+                        if row[5] == 'Gy':
+                            dose = int(float(row[4])) * 100 #conversion rate between cGy and Gy. Gy = 100 cGy 
+                        elif row[5] == 'cGy':
+                            dose = int(float(row[4]))
+                        else:
+                            continue
+                    except:
+                        continue
+                    if 'UNKNOWN' in row[6] or 'Discrepancy' in row[6] or 'DNP' in row[6]:
+                        continue
+                    daysToStart = int(float(row[6]))
+                    if 'UNKNOWN' in row[7] or 'Discrepancy' in row[7] or 'DNP' in row[7]:
+                        continue
+                    daysToEnd = int(float(row[7]))
+                    if cancerType + patID in patientRadiationDict:
+                        patientRadiationDict[cancerType + patID].append((therapyName, therapySite, dose, daysToStart, daysToEnd))
+                    else:
+                        patientRadiationDict[cancerType + patID] = [(therapyName, therapySite, dose, daysToStart, daysToEnd)]
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
         for p in self.patients:
             if p.cancerType + p.patientID in patientRadiationDict:
                 radiationData = patientRadiationDict[p.cancerType+p.patientID]
                 for rData in radiationData:
-                    p.therapyName.append(radiationData[0])
-                    p.therapySite.append(radiationData[1])
-                    p.radiationDose.append(radiationData[2])
-                    p.daysToTherapyStart.append(radiationData[3])
-                    p.daysToTherapyEnd.append(radiationData[4])
+                    if radNameOnly:
+                        p.therapyName.append(rData)
+                    else:
+                        p.therapyName.append(rData[0])
+                        p.therapySite.append(rData[1])
+                        p.radiationDose.append(rData[2])
+                        p.daysToTherapyStart.append(rData[3])
+                        p.daysToTherapyEnd.append(rData[4])
 
         self.radiationCollected = True
 
+    def processDrugData(self, drugData, drugNameOnly=True):
+        assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
+        self.drugNameOnly = drugNameOnly
+        with open(drugData, 'r') as csv_file:
+            reader = csv.reader(csv_file)
+            patientDrugDict = dict()
+            # row[0] = cancerType, row[1] = patientID, row[2] = Drug name, row[3] = dose, row[4] = doseUnit, row[5] = days to start, row[6] = days to end
+            pbar = tqdm.tqdm(total=os.path.getsize(drugData), desc='Reading drug data')
+            next(reader)
+            for row in reader:
+                if drugNameOnly:
+                    cancerType = row[0]
+                    patID = row[1]
+                    if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
+                        continue
+                    drugName = row[2]
+                    if cancerType + patID in patientDrugDict:
+                        patientDrugDict[cancerType + patID].append(drugName)
+                    else:
+                        patientDrugDict[cancerType + patID] = [drugName]
+                else:
+                    cancerType = row[0]
+                    patID = row[1]
+                    if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
+                        continue
+                    drugName = row[2]
+                    dose = None
+                    try:
+                        if row[4] == 'mg':
+                            dose = float(row[3]) #conversion rate between cGy and Gy. Gy = 100 cGy
+                        elif row[4] == 'g':
+                            dose = float(row[3])/1000.0
+                        elif row[4] == 'ug':
+                            dose = float(row[3])*1000.0
+                        else:
+                            continue
+                    except:
+                        continue
+                    if 'UNKNOWN' in row[5] or 'Discrepancy' in row[5] or 'DNP' in row[5]:
+                        continue
+                    daysToStart = int(float(row[5]))
+                    if 'UNKNOWN' in row[6] or 'Discrepancy' in row[6] or 'DNP' in row[6]:
+                        continue
+                    daysToEnd = int(float(row[6]))
+                    if cancerType + patID in patientDrugDict:
+                        patientDrugDict[cancerType + patID].append((drugName, dose, daysToStart, daysToEnd))
+                    else:
+                        patientDrugDict[cancerType + patID] = [(drugName, dose, daysToStart, daysToEnd)]
+                pbar.update(len(''.join(row).encode('utf-8')))
+            pbar.close()
+        for p in self.patients:
+            if p.cancerType + p.patientID in patientDrugDict:
+                drugData = patientDrugDict[p.cancerType+p.patientID]
+                for dData in drugData:
+                    if drugNameOnly:
+                        p.drugName.append(dData)
+                    else:
+                        p.drugName.append(dData[0])
+                        p.drugDose.append(dData[1])
+                        p.daysToDrugStart.append(dData[2])
+                        p.daysToDrugEnd.append(dData[3])
+        self.drugCollected = True
 
     # should be called after all Patient objects have been cosntructed
     def processPatientBKF(self):
@@ -255,16 +342,31 @@ class PatientProcessor:
             patientDict["Survival_Time"] = self.patients[bkfPatientIndex].survivalTime
         #patients can have no radiation data associated with them --------------------v
         if self.radiationCollected and len(self.patients[bkfPatientIndex].therapyName) > 0:
-            # patient therapy name(s)
-            patientDict["Therapy_Name(s)"] = tuple(self.patients[bkfPatientIndex].therapyName)
-            # patient therapy site(s)
-            patientDict["Therapy_Site(s)"] = tuple(self.patients[bkfPatientIndex].therapySite)
-            # patient radiation dose(s)
-            patientDict["Radiation_Dose(s)"] = tuple(self.patients[bkfPatientIndex].radiationDose)
-            # patient days to therapy start
-            patientDict["Days_To_Therapy_Start(s)"] = tuple(self.patients[bkfPatientIndex].daysToTherapyStart)
-            # patient days to therapy end
-            patientDict["Days_To_Therapy_End(s)"] = tuple(self.patients[bkfPatientIndex].daysToTherapyEnd)
+            if self.radNameOnly:
+                patientDict["Therapy_Name(s)"] = tuple(self.patients[bkfPatientIndex].therapyName)
+            else:
+                # patient therapy name(s)
+                patientDict["Therapy_Name(s)"] = tuple(self.patients[bkfPatientIndex].therapyName)
+                # patient therapy site(s)
+                patientDict["Therapy_Site(s)"] = tuple(self.patients[bkfPatientIndex].therapySite)
+                # patient radiation dose(s)
+                patientDict["Radiation_Dose(s)"] = tuple(self.patients[bkfPatientIndex].radiationDose)
+                # patient days to therapy start
+                patientDict["Days_To_Therapy_Start(s)"] = tuple(self.patients[bkfPatientIndex].daysToTherapyStart)
+                # patient days to therapy end
+                patientDict["Days_To_Therapy_End(s)"] = tuple(self.patients[bkfPatientIndex].daysToTherapyEnd)
+        if self.drugCollected and len(self.patients[bkfPatientIndex].drugName) > 0:
+            if self.drugNameOnly:
+                patientDict["Drug_Name(s)"] = tuple(self.patients[bkfPatientIndex].drugName)
+            else:
+                # patient drug name(s)
+                patientDict["Drug_Name(s)"] = tuple(self.patients[bkfPatientIndex].drugName)
+                # patient drug dose(s)
+                patientDict["Drug_Dose(s)"] = tuple(self.patients[bkfPatientIndex].drugDose)
+                # patient days to drug start
+                patientDict["Days_To_Drug_Start(s)"] = tuple(self.patients[bkfPatientIndex].daysToDrugStart)
+                # patient days to drug end
+                patientDict["Days_To_Drug_End(s)"] = tuple(self.patients[bkfPatientIndex].daysToDrugEnd)
 
         patientHashVal = hash(self.patients[bkfPatientIndex].patientID)
         self.bkfs[bkfPatientIndex].name = patientHashVal
