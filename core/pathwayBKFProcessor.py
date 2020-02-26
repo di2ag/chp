@@ -35,29 +35,32 @@ class PathwayProcessor:
             self.pathways.append(self.Pathway(pathwayName, genes))
 
 
-    def processPathwayBKF(self):
+    def processPathwayBKF(self, exhaustiveOr=False):
         assert len(self.pathways) > 0, "Have not processed pathways yet"
-
         for pathway in tqdm.tqdm(self.pathways, desc='Processing pathway BKFs'):
             bkf = BKB(name=pathway.pathwayID)
 
-            #pathwayActiveComp = BKB_component(pathway.pathwayID + "_active=")
-            #pathwayActiveTrue = BKB_I_node('True',pathwayActiveComp)
-            #pathwayActiveComp.addINode(pathwayActiveTrue)
             pathwayActiveComp_idx = bkf.addComponent('{}_active='.format(pathway.pathwayID))
             pathwayActiveTrue_idx = bkf.addComponentState(pathwayActiveComp_idx, 'True')
 
-            for gene in pathway.genes: #gene[0] = geneName, gene[1] = low value gene[2] = high value
-                #statConditionComp = BKB_component("mu-STD>=" + gene[0] + "<=mu+STD=")
-                #statConditionTrue = BKB_I_node('True', statConditionComp)
-                #statConditionComp.addINode(statConditionTrue)
-                statConditionComp_idx = bkf.addComponent('mu-STD<={}<=mu+STD'.format(gene[0]))
-                statConditionTrue_idx = bkf.addComponentState(statConditionComp_idx,'True')
+            if exhaustiveOr:
+                print("not implemented")
+            else:
+                geneSelectorComp_idx = bkf.addComponent("Gene_combo=")
+                for gene in pathway.genes: #gene[0] = geneName, gene[1] = low value gene[2] = high value
+                    geneCombo_idx = bkf.addComponentState(geneSelectorComp_idx, gene[0])
 
-                bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionTrue_idx, 1.0))
+                    statConditionComp_idx = bkf.addComponent('mu-STD<={}<=mu+STD='.format(gene[0]))
+                    statConditionTrue_idx = bkf.addComponentState(statConditionComp_idx, 'True')
 
-                bkf.addSNode(BKB_S_node(pathwayActiveComp_idx, pathwayActiveTrue_idx, 1.0, [(statConditionComp_idx, statConditionTrue_idx)]))
-            self.bkfs.append(bkf)
+                    bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionTrue_idx, 1.0))
+
+                    bkf.addSNode(BKB_S_node(geneSelectorComp_idx, geneCombo_idx, 1.0, [(statConditionComp_idx, statConditionTrue_idx)]))
+
+                    bkf.addSNode(BKB_S_node(pathwayActiveComp_idx, pathwayActiveTrue_idx, 1.0, [(geneSelectorComp_idx, geneCombo_idx)]))
+
+                self.bkfs.append(bkf)
+        assert len(self.pathways) > 0, "Have not processed pathways yet"
 
     def BKFsToFile(self, outDirect):
         bkf_files = list()
