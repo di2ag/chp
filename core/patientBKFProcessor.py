@@ -112,12 +112,14 @@ class PatientProcessor:
                 patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender,survTime)
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
-        for p in self.patients:
+        for p in self.patients[:]:
             if str(p.cancerType)+str(p.patientID) in patientClinicalDict:
                 clinical = patientClinicalDict[str(p.cancerType)+str(p.patientID)]
                 p.ageDiagnos = clinical[0]
                 p.gender = clinical[1]
                 p.survivalTime = clinical[2]
+            else:
+                self.patients.remove(p)
         self.clinicalCollected = True
 
     def processRadiationData(self, radiationData, radNameOnly=True):
@@ -174,7 +176,7 @@ class PatientProcessor:
                         patientRadiationDict[cancerType + patID] = [(therapyName, therapySite, dose, daysToStart, daysToEnd)]
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
-        for p in self.patients:
+        for p in self.patients[:]:
             if p.cancerType + p.patientID in patientRadiationDict:
                 radiationData = patientRadiationDict[p.cancerType+p.patientID]
                 for rData in radiationData:
@@ -186,7 +188,8 @@ class PatientProcessor:
                         p.radiationDose.append(rData[2])
                         p.daysToTherapyStart.append(rData[3])
                         p.daysToTherapyEnd.append(rData[4])
-
+            else:
+                self.patients.remove(p) 
         self.radiationCollected = True
 
     def processDrugData(self, drugData, drugNameOnly=True):
@@ -239,7 +242,7 @@ class PatientProcessor:
                         patientDrugDict[cancerType + patID] = [(drugName, dose, daysToStart, daysToEnd)]
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
-        for p in self.patients:
+        for p in self.patients[:]:
             if p.cancerType + p.patientID in patientDrugDict:
                 drugData = patientDrugDict[p.cancerType+p.patientID]
                 for dData in drugData:
@@ -250,6 +253,8 @@ class PatientProcessor:
                         p.drugDose.append(dData[1])
                         p.daysToDrugStart.append(dData[2])
                         p.daysToDrugEnd.append(dData[3])
+            else:
+                self.patients.remove(p)
         self.drugCollected = True
 
     # should be called after all Patient objects have been cosntructed
@@ -261,37 +266,13 @@ class PatientProcessor:
             bkf = BKB(name = pat.patientID)
             for gene in pat.mutatedGenes:
                 # gene
-                #mutGeneComp = BKB_component("mut_" + gene + "=")
-                #iNodeGeneMut = BKB_I_node('True',mutGeneComp)
-                #mutGeneComp.addINode(iNodeGeneMut)
                 mutGeneComp_idx = bkf.addComponent('mut_{}='.format(gene))
                 iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
-
-                # stat condition bin
-                #statConditionComp = BKB_component("mu-STD>=" + gene + "<=mu+STD=")
-                #statConditionTrue = BKB_I_node('True',statConditionComp)
-                #statConditionFalse = BKB_I_node('False',statConditionComp)
-                #statConditionComp.addINode(statConditionTrue)
-                #statConditionComp.addINode(statConditionFalse)
-                statConditionComp_idx = bkf.addComponent('mut-STD>={}<=mu+STD'.format(gene))
-                statConditionTrue_idx = bkf.addComponentState(statConditionComp_idx, 'True')
-                #statConditionFalse_idx = bkf.addComponentState(statConditionComp_idx, 'False')
 
                 # form SNode  o---->[mut_<genename>=True]
                 bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
 
-                if True: #add stat condition given data, i.e. compare patient gene reads vs the population mean and std
-                    # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=True
-                    bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionTrue_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
-                    # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=False
-                    #bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionFalse_idx, 0.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
-                else:
-                    # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=True
-                    #bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionTrue_idx, 0.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
-                    # form SNode  [mut_<genename>=True]----o---->[mu-STD>=<genename><=mu+STD=False
-                    bkf.addSNode(BKB_S_node(statConditionComp_idx, statConditionFalse_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
             self.bkfs.append(bkf)
-        #print("Patient BKFs formed.")
 
     def SubsetBKFsToFile(self, outDirect, indices):
         allBKFHashNames = dict()
