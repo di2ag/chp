@@ -68,7 +68,7 @@ class PatientProcessor:
                 mutatedPatGenes = list()
             mutatedPatGenes.append(row[2])
         csv_file.close()
-
+        '''
         # reading gene reads
         with open(patientMutReads, 'r') as csv_file:
             reader = csv.reader(csv_file)
@@ -80,6 +80,7 @@ class PatientProcessor:
                 geneReadsDict[str(row[0])+str(row[1])+str(row[6])] = float(row[7])
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
+
         for p in tqdm.tqdm(self.patients[:], desc='Reading patient mutations'):
             geneMismatch = []
             for gene in p.mutatedGenes[:]:
@@ -92,7 +93,7 @@ class PatientProcessor:
             # rare case where we've removed all genes for a patient
             if len(p.mutatedGenes) == 0:
                 self.patients.remove(p)
-
+        '''
     def processClinicalData(self, clinicalData):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
         with open(clinicalData, 'r') as csv_file:

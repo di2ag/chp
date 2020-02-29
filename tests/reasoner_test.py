@@ -27,3 +27,4 @@ query1 = Query(evidence=dict(),
 
 query1 = reasoner.analyze_query(query1)
 query1.getReport()
+query1.bkb.makeGraph()
