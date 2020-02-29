@@ -216,7 +216,15 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
                 ev_, state = ev_state
                 prop_, op_str_, val_ = ev_
                 op_ = _process_operator(op_str_)
-                res = op_(src_population_data[src_name][prop_], val_)
+                #-- Check if the src_population item is a list of items (useful for drugs):
+                if type(src_population_data[src_name][prop_]) == tuple:
+                    for src_val in src_population_data[src_name][prop_]:
+                        if op_(src_val, val_):
+                            res = True
+                            break
+                        res = False
+                else:
+                    res = op_(src_population_data[src_name][prop_], val_)
                 truth.append(res == state)
             if all(truth):
                 count += 1
@@ -242,9 +250,17 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
     matched_srcs = set()
     pop_count_true = 0
     for entity_name, src_name in src_population.items():
-        if op(src_population_data[src_name][prop], val):
-            matched_srcs.add(entity_name)
-            pop_count_true += 1
+        #print(src_population_data[src_name][prop])
+        if type(src_population_data[src_name][prop]) == tuple:
+            for src_val in src_population_data[src_name][prop]:
+                if op(src_val, val):
+                    matched_srcs.add(entity_name)
+                    pop_count_true += 1
+                    break
+        else:
+            if op(src_population_data[src_name][prop], val):
+                matched_srcs.add(entity_name)
+                pop_count_true += 1
     prob = float(pop_count_true / len(src_population))
 
     #comp = BKB_component('{} {} {}'.format(prop, op_str, val))

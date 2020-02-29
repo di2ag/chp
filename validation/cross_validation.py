@@ -197,11 +197,15 @@ if __name__ == '__main__':
     test_patient_hashes = None
     #print(test_patient_hashes)
     '''
-    demo_evidence = ('Age_of_Diagnosis', '>=')
+    demo_evidence_static = [('Drug_Name(s)', '==', 'TAMOXIFEN')]
+    demo_evidence_dynamic = ('Age_of_Diagnosis','>=')
     demo_evidence_vals = [val for val in range(15000, 30000, 5000)]
 
     demo_target = ('Survival_Time', '>=', 300)
 
     cross_validator = CrossValidator(fused_bkb, test_patient_hashes, patient_data_file)
-    df = cross_validator.run_demo_suite(demo_target, demo_evidence_dynamic=demo_evidence, demo_evidence_values=demo_evidence_vals)
+    df = cross_validator.run_demo_suite(demo_target, 
+                                        demo_evidence_static=demo_evidence_static, 
+                                        demo_evidence_dynamic=demo_evidence_dynamic, 
+                                        demo_evidence_values=demo_evidence_vals)
     print(df)
