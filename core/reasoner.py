@@ -218,19 +218,22 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
                 op_ = _process_operator(op_str_)
                 #-- Check if the src_population item is a list of items (useful for drugs):
                 if type(src_population_data[src_name][prop_]) == tuple:
-                    for src_val in src_population_data[src_name][prop_]:
-                        if op_(src_val, val_):
-                            res = True
-                            break
+                    if op_(set(val_), set(src_population_data[src_name][prop_])):
+                        res = True
+                    else:
                         res = False
+                    #for src_val in src_population_data[src_name][prop_]:
+                    #    if op_(src_val, val_):
+                    #        res = True
+                    #        break
+                    #    res = False
                 else:
                     res = op_(src_population_data[src_name][prop_], val_)
                 truth.append(res == state)
             if all(truth):
                 count += 1
         counts.append(count)
-    probs = [float(count / len(src_population)) for count in counts]
-
+    probs = [float(float(count) / float(len(src_population))) for count in counts]
     #-- Setup each S-node
     for j, combo in enumerate(combos):
         head, tail = combo
@@ -252,11 +255,17 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
     for entity_name, src_name in src_population.items():
         #print(src_population_data[src_name][prop])
         if type(src_population_data[src_name][prop]) == tuple:
-            for src_val in src_population_data[src_name][prop]:
-                if op(src_val, val):
-                    matched_srcs.add(entity_name)
-                    pop_count_true += 1
-                    break
+            if not isinstance(val, list):
+                val = [val]
+            if op(set(val),set(src_population_data[src_name][prop])):
+                matched_srcs.add(entity_name)
+                pop_count_true += 1
+                break
+            #for src_val in src_population_data[src_name][prop]:
+            #    if op(src_val, val):
+            #        matched_srcs.add(entity_name)
+            #        pop_count_true += 1
+            #        break
         else:
             if op(src_population_data[src_name][prop], val):
                 matched_srcs.add(entity_name)
