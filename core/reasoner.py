@@ -233,7 +233,9 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
             if all(truth):
                 count += 1
         counts.append(count)
-    probs = [float(float(count) / float(len(src_population))) for count in counts]
+    print(counts)
+    probs = [float(count) / len(src_population) for count in counts]
+    print(sum(probs))
     #-- Setup each S-node
     for j, combo in enumerate(combos):
         head, tail = combo
@@ -255,12 +257,12 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
     for entity_name, src_name in src_population.items():
         #print(src_population_data[src_name][prop])
         if type(src_population_data[src_name][prop]) == tuple:
-            if not isinstance(val, list):
-                val = [val]
-            if op(set(val),set(src_population_data[src_name][prop])):
+            if op(set(val), set(src_population_data[src_name][prop])):
                 matched_srcs.add(entity_name)
                 pop_count_true += 1
-                break
+                res = True
+            else:
+                res = False
             #for src_val in src_population_data[src_name][prop]:
             #    if op(src_val, val):
             #        matched_srcs.add(entity_name)
