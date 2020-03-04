@@ -3,8 +3,12 @@ import sys
 import argparse
 import csv
 import time
+import pickle
 
 from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+
+sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+
 from reasoner import Reasoner
 from query import Query
 
@@ -24,6 +28,10 @@ class Driver:
         self.fused_bkb.load(self.fused_bkb_path)
         self.reasoner = Reasoner(self.fused_bkb, None)
         self.reasoner.set_src_metadata(self.src_metadata_path)
+
+    def run_query(self, query):
+        result_query = self.reasoner.analyze_query(query)
+        return result_query
 
     def run(self, i=0):
         if i == 0:
@@ -203,13 +211,43 @@ class Driver:
                 else:
                     print('Unrecognized selection.')
 
+    def collectVariables(self):
+        #-- Demographics exposed to the user.
+        availableDemographics = set(['Gender', 'Patient ID', 'Survival_Time', 'Age_of_Diagnosis'])
+        #-- Get all inodes
+        all_inode_names = self.fused_bkb.getINodeNames()
+        #-- Filter out sources
+        inode_names = [inode for inode in all_inode_names if 'Source' not in inode[0]]
+        #-- Collect avaliable demographics
+        demographics = {demo_name: list(demo_range)
+                        for demo_name, demo_range in self.reasoner.metadata_ranges.items()
+                        if demo_name in availableDemographics}
+        return {'genetic_info': inode_names,
+                'demographic_info': demographics}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='BKB Pathway Provider Minimal Driver')
     parser.add_argument('--config_file', default='driver.config', type=str)
-
+    parser.add_argument('--headless', action='store_true')
+    parser.add_argument('--query_file', type=str)
+    parser.add_argument('--save_dir', type=str, default=os.getcwd())
+    parser.add_argument('--get_variables', type=str, default=None)
     args = parser.parse_args()
 
-    driver = Driver(args.config_file)
-    driver.run()
+    if args.headless:
+        driver = Driver(args.config_file)
+        #-- Load Query from query file
+        query = Query().read(args.query_file)
+        result_query = driver.run_query(query)
+
+        #-- Save Query
+        result_query.save(args.save_dir, only_json=True)
+    elif args.get_variables is not None:
+        driver = Driver(args.config_file)
+        vars_ = driver.collectVariables()
+        with open(args.get_variables, 'wb') as f_:
+            pickle.dump(file=f_, obj=vars_)
+    else:
+        driver = Driver(args.config_file)
+        driver.run()
 

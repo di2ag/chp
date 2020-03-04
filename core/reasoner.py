@@ -340,6 +340,8 @@ def _collapseSrcNodes(bkb, matched_srcs):
             continue
         count_true = 0
         src_parents = set()
+        matched_src_hashs = dict()
+        unmatched_src_hashs = dict()
         for src_comp_idx, src_state_idx in sources:
             #-- Collect src parents
             for snode in S_nodes_by_head[src_comp_idx][src_state_idx]:
@@ -351,9 +353,39 @@ def _collapseSrcNodes(bkb, matched_srcs):
             src_num = src_name[1:-1]
             if src_num in matched_srcs:
                 count_true += 1
+                if src_comp_idx in matched_src_hashs:
+                    matched_src_hashs[src_comp_idx].append(src_state_idx)
+                else:
+                    matched_src_hashs[src_comp_idx] = [src_state_idx]
+            else:
+                if src_comp_idx in matched_src_hashs:
+                    unmatched_src_hashs[src_comp_idx].append(src_state_idx)
+                else:
+                    unmatched_src_hashs[src_comp_idx] = [src_state_idx]
         prob_true = float(count_true / len(sources))
+        '''
+        #-- Make a new Source Component state that collects every matched source node.
+        matched_collections = list()
+        for src_comp_idx, src_states in matched_src_hashs.items():
+            matched_state = ','join.([bkb.getComponentINodeName(src_comp_idx, src_state_idx).split('_')[-1] for src_state_idx in src_states])
+            matched_state_idx = bkb.addComponentINode(src_comp_idx, matched_state)
+            matched_collections.append((src_comp_idx, matched_state_idx))
+        unmatched_collection = list()
+        for src_comp_idx, src_states in unmatched_src_hashs.items():
+            unmatched_state = ','join.([bkb.getComponentINodeName(src_comp_idx, src_state_idx).split('_')[-1] for src_state_idx in src_states])
+            unmatched_state_idx = bkb.addComponentINode(src_comp_idx, unmatched_state)
+            unmatched_collections.append((src_comp_idx, unmatched_state_idx))
+        
+        #-- Add snode from source collections to genetic info
+        for src_comp_idx, matched_state_idx in matched_collection:
+            
+            bkb.addSNode(BKB_S_node(init_component_index=non_src_comp,
+                                    init_state_index=non_src_state,
+                                    init_probability=1,
+                                    init_tail=[(src_comp_idx, matched_state_idx)]))
 
-        #-- Add new snode connecting non_src_component to the src_components parent (i.e. demographic info)
+        '''
+        #-- Add new snode connecting non_src_component to the src_components parent via a Source Collection Inode (i.e. demographic info)
         for src_parent_comp_idx, src_parent_state_idx in src_parents:
             if bkb.getComponentINodeName(src_parent_comp_idx, src_parent_state_idx) == 'True':
                 if prob_true > 0:
