@@ -30,6 +30,9 @@ class PatientProcessor:
             # clinical data
             self.ageDiagnos = None
             self.gender = None
+            self.pathT = None
+            self.pathN = None
+            self.pathM = None
             self.survivalTime = None
 
             # radiation data
@@ -68,7 +71,7 @@ class PatientProcessor:
                 mutatedPatGenes = list()
             mutatedPatGenes.append(row[2])
         csv_file.close()
-        '''
+
         # reading gene reads
         with open(patientMutReads, 'r') as csv_file:
             reader = csv.reader(csv_file)
@@ -92,25 +95,37 @@ class PatientProcessor:
                     p.mutatedGenes.remove(gene)
             # rare case where we've removed all genes for a patient
             if len(p.mutatedGenes) == 0:
+                print("No Reads - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
-        '''
+
     def processClinicalData(self, clinicalData):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
         with open(clinicalData, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientClinicalDict = dict()
-            # row[0] = cancerType, row[1] = patientID, row[2] = age of diagnosis, row[3] = gender, row[7] = survival time
+            # row[0] = cancerType, row[1] = patientID, row[2] = age of diagnosis, row[3] = gender, row[4] = Pathologic_T, row[5] = Pathologic_N, row[6] = Pathologic_M , row[7] = survival time
             pbar = tqdm.tqdm(total=os.path.getsize(clinicalData), desc='Reading clinical data')
             next(reader)
             for row in reader:
                 if 'DNP' in row[2]:
                     continue
                 ageDiag = int(float(row[2]))
+                if 'DNP' in row[3]:
+                    continue
                 gender = row[3]
+                if 'DNP' in row[4]:
+                    continue
+                pathT = row[4]
+                if 'DNP' in row[5]:
+                    continue
+                pathN = row[5]
+                if 'DNP' in row[6]:
+                    continue
+                pathM = row[6]
                 if 'DNP' in row[7]:
                     continue
                 survTime = int(float(row[7]))
-                patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender,survTime)
+                patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender, pathT, pathN, pathM, survTime)
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
         for p in self.patients[:]:
@@ -118,8 +133,12 @@ class PatientProcessor:
                 clinical = patientClinicalDict[str(p.cancerType)+str(p.patientID)]
                 p.ageDiagnos = clinical[0]
                 p.gender = clinical[1]
-                p.survivalTime = clinical[2]
+                p.pathT = clinical[2]
+                p.pathN = clinical[3]
+                p.pathM = clinical[4]
+                p.survivalTime = clinical[5]
             else:
+                print("No Clinical - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
         self.clinicalCollected = True
 
@@ -190,6 +209,7 @@ class PatientProcessor:
                         p.daysToTherapyStart.append(rData[3])
                         p.daysToTherapyEnd.append(rData[4])
             else:
+                print("No Radiation - Removing: {}".format(p.patientID))
                 self.patients.remove(p) 
         self.radiationCollected = True
 
@@ -255,6 +275,7 @@ class PatientProcessor:
                         p.daysToDrugStart.append(dData[2])
                         p.daysToDrugEnd.append(dData[3])
             else:
+                rint("No Drug - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
         self.drugCollected = True
 

@@ -136,14 +136,38 @@ class DataHandler:
             self.patientProcessor.processPatientGeneData(self.mutation_data_file,
                                                          self.tumor_rna_expression_file,
                                                          None)
-        if self.clinical_data_file is not None:
-            self.patientProcessor.processClinicalData(self.clinical_data_file)
+        while True:
+            clinic = input('Collect clinical? ([y],n): ') or 'y'
+            if clinic == 'y':
+                if self.clinical_data_file is not None:
+                    self.patientProcessor.processClinicalData(self.clinical_data_file)
+                break
+            if clinic == 'n':
+                break
+            else:
+                print('Response not recognized')
 
-        if self.radiation_data_file is not None:
-            self.patientProcessor.processRadiationData(self.radiation_data_file, radNameOnly=True)
+        while True:
+            rad = input('Collect radiation? ([y],n): ') or 'y'
+            if rad == 'y':
+                if self.radiation_data_file is not None:
+                    self.patientProcessor.processRadiationData(self.radiation_data_file, radNameOnly=True)
+                break
+            if rad == 'n':
+                break
+            else:
+                print('Response not recognized')
 
-        if self.drug_data_file is not None:
-            self.patientProcessor.processDrugData(self.drug_data_file, drugNameOnly=True)
+        while True:
+            drug = input('Collect Drug? ([y],n): ') or 'y'
+            if drug == 'y':
+                if self.drug_data_file is not None:
+                    self.patientProcessor.processDrugData(self.drug_data_file, drugNameOnly=True)
+                break
+            if drug == 'n':
+                break
+            else:
+                print('Response not recognized')
 
         self.patientProcessor.processPatientBKF()
 
