@@ -8,6 +8,7 @@ random.seed(116)
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
 from pybkb.core.python_base.fusion import fuse
+from pybkb.core.python_base.fusion_collapse import collapse_sources
 from pybkb.core.cpp_base.reasoning import updating
 
 sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
@@ -15,8 +16,9 @@ sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core'
 from reasoner import Reasoner
 from query import Query
 
-PATIENTS = ['Patient_{}'.format(i) for i in range(10)]
-NUM_GENES = 100
+PATIENTS = ['Patient{}'.format(i) for i in range(100)]
+GENES = ['Gene{}_mut'.format(i) for i in range(10)]
+GENE_VARIANTS = ['Variant{}'.format(i) for i in range(2)]
 
 bkfs = list()
 
@@ -24,15 +26,23 @@ bkfs = list()
 for j, _ in enumerate(PATIENTS):
     bkf = BKB()
 
-    for i in range(NUM_GENES):
+    for gene in GENES:
         #-- Setup Gene i component.
-        comp_idx = bkf.addComponent('Gene{}_mutated'.format(i))
+        comp_idx = bkf.addComponent(gene)
         stateTrue_idx = bkf.addComponentState(comp_idx, 'True')
 
         if random.choice([True, False]):
             bkf.addSNode(BKB_S_node(init_component_index=comp_idx,
                                     init_state_index=stateTrue_idx,
                                     init_probability=1))
+            variant_comp_idx = bkf.addComponent(gene + '_Var')
+            variant_state_idx = bkf.addComponentState(variant_comp_idx, random.choice(GENE_VARIANTS))
+            bkf.addSNode(BKB_S_node(init_component_index=variant_comp_idx,
+                                    init_state_index=variant_state_idx,
+                                    init_probability=1,
+                                    init_tail=[(comp_idx, stateTrue_idx)]))
+#    if j == 0:
+#        bkf.makeGraph()
     bkfs.append(bkf)
 
 #-- Fuse patients together.
@@ -42,6 +52,8 @@ fused_bkb = fuse(bkfs,
                  working_dir=os.getcwd())
 
 #fused_bkb.makeGraph(layout='neato')
+#col_bkb = collapse_sources(fused_bkb)
+#col_bkb.makeGraph(layout='neato')
 
 #-- Add demographic evidence.
 GENDER_OPTIONS = ('Male', 'Female')
@@ -67,13 +79,13 @@ demo_tar = [('Survival', '>=', 2)]
 reasoner = Reasoner(fused_bkb, None)
 reasoner.metadata = patient_data_hash
 
-random_genes = list(set(['Gene{}_mutated'.format(i) for i in [random.randint(0, NUM_GENES) for _ in range(random.randint(0,30))]]))
-query0 = Query(evidence={gene:'True' for gene in random_genes},
+query0 = Query(evidence={'Gene1_mut':'True',
+                         'Gene2_mut':'True'},
                targets=list(),
+               meta_evidence=demo_ev,
                meta_targets=demo_tar,
                type='updating')
 
 query0 = reasoner.analyze_query(query0)
 query0.getReport()
-query0.bkb.makeGraph()
-
+#query0.bkb.makeGraph()

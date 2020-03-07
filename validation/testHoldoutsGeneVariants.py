@@ -12,9 +12,10 @@ from pybkb import bayesianKnowledgeBase as BKB
 from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
 from pybkb.core.python_base.fusion import fuse
 
-sys.path.append('/home/ghyde/bkb-pathway-provider/core')
+#sys.path.append('/home/ghyde/bkb-pathway-provider/core')
+sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
 
-from reasoner import Reasoner, _constructSNodesByHead
+from reasoner import Reasoner
 from query import Query
 
 def read_withheldPatientFile(file_name):
@@ -48,18 +49,20 @@ class CrossValidator:
         #queryResults = list()
         #probs = list()
         #summaries = list()
-        for idx, patID in tqdm.tqdm(enumerate(patientIDs)):
+        for idx, patID in enumerate(patientIDs):
             queryResults = list()
             probs = list()
-            summaries = list()
             for patientDynamicEvidence in tqdm.tqdm(patientsDynamicEvidence[idx]):
-                prob, summary = self.run_demo_only(target, patID, patientDynamicEvidence)
+                print(patientDynamicEvidence)
+                prob = self.run_demo_only(target, patID, patientDynamicEvidence)
                 queryResults.append(patID)
                 probs.append(prob)
-                summaries.append(summary)
-            for i in range(0, len(queryResults)):
-                print(probs[i])
-                print(summaries[i])
+                #print(prob)
+                #input()
+            print(probs)
+            #for i in range(0, len(queryResults)):
+            #    print(probs[i])
+            #    print(summaries[i])
 
     def run_demo_only(self, target, patID, evidence):
         #-- Set Up Reasoner
@@ -67,8 +70,8 @@ class CrossValidator:
         self.reasoner.set_src_metadata(self.patient_data_file)
         self.reasoner.cpp_reasoning = False
 
-        print(evidence)
-        print([target])
+        #print(evidence)
+        #print([target])
         #-- Make query and analyze
         query = Query(evidence=evidence,
                       targets=[],
@@ -76,30 +79,26 @@ class CrossValidator:
                       meta_targets=[target],
                       type='updating')
         probs = list()
-        summary = None
         if self.first:
-            query, queryCopy= self.reasoner.analyze_query(copy.deepcopy(query), save_dir=None)
-            self.queryCopy = queryCopy
+            query = self.reasoner.analyze_query(copy.deepcopy(query), save_dir=None)
+            self.processed_bkb = copy.deepcopy(query.bkb)
             self.first = False
-            summary = query.result.summary()
+            #query.result.summary()
             for update, prob in query.result.updates.items():
                 comp_idx, state_idx = update
                 comp_name = query.bkb.getComponentName(comp_idx)
                 state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
                 probs.append((comp_name, state_name, prob))
         else:
-            query = self.queryCopy
-            query.meta_targets = [target]
-            query.evidence = evidence
-            query = self.reasoner.solve_query(copy.deepcopy(query))
-            summary = query.result.summary()
+            query = self.reasoner.analyze_query(copy.deepcopy(query), preprocessed_bkb=self.processed_bkb)
+            #query.result.summary()
             for update, prob in query.result.updates.items():
                 comp_idx, state_idx = update
                 comp_name = query.bkb.getComponentName(comp_idx)
                 state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
                 probs.append((comp_name, state_name, prob))
 
-        return probs, summary
+        return probs
 
 
 if __name__ == '__main__':
@@ -136,9 +135,11 @@ if __name__ == '__main__':
             patientsDynamicEvidence.append(patientDynamicEvidence)
         count += 1
     target = ('Survival_Time', '<=', 943)
-
+    print(patientIDs)
+    print(patientsDynamicEvidence)
+    
     cross_validator = CrossValidator(fused_bkb,withheldPatientHashes, patient_data_file)
     df = cross_validator.run_demo_suite(target,
                                         patientIDs,
                                         patientsDynamicEvidence)
-    print(df)
+    #print(df)

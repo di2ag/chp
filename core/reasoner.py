@@ -11,6 +11,7 @@ import time
 from pybkb.core.cpp_base.reasoning import revision as cpp_revision
 from pybkb.core.cpp_base.reasoning import updating as cpp_updating
 from pybkb.core.python_base.reasoning import updating as py_updating
+from pybkb.core.python_base.fusion_collapse import collapse_sources
 from pybkb.core.common.bayesianKnowledgeBase import BKB_component, BKB_I_node, BKB_S_node
 
 class Reasoner:
@@ -106,6 +107,9 @@ class Reasoner:
         #-- Get all src components
         #src_components = bkb.getSrcComponents()
 
+        #-- Collapse sources in fused bkb
+        bkb = collapse_sources(bkb)
+
         #-- Collect source hashs that match metadata as well as population stats
         transformed_meta = dict()
         pop_stats = dict()
@@ -121,8 +125,29 @@ class Reasoner:
         bkb = _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, self.src_hashs)
         return transformed_meta, bkb
 
-    def analyze_query(self, query, save_dir=None):
+    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None):
         #-- Copy BKB
+        if preprocessed_bkb is not None:
+            bkb = copy.deepcopy(preprocessed_bkb)
+
+            if query.meta_targets is not None:
+                transformed_meta_targets = ['{} {} {}'.format(target[0], target[1], target[2]) for target in query.meta_targets]
+
+            if query.meta_evidence is not None:
+                transformed_meta_evidence = dict()
+                for ev in query.meta_evidence:
+                    meta_name = '{} {} {}'.format(ev[0], ev[1], ev[2])
+                    transformed_meta_evidence[meta_name] = 'True'
+                    query.evidence.update(transformed_meta_evidence)
+
+            query.targets.extend(transformed_meta_targets)
+            query.bkb = bkb
+
+            if save_dir is not None:
+                query.save(save_dir)
+            return self.solve_query(query)
+
+        #-- Else
         bkb = copy.deepcopy(self.fused_bkb)
         meta_variables = []
         if query.meta_evidence is not None:
@@ -222,20 +247,15 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
                         res = True
                     else:
                         res = False
-                    #for src_val in src_population_data[src_name][prop_]:
-                    #    if op_(src_val, val_):
-                    #        res = True
-                    #        break
-                    #    res = False
                 else:
                     res = op_(src_population_data[src_name][prop_], val_)
                 truth.append(res == state)
             if all(truth):
                 count += 1
         counts.append(count)
-    print(counts)
+
     probs = [float(count) / len(src_population) for count in counts]
-    print(sum(probs))
+
     #-- Setup each S-node
     for j, combo in enumerate(combos):
         head, tail = combo
@@ -263,21 +283,12 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
                 res = True
             else:
                 res = False
-            #for src_val in src_population_data[src_name][prop]:
-            #    if op(src_val, val):
-            #        matched_srcs.add(entity_name)
-            #        pop_count_true += 1
-            #        break
         else:
             if op(src_population_data[src_name][prop], val):
                 matched_srcs.add(entity_name)
                 pop_count_true += 1
     prob = float(pop_count_true / len(src_population))
 
-    #comp = BKB_component('{} {} {}'.format(prop, op_str, val))
-    #inode_true = BKB_I_node(init_name='True', init_component=comp)
-    #inode_false = BKB_I_node(init_name='False', init_component=comp)
-    
     comp_idx = bkb.addComponent('{} {} {}'.format(prop, op_str, val))
     inode_true_idx = bkb.addComponentState(comp_idx, 'True')
     inode_false_idx = bkb.addComponentState(comp_idx, 'False')
@@ -298,146 +309,92 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
 
     return bkb, options_dict, matched_srcs
 
-def _constructSNodesByHead(bkb):
-    S_nodes_by_head = dict()
-    for snode in bkb._S_nodes:
-        (cidx, iidx) = snode.getHead()
-        try:
-            S_nodes_by_head[cidx]
-        except KeyError:
-            S_nodes_by_head[cidx] = dict()
-        try:
-            S_nodes_by_head[cidx][iidx].append(snode)
-        except KeyError:
-            S_nodes_by_head[cidx][iidx] = list()
-            S_nodes_by_head[cidx][iidx].append(snode)
-    return S_nodes_by_head
+def _linkSource(src_comp, src_state, non_src_comp, non_src_state, other_non_src_tails, prob,
+                comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_population):
+    #-- Process the source name collection
+    src_state_name = bkb.getComponentINodeName(src_comp, src_state)
+    src_split = src_state_name.split('_')
+    src_nums_str = src_split[0][1:-1]
+    src_name_str = ''.join(src_split[1:])
+    src_nums = [int(num) for num in src_nums_str.split(',')]
+    src_names = src_name_str.split(',')
 
-def _collectINodeSrcNodes(bkb, S_nodes_by_head):
-    src_component_indices = bkb.getSrcComponents()
-    non_src_component_indices = set(bkb.getAllComponentIndices()) - set(src_component_indices)
-    non_src_inodes = [(non_src_comp_idx, non_src_inode_idx)
-                      for non_src_comp_idx in non_src_component_indices
-                      for non_src_inode_idx in bkb.getAllComponentINodeIndices(non_src_comp_idx)]
-    src_map = {inode: list() for inode in non_src_inodes}
+    #-- Delete the source node and snodes
+    bkb.removeComponentState(src_comp, src_state)
 
-    #--Find all source component mappings
-    for non_src_comp_idx in non_src_component_indices:
-        for non_src_state_idx in bkb.getAllComponentINodeIndices(non_src_comp_idx):
-            for snode in S_nodes_by_head[non_src_comp_idx][non_src_state_idx]:
-                for tail_idx in range(snode.getNumberTail()):
-                    tail_comp, tail_state = snode.getTail(tail_idx)
-                    if tail_comp in src_component_indices:
-                        src_map[(non_src_comp_idx, non_src_state_idx)].append((tail_comp, tail_state))
-                        bkb.removeSNode(snode)
-    return src_map, bkb
+    true_srcs = list()
+    false_srcs = list()
+    for src_num, src_name in zip(src_nums, src_names):
+        if src_num in matched_srcs:
+            true_srcs.append((src_num, src_name))
+        else:
+            false_srcs.append((src_num, src_name))
 
-def _collapseSrcNodes(bkb, matched_srcs):
-    S_nodes_by_head = _constructSNodesByHead(bkb)
-    src_map, bkb = _collectINodeSrcNodes(bkb, S_nodes_by_head)
-    for (non_src_comp, non_src_state), sources in tqdm.tqdm(src_map.items(), desc='Collapsing Sources', leave=False):
-        if len(sources) == 0:
-            continue
-        count_true = 0
-        src_parents = set()
-        matched_src_hashs = dict()
-        unmatched_src_hashs = dict()
-        for src_comp_idx, src_state_idx in sources:
-            #-- Collect src parents
-            for snode in S_nodes_by_head[src_comp_idx][src_state_idx]:
-                for tail_idx in range(snode.getNumberTail()):
-                    src_parents.add(snode.getTail(tail_idx))
-                bkb.removeSNode(snode)
-            #-- Get name and src number
-            src_name = bkb.getComponentINodeName(src_comp_idx, src_state_idx)
-            src_num = src_name[1:-1]
-            if src_num in matched_srcs:
-                count_true += 1
-                if src_comp_idx in matched_src_hashs:
-                    matched_src_hashs[src_comp_idx].append(src_state_idx)
-                else:
-                    matched_src_hashs[src_comp_idx] = [src_state_idx]
-            else:
-                if src_comp_idx in matched_src_hashs:
-                    unmatched_src_hashs[src_comp_idx].append(src_state_idx)
-                else:
-                    unmatched_src_hashs[src_comp_idx] = [src_state_idx]
-        prob_true = float(count_true / len(sources))
-        '''
-        #-- Make a new Source Component state that collects every matched source node.
-        matched_collections = list()
-        for src_comp_idx, src_states in matched_src_hashs.items():
-            matched_state = ','join.([bkb.getComponentINodeName(src_comp_idx, src_state_idx).split('_')[-1] for src_state_idx in src_states])
-            matched_state_idx = bkb.addComponentINode(src_comp_idx, matched_state)
-            matched_collections.append((src_comp_idx, matched_state_idx))
-        unmatched_collection = list()
-        for src_comp_idx, src_states in unmatched_src_hashs.items():
-            unmatched_state = ','join.([bkb.getComponentINodeName(src_comp_idx, src_state_idx).split('_')[-1] for src_state_idx in src_states])
-            unmatched_state_idx = bkb.addComponentINode(src_comp_idx, unmatched_state)
-            unmatched_collections.append((src_comp_idx, unmatched_state_idx))
-        
-        #-- Add snode from source collections to genetic info
-        for src_comp_idx, matched_state_idx in matched_collection:
-            
-            bkb.addSNode(BKB_S_node(init_component_index=non_src_comp,
-                                    init_state_index=non_src_state,
-                                    init_probability=1,
-                                    init_tail=[(src_comp_idx, matched_state_idx)]))
+    true_prob = len(true_srcs) / (len(true_srcs) + len(false_srcs))
 
-        '''
-        #-- Add new snode connecting non_src_component to the src_components parent via a Source Collection Inode (i.e. demographic info)
-        for src_parent_comp_idx, src_parent_state_idx in src_parents:
-            if bkb.getComponentINodeName(src_parent_comp_idx, src_parent_state_idx) == 'True':
-                if prob_true > 0:
-                    bkb.addSNode(BKB_S_node(init_component_index=non_src_comp,
-                                            init_state_index=non_src_state,
-                                            init_probability=prob_true,
-                                            init_tail=[(src_parent_comp_idx, src_parent_state_idx)]))
-            elif bkb.getComponentINodeName(src_parent_comp_idx, src_parent_state_idx) == 'False':
-                if 1 - prob_true > 0:
-                    bkb.addSNode(BKB_S_node(init_component_index=non_src_comp,
-                                            init_state_index=non_src_state,
-                                            init_probability=1-prob_true,
-                                            init_tail=[(src_parent_comp_idx, src_parent_state_idx)]))
-            else:
-                raise ValueError('Unknown Source Parent INode: {} = {}'.format(bkb.getComponentName(src_parent_comp_idx),
-                                                                               bkb.getComponentINodeName(src_parent_comp_idx, src_parent_state_idx)))
+    #-- Make new true and false collections
+    true_state_name = '[{}]_{}'.format(','.join([str(src[0]) for src in true_srcs]), ','.join([src[1] for src in true_srcs]))
+    false_state_name = '[{}]_{}'.format(','.join([str(src[0]) for src in false_srcs]), ','.join([src[1] for src in false_srcs]))
+
+    #-- Now add the I nodes
+    if true_prob > 0:
+        src_true_idx = bkb.addComponentState(src_comp, true_state_name)
+        #-- Now connect with S nodes
+        bkb.addSNode(BKB_S_node(init_component_index=non_src_comp,
+                                init_state_index=non_src_state,
+                                init_probability=1,
+                                init_tail=[(src_comp, src_true_idx)] + other_non_src_tails))
+        bkb.addSNode(BKB_S_node(init_component_index=src_comp,
+                                init_state_index=src_true_idx,
+                                init_probability=prob*true_prob,
+                                init_tail=[(comp_idx, inode_true_idx)]))
+    if (1 - true_prob) > 0:
+        src_false_idx = bkb.addComponentState(src_comp, false_state_name)
+        #-- Now connect with S nodes
+        bkb.addSNode(BKB_S_node(init_component_index=non_src_comp,
+                                init_state_index=non_src_state,
+                                init_probability=1,
+                                init_tail=[(src_comp, src_false_idx)] + other_non_src_tails))
+        bkb.addSNode(BKB_S_node(init_component_index=src_comp,
+                                init_state_index=src_false_idx,
+                                init_probability=prob*(1 - true_prob),
+                                init_tail=[(comp_idx, inode_false_idx)]))
+
     return bkb
 
 def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_population):
     #-- Attach to source nodes
-    src_component_indices = bkb.getSrcComponents()
-    S_nodes_by_head = _constructSNodesByHead(bkb)
+    src_comp_indices = bkb.getSrcComponents()
+    non_src_comp_indices = set(bkb.getAllComponentIndices()) - set(src_comp_indices)
+    S_nodes_by_head = bkb.constructSNodesByHead()
 
-    for entity_name, src_name in tqdm.tqdm(src_population.items(), desc='Linking Sources', leave=False):
-        for src_comp_idx in src_component_indices:
-            #print(src_name)
-            #print(bkb.getComponentName(src_comp_idx))
-            #print([bkb.getComponentINodeName(src_comp_idx, i) for i in bkb.getAllComponentINodeIndices(src_comp_idx)])
-            try:
-            #print(bkb.getComponentName(src_comp_idx))
-            #print(src_name)
-                src_state_idx = bkb.findINode(src_comp_idx, str(src_name), contains=True)
-            #-- Find Prior snode, capture probability and remove.
-            #cidx = bkb.getComponentIndex(src_comp)
-            #iidx = src_comp.getStateIndex(src_state)
-                s_node = S_nodes_by_head[src_comp_idx][src_state_idx][0]
-            except AttributeError:
-                continue
-            except KeyError:
-                continue
-            prob = s_node.probability
-            bkb.removeSNode(s_node)
-
-            if entity_name in matched_srcs:
-                bkb.addSNode(BKB_S_node(init_component_index=src_comp_idx,
-                                              init_state_index=src_state_idx,
-                                              init_probability=prob,
-                                              init_tail = [(comp_idx, inode_true_idx)]))
-            else:
-                bkb.addSNode(BKB_S_node(init_component_index=src_comp_idx,
-                                              init_state_index=src_state_idx,
-                                              init_probability=prob,
-                                              init_tail = [(comp_idx, inode_false_idx)]))
-    return _collapseSrcNodes(bkb, matched_srcs)
-    #return bkb
+    for non_src_comp in tqdm.tqdm(non_src_comp_indices, desc='Linking Sources'):
+        for non_src_state in bkb.getAllComponentINodeIndices(non_src_comp):
+            snodes = S_nodes_by_head[non_src_comp][non_src_state]
+            for snode in snodes:
+                src_tails = list()
+                non_src_tails = list()
+                for tail_idx in range(snode.getNumberTail()):
+                    tail_comp, tail_state = snode.getTail(tail_idx)
+                    #-- If this is a source component
+                    if tail_comp in src_comp_indices:
+                        src_tails.append((tail_comp, tail_state))
+                    else:
+                        non_src_tails.append((tail_comp, tail_state))
+                for src_tail_comp, src_tail_state in src_tails:
+                    prior_src_snode = S_nodes_by_head[src_tail_comp][src_tail_state][0]
+                    prob = prior_src_snode.probability
+                    bkb = _linkSource(src_tail_comp, src_tail_state, non_src_comp, non_src_state, non_src_tails, prob,
+                                      comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_population)
+                    #-- delete the prior snode
+                    try:
+                        bkb.removeSNode(prior_src_snode)
+                    except:
+                        pass
+                if len(src_tails) > 0:
+                    #-- Delete other S node
+                    try:
+                        bkb.removeSNode(snode)
+                    except:
+                        pass
+    return bkb
