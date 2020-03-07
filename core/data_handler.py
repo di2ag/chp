@@ -33,6 +33,7 @@ class DataDriver:
                                        pathway_file=self.config['pathway_file'],
                                        reactome_g2r_file=self.config['reactome_g2r_file'],
                                        reactome_p2p_file=self.config['reactome_p2p_file'],
+                                       patient_holdout=self.config['patient_holdout'],
                                        working_dir=self.config['working_dir'],
                                        cpp_fuse_option=ast.literal_eval(self.config['cpp_fuse_option']))
 
@@ -114,6 +115,7 @@ class DataHandler:
                  pathway_file=None,
                  reactome_p2p_file=None,
                  reactome_g2r_file=None,
+                 patient_holdout=None,
                  working_dir='/tmp',
                  cpp_fuse_option=False):
 
@@ -126,11 +128,17 @@ class DataHandler:
         self.pathway_file = pathway_file
         self.reactome_p2p_file = reactome_p2p_file
         self.reactome_g2r_file = reactome_g2r_file
+        self.patient_holdout  = patient_holdout
         self.working_dir = working_dir
         self.cpp_fuse_option = cpp_fuse_option
 
     def readTcgaData(self):
         self.patientProcessor = PatientProcessor()
+
+        if self.patient_holdout != None:
+            with open(self.patient_holdout, 'r') as csv_file:
+                reader = csv.reader(csv_file)
+                self.holdoutPatients = [(row[0],row[1]) for row in reader]
 
         if self.tumor_rna_expression_file is not None and self.mutation_data_file is not None:
             self.patientProcessor.processPatientGeneData(self.mutation_data_file,
@@ -192,13 +200,22 @@ class DataHandler:
         self.readPathwayData()
 
     def fuse(self, patients, with_pathways=True):
+
         patient_indices = list()
         patient_bkfs = list()
         for patient_name in patients:
             idx = self.patientProcessor.patients.index(patient_name)
             patient_indices.append(idx)
             patient_bkfs.append(self.patientProcessor.bkfs[idx])
-        patient_bkf_files, patient_source_names, dump_loc = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
+        patient_bkf_files, patient_source_names, dump_loc, patientHash = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
+
+        holdoutSource = list()
+        for patient in patient_bkfs[:]:
+            for holdoutPatient in self.holdoutPatients:
+                if patient._name == holdoutPatient[1]:
+                    idx = patient_bkfs.index(patient)
+                    patient_bkfs.pop(idx)
+                    holdoutSource.append(patient_source_names.pop(idx))
 
         if with_pathways:
             pathway_bkf_files, pathway_source_names = self.pathwayProcessor.BKFsToFile(self.working_dir)
@@ -219,12 +236,22 @@ class DataHandler:
             cpp_fuse(bkf_files,
                  reliabilities=[1 for _ in range(len(bkf_files))],
                  source_names=source_names,
+                 consistency_check=True,
                  working_dir=self.working_dir)
         else:
             py_fuse(bkfs,
                  reliabilities=[1 for _ in range(len(bkfs))],
                  source_names=source_names,
                  working_dir=self.working_dir)
+
+        f = open(self.working_dir +  'withheldPatients.csv', 'w')
+        withheldHashes = ''
+        for HOSource in holdoutSource:
+            withheldHashes += HOSource + ','
+        f.write(withheldHashes[:-1])
+        f.close()
+
+
         print('Patient data located at: {}'.format(dump_loc))
         return True
 
