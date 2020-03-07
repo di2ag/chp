@@ -320,7 +320,8 @@ def _linkSource(src_comp, src_state, non_src_comp, non_src_state, other_non_src_
     src_names = src_name_str.split(',')
 
     #-- Delete the source node and snodes
-    bkb.removeComponentState(src_comp, src_state)
+    #-- Actually leaving states in for speed.
+    #bkb.removeComponentState(src_comp, src_state)
 
     true_srcs = list()
     false_srcs = list()

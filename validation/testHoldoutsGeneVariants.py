@@ -104,13 +104,13 @@ class CrossValidator:
 if __name__ == '__main__':
     fused_bkb = BKB()
 
-    #fused_bkb.load('/home/public/data/ncats/663Pats6Holdouts/fusion.bkb')
-    #patient_data_file = '/home/public/data/ncats/663Pats6Holdouts/patient_data.pk'
-    #withheld_patients_file = '/home/public/data/ncats/663Pats6Holdouts/withheldPatients.csv'
+    fused_bkb.load('/home/public/data/ncats/663Pats6Holdouts/fusion.bkb')
+    patient_data_file = '/home/public/data/ncats/663Pats6Holdouts/patient_data.pk'
+    withheld_patients_file = '/home/public/data/ncats/663Pats6Holdouts/withheldPatients.csv'
 
-    fused_bkb.load('/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/fusion.bkb')
-    patient_data_file = '/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/patient_data.pk'
-    withheld_patients_file = '/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/withheldPatients.csv'
+    #fused_bkb.load('/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/fusion.bkb')
+    #patient_data_file = '/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/patient_data.pk'
+    #withheld_patients_file = '/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/withheldPatients.csv'
 
 
     compNames = fused_bkb.getAllComponentNames()

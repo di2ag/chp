@@ -9,6 +9,7 @@ from pybkb import bayesianKnowledgeBase as BKB
 from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
 from pybkb.core.python_base.fusion import fuse
 from pybkb.core.python_base.fusion_collapse import collapse_sources
+from pybkb.core.python_base.reasoning import checkMutex
 from pybkb.core.cpp_base.reasoning import updating
 
 sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
@@ -16,7 +17,7 @@ sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core'
 from reasoner import Reasoner
 from query import Query
 
-PATIENTS = ['Patient{}'.format(i) for i in range(100)]
+PATIENTS = ['Patient{}'.format(i) for i in range(10)]
 GENES = ['Gene{}_mut'.format(i) for i in range(10)]
 GENE_VARIANTS = ['Variant{}'.format(i) for i in range(2)]
 
@@ -88,4 +89,5 @@ query0 = Query(evidence={'Gene1_mut':'True',
 
 query0 = reasoner.analyze_query(query0)
 query0.getReport()
-#query0.bkb.makeGraph()
+print(checkMutex(query0.bkb))
+query0.bkb.makeGraph()
