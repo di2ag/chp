@@ -1,6 +1,9 @@
 # Prerequisites
 *.d
 
+# Python Files
+*.pyc
+
 # Compiled Object files
 *.slo
 *.lo
