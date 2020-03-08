@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 import pickle
 from operator import ge, le, eq
 import itertools
@@ -12,20 +13,30 @@ from pybkb.core.cpp_base.reasoning import revision as cpp_revision
 from pybkb.core.cpp_base.reasoning import updating as cpp_updating
 from pybkb.core.python_base.reasoning import updating as py_updating
 from pybkb.core.python_base.fusion_collapse import collapse_sources
-from pybkb.core.common.bayesianKnowledgeBase import BKB_component, BKB_I_node, BKB_S_node
+from pybkb.core.common.bayesianKnowledgeBase import BKB_S_node
 
 class Reasoner:
-    def __init__(self, fused_bkb, patients, cpp_reasoning=False):
+    def __init__(self, fused_bkb, patient_data=None, cpp_reasoning=False):
         self.fused_bkb = fused_bkb
-        self.patients = patients
+        self.metadata = patient_data
         self.cpp_reasoning = cpp_reasoning
+        self.metadata = patient_data
+        if patient_data is not None:
+            try:
+                self.setup()
+            except:
+                raise ValueError('Likely patient data is not in the right format.')
+
+    def setup(self):
+        #-- Collapse sources in fused bkb
+        self.collapsed_bkb = collapse_sources(self.fused_bkb)
 
         #-- Preprocess src hash values
-        src_component_indices = fused_bkb.getSrcComponents()
+        src_component_indices = self.fused_bkb.getSrcComponents()
         src_hashs = dict()
         for comp_idx in src_component_indices:
-            for state_idx in range(fused_bkb.getNumberComponentINodes(comp_idx)):
-                state_name = fused_bkb.getComponentINodeName(comp_idx, state_idx)
+            for state_idx in range(self.fused_bkb.getNumberComponentINodes(comp_idx)):
+                state_name = self.fused_bkb.getComponentINodeName(comp_idx, state_idx)
                 #-- Collect src numbers and string name or hash
                 src_num = int(state_name.split('_')[0][1:-1])
                 try:
@@ -36,42 +47,67 @@ class Reasoner:
         #self.src_hashs = set(src_hashs)
         self.src_hashs = src_hashs
 
-    #-- Should be source hash value followed by a dictionary of all available meta data. The file is assumed to be a pickle.
-    def set_src_metadata(self, metadata_file):
-        with open(metadata_file, 'rb') as m_:
-            self.metadata = pickle.load(m_)
-        #print('Available Metadata:')
+        #-- Preprocess Patient Variant data into dictionary
+        for src_hash, data_dict in self.metadata.items():
+            if 'Patient_Gene_Variants' in data_dict:
+                #-- Transform into directionary
+                gene_variant_dict = dict()
+                for gene_variant_str in data_dict['Patient_Gene_Variants']:
+                    gene_variant_split = gene_variant_str.split('-')
+                    gene = gene_variant_split[0]
+                    variant = gene_variant_split[1]
+                    gene_variant_dict[gene] = variant
+                data_dict['Patient_Gene_Variant'] = gene_variant_dict
+
+        #-- Setup Metadata labels and ranges
         self.metadata_labels = list()
         self.metadata_ranges = dict()
         for hash_key in self.metadata:
             self.metadata_labels.extend(list(self.metadata[hash_key].keys()))
             for label in self.metadata[hash_key]:
-                #print(label)
-                #print(self.metadata[hash_key][label])
-                try:
-                    val = float(self.metadata[hash_key][label])
-                    #print('val', val)
+                val = self.metadata[hash_key][label]
+                if type(val) == str or type(val) == int or type(val) == float:
+                    try:
+                        val = float(self.metadata[hash_key][label])
+                        if label in self.metadata_ranges:
+                            min_, max_ = self.metadata_ranges[label]
+                            if val < min_:
+                                min_ = val
+                            if val > max_:
+                                max_ = val
+                            self.metadata_ranges[label] = (min_, max_)
+                        else:
+                            self.metadata_ranges[label] = (val, val)
+                    except ValueError:
+                        if label in self.metadata_ranges:
+                            self.metadata_ranges[label].add(val)
+                        else:
+                            self.metadata_ranges[label] = set([val])
+                elif type(val) == list or type(val) == tuple:
                     if label in self.metadata_ranges:
-                        min_, max_ = self.metadata_ranges[label]
-                        if val < min_:
-                            min_ = val
-                        if val > max_:
-                            max_ = val
-                        self.metadata_ranges[label] = (min_, max_)
-                    else:
-                        self.metadata_ranges[label] = (val, val)
-                except:
-                    if label in self.metadata_ranges:
-                        #print(label)
-                        #print(self.metadata_ranges[label])
                         self.metadata_ranges[label].add(self.metadata[hash_key][label])
                     else:
                         self.metadata_ranges[label] = set([self.metadata[hash_key][label]])
+                elif type(val) == dict:
+                    #-- collapse dict into a set
+                    if label in self.metadata_ranges:
+                        self.metadata_ranges[label].update(set(self.metadata[hash_key][label]))
+                    else:
+                        self.metadata_ranges[label] = set(list(self.metadata[hash_key][label].items()))
+                else:
+                    raise TypeError('Unrecongized data type: {},\n{}'.format(type(val), val))
         self.metadata_labels = list(set(self.metadata_labels))
-        #for meta in set(self.metadata_labels):
-        #    print('\t{}'.format(meta))
 
-    def solve_query(self, query):
+    #-- Should be source hash value followed by a dictionary of all available meta data. The file is assumed to be a pickle.
+    def set_src_metadata(self, metadata_file):
+        with open(metadata_file, 'rb') as m_:
+            self.metadata = pickle.load(m_)
+        #-- Run setup
+        self.setup()
+
+    def solve_query(self, query, target_strategy='chain', interpolation='independence'):
+        #-- I don't think we need to make a copy of the query.
+        #query = copy.deepcopy(query)
         print('Reasoning...')
         start_time = time.time()
         if self.cpp_reasoning:
@@ -98,38 +134,95 @@ class Reasoner:
                                query.targets)
             else:
                 raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
+
         compute_time = time.time() - start_time
         query.result = res
         query.compute_time = compute_time
+
+        #-- If target strategy is topological multiply all the target probabilities together.
+        if target_strategy == 'topological':
+            topo_updates = dict()
+            for update, prob in res.updates.items():
+                comp_idx, state_idx = update
+                comp_name = query.bkb.getComponentName(comp_idx)
+                state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
+                if comp_name not in topo_updates:
+                    topo_updates[comp_name] = {state_name: math.log(prob)}
+                else:
+                    topo_updates[comp_name][state_name] = math.log(prob)
+            #-- Convert to actual meta target probability using independence assumption.
+            meta_target_updates = dict()
+            for comp_name, state_dict in topo_updates.items():
+                #-- There should always be two states, i.e. True and False. If theres only one just omit it.
+                if len(state_dict) < 2:
+                    continue
+                meta_target_name = comp_name.split('_')[0]
+                if meta_target_name not in meta_target_updates:
+                    meta_target_updates[meta_target_name] = state_dict
+                else:
+                    for state_name, log_prob in state_dict.items():
+                        meta_target_updates[meta_target_name][state_name] += log_prob
+            #-- Convert to probabilities and Normalize
+            for meta_target, state_dict in meta_target_updates.items():
+                total_prob = 0
+                for target_state, log_prob in state_dict.items():
+                    total_prob += math.exp(log_prob)
+                new_state_dict = dict()
+                for target_state, log_prob in state_dict.items():
+                    new_state_dict[target_state] = float(math.exp(log_prob) / total_prob)
+                meta_target_updates[meta_target] = new_state_dict
+            query.result.meta_target_updates = meta_target_updates
         return query
 
-    def process_metaVariables(self, bkb, meta_variables):
-        #-- Get all src components
-        #src_components = bkb.getSrcComponents()
+    def process_metaVariables(self, bkb, meta_evidence, meta_targets, target_strategy='chain'):
+        if target_strategy == 'chain':
+            meta_variables = []
+            if meta_evidence is not None:
+                meta_variables += meta_evidence
+            if meta_targets is not None:
+                meta_variables += meta_targets
+        elif target_strategy == 'topological':
+            if len(meta_targets) > 1:
+                raise NotImplementedError('Only one target can be specified and must be a demographic target.')
+            meta_variables = meta_evidence
+        else:
+            raise ValueError('Target Strategy must be chain or topological.')
 
-        #-- Collapse sources in fused bkb
-        bkb = collapse_sources(bkb)
 
         #-- Collect source hashs that match metadata as well as population stats
         transformed_meta = dict()
         pop_stats = dict()
-        for i, meta in enumerate(meta_variables):
-            bkb, transformed_meta_, matched_srcs = _addDemographicOption(meta, bkb, self.src_hashs, self.metadata, option_dependencies=meta_variables[:i])
-            transformed_meta.update(transformed_meta_)
+        if meta_variables is not None:
+            for i, meta in enumerate(meta_variables):
+                bkb, transformed_meta_, matched_srcs = _addDemographicOption(meta, bkb, self.src_hashs, self.metadata, option_dependencies=meta_variables[:i])
+                transformed_meta.update(transformed_meta_)
 
-        #-- Process Sources
-        #-- If first piece of evidence connect to all patients.
-        comp_idx = bkb.getComponentIndex('{} {} {}'.format(meta[0], meta[1], meta[2]))
-        inode_true_idx = bkb.getComponentINodeIndex(comp_idx, 'True')
-        inode_false_idx = bkb.getComponentINodeIndex(comp_idx, 'False')
-        bkb = _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, self.src_hashs)
+            #-- Process Sources
+            #-- If first piece of evidence connect to all patients.
+            comp_idx = bkb.getComponentIndex('{} {} {}'.format(meta[0], meta[1], meta[2]))
+            inode_true_idx = bkb.getComponentINodeIndex(comp_idx, 'True')
+            inode_false_idx = bkb.getComponentINodeIndex(comp_idx, 'False')
+            bkb = _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, self.src_hashs)
+
+        #-- If topological target stradegy connect target to each bottom I node.
+        if target_strategy == 'topological':
+            #-- Construct link and stats from bottom I-nodes to individual meta targets.
+            bkb, transformed_meta_ = _addTargetToLastTopologVariables(meta_targets[0], bkb, self.src_hashs, self.metadata)
+            transformed_meta.update(transformed_meta_)
         return transformed_meta, bkb
 
-    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None):
+    '''
+    Target strategy can be chain, where targets are located in the chain rule (legacy) or
+    topological where target is attached to all nodes at the bottom of the topological sort. This
+    methodolgy can only except on target then.
+    '''
+    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='independence'):
         #-- Copy BKB
         if preprocessed_bkb is not None:
-            bkb = copy.deepcopy(preprocessed_bkb)
+            start_time = time.time()
+            #bkb = copy.deepcopy(preprocessed_bkb)
 
+            print('\n\n{}'.format(time.time() - start_time))
             if query.meta_targets is not None:
                 transformed_meta_targets = ['{} {} {}'.format(target[0], target[1], target[2]) for target in query.meta_targets]
 
@@ -141,39 +234,44 @@ class Reasoner:
                     query.evidence.update(transformed_meta_evidence)
 
             query.targets.extend(transformed_meta_targets)
-            query.bkb = bkb
+            query.bkb = preprocessed_bkb
 
             if save_dir is not None:
                 query.save(save_dir)
             return self.solve_query(query)
 
-        #-- Else
-        bkb = copy.deepcopy(self.fused_bkb)
-        meta_variables = []
-        if query.meta_evidence is not None:
-            meta_variables += query.meta_evidence
+        #-- Else use the collapsed bkb that was processed during setup.
+        bkb = copy.deepcopy(self.collapsed_bkb)
 
         if query.meta_targets is not None:
-            meta_variables += query.meta_targets
             transformed_meta_targets = ['{} {} {}'.format(target[0], target[1], target[2]) for target in query.meta_targets]
 
-        if len(meta_variables) > 0:
-            transformed_meta, bkb = self.process_metaVariables(bkb, meta_variables)
-            #-- Collect Evidence
-            transformed_meta_evidence = dict()
-            if query.meta_evidence is not None:
-                for ev in query.meta_evidence:
-                    meta_name = '{} {} {}'.format(ev[0], ev[1], ev[2])
-                    transformed_meta_evidence[meta_name] = transformed_meta[meta_name]
+        transformed_meta, bkb = self.process_metaVariables(bkb, query.meta_evidence, query.meta_targets, target_strategy)
 
-                query.evidence.update(transformed_meta_evidence)
-            query.targets.extend(transformed_meta_targets)
+        #-- Collect Evidence
+        transformed_meta_evidence = dict()
+        if query.meta_evidence is not None:
+            for ev in query.meta_evidence:
+                meta_name = '{} {} {}'.format(ev[0], ev[1], ev[2])
+                transformed_meta_evidence[meta_name] = transformed_meta[meta_name]
+
+        #-- Collect Targets differently if using topological target strategy
+        if target_strategy == 'topological':
+            transformed_meta_targets = dict()
+            for target in query.meta_targets:
+                meta_name = '{} {} {}'.format(target[0], target[1], target[2])
+                for name in transformed_meta:
+                    if meta_name in name:
+                        transformed_meta_targets[name] = transformed_meta[name]
+
+        query.evidence.update(transformed_meta_evidence)
+        query.targets.extend(transformed_meta_targets)
 
         query.bkb = bkb
 
         if save_dir is not None:
             query.save(save_dir)
-        return self.solve_query(query)
+        return self.solve_query(query, target_strategy=target_strategy, interpolation=interpolation)
 
 def _process_operator(op):
     if op == '>=':
@@ -268,6 +366,99 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
             bkb.addSNode(BKB_S_node(init_component_index=comp_head_idx, init_state_index=i_node_head_idx, init_probability=probs[j], init_tail=processed_tail))
 
     return bkb
+
+def _collectBkbBottomINodes(bkb):
+    #-- Collect all I-nodes that are not present in any snode tails. Probably can optimize this. Needs a cycle check.
+    print(bkb)
+    heads = set()
+    tails = set()
+    for snode in bkb.getAllSNodes():
+        heads.add(snode.getHead())
+        for tail_idx in range(snode.getNumberTail()):
+            tails.add(snode.getTail(tail_idx))
+    #-- This picks out any inode that appears in an snode head put not in any snode tails, i.e. the bottom node.
+    bottom_inodes = heads - tails
+    return bottom_inodes
+
+def _addTargetToLastTopologVariables(target, bkb, src_population, src_population_data):
+    bottom_inodes = _collectBkbBottomINodes(bkb)
+
+    prop, op_str, val = target
+    op = _process_operator(op_str)
+
+    transformed_meta = dict()
+    for comp_idx, state_idx in bottom_inodes:
+        comp_name = bkb.getComponentName(comp_idx)
+        if 'mut-var_' == comp_name[:8]:
+            #-- If this is a variant component
+            gene = comp_name.split('_')[1]
+            variant = bkb.getComponentINodeName(comp_idx, state_idx)
+            joint_count = 0
+            prior_count = 0
+            neg_joint_count = 0
+            for src_hash, data_dict in src_population_data.items():
+                try:
+                    if src_population_data[src_hash]['Patient_Gene_Variant'][gene] == variant:
+                        prior_count += 1
+                        if op(src_population_data[src_hash][prop], val):
+                            joint_count += 1
+                        else:
+                            neg_joint_count += 1
+                except:
+                    continue
+            prob_true_cond = joint_count / prior_count
+            prob_false_cond = neg_joint_count / prior_count
+
+            #-- Add target Inode and attach s-node
+            target_comp_idx = bkb.addComponent('{} {} {}_mut-var_{}_{}'.format(prop, op_str, val,
+                                                                                gene, variant))
+            if prob_true_cond > 0:
+                target_true_idx = bkb.addComponentState(target_comp_idx, 'True')
+                bkb.addSNode(BKB_S_node(init_component_index=target_comp_idx,
+                                        init_state_index=target_true_idx,
+                                        init_probability=prob_true_cond,
+                                        init_tail=[(comp_idx, state_idx)]))
+            if prob_false_cond > 0:
+                target_false_idx = bkb.addComponentState(target_comp_idx, 'False')
+                bkb.addSNode(BKB_S_node(init_component_index=target_comp_idx,
+                                        init_state_index=target_false_idx,
+                                        init_probability=prob_false_cond,
+                                        init_tail=[(comp_idx, state_idx)]))
+        elif 'mut_' == comp_name[:4]:
+            #-- If this is a mutation component
+            gene = comp_name.split('_')[1]
+            joint_count = 0
+            prior_count = 0
+            neg_joint_count = 0
+            for src_hash, data_dict in src_population_data.items():
+                try:
+                    if gene in src_population_data[src_hash]['Patient_Genes']:
+                        prior_count += 1
+                        if op(src_population_data[src_hash][prop], val):
+                            joint_count += 1
+                        else:
+                            neg_joint_count += 1
+                except:
+                    continue
+            prob_true_cond = joint_count / prior_count
+            prob_false_cond = neg_joint_count / prior_count
+
+            #-- Add target Inode and attach s-node
+            target_comp_idx = bkb.addComponent('{} {} {}_mut_{}'.format(prop, op_str, val, gene))
+            if prob_true_cond > 0:
+                target_true_idx = bkb.addComponentState(target_comp_idx, 'True')
+                bkb.addSNode(BKB_S_node(init_component_index=target_comp_idx,
+                                        init_state_index=target_true_idx,
+                                        init_probability=prob_true_cond,
+                                        init_tail=[(comp_idx, state_idx)]))
+            if prob_false_cond > 0:
+                target_false_idx = bkb.addComponentState(target_comp_idx, 'False')
+                bkb.addSNode(BKB_S_node(init_component_index=target_comp_idx,
+                                        init_state_index=target_false_idx,
+                                        init_probability=prob_false_cond,
+                                        init_tail=[(comp_idx, state_idx)]))
+        transformed_meta[bkb.getComponentName(target_comp_idx)] = 'True'
+    return bkb, transformed_meta
 
 def _addDemographicOption(option, bkb, src_population, src_population_data, option_dependencies=list()):
     prop, op_str, val = option
@@ -369,7 +560,7 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
     non_src_comp_indices = set(bkb.getAllComponentIndices()) - set(src_comp_indices)
     S_nodes_by_head = bkb.constructSNodesByHead()
 
-    for non_src_comp in tqdm.tqdm(non_src_comp_indices, desc='Linking Sources'):
+    for non_src_comp in tqdm.tqdm(non_src_comp_indices, desc='Linking Sources', leave=False):
         for non_src_state in bkb.getAllComponentINodeIndices(non_src_comp):
             snodes = S_nodes_by_head[non_src_comp][non_src_state]
             for snode in snodes:

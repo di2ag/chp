@@ -12,8 +12,8 @@ from pybkb import bayesianKnowledgeBase as BKB
 from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
 from pybkb.core.python_base.fusion import fuse
 
-sys.path.append('/home/ghyde/bkb-pathway-provider/core')
-#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/ghyde/bkb-pathway-provider/core')
+sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
 
 from reasoner import Reasoner
 from query import Query
@@ -46,6 +46,10 @@ class CrossValidator:
         self.first = True
 
     def run_demo_suite(self, target, patientIDs, patientsDynamicEvidence):
+        #-- Set Up Reasoner
+        self.reasoner = Reasoner(self.bkb, None)
+        self.reasoner.set_src_metadata(self.patient_data_file)
+        self.reasoner.cpp_reasoning = False
         #queryResults = list()
         #probs = list()
         #summaries = list()
@@ -101,11 +105,6 @@ class CrossValidator:
                 #print(summaries[i])
 
     def run_demo_only(self, target, patID, evidence):
-        #-- Set Up Reasoner
-        self.reasoner = Reasoner(self.bkb, None)
-        self.reasoner.set_src_metadata(self.patient_data_file)
-        self.reasoner.cpp_reasoning = False
-
         #print(evidence)
         #print([target])
         #-- Make query and analyze
@@ -167,14 +166,14 @@ if __name__ == '__main__':
             pgv = withheldPatientDict["Patient_Gene_Variants"]
             patientDynamicEvidence = []
             for mut in pgv:
-                compName = 'mut-var_'+mut
+                compName = 'mut-var_'+mut+'='
                 if compName in compNames:
                     dict = {compName:'True'}
                     patientDynamicEvidence.append(dict) #          [('Patient_Gene_Variants', '==', tuple([mut]))])
             patientsDynamicEvidence.append(patientDynamicEvidence)
         count += 1
     target = ('Survival_Time', '<=', 943)
-    
+
     cross_validator = CrossValidator(fused_bkb,withheldPatientHashes, patient_data_file)
     df = cross_validator.run_demo_suite(target,
                                         patientIDs,
