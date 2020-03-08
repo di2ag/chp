@@ -180,15 +180,15 @@ class CrossValidator:
     def results_to_dataframe(self, results):
         print(results)
         df = pd.DataFrame(data=results)
-        df.to_csv('crossValid-results-1.csv')
+        df.to_csv('crossValid-results-1000.csv')
         return df
 
 if __name__ == '__main__':
     fused_bkb = BKB()
-    fused_bkb.load('/home/public/data/ncats/90PERCENTValidation200Patients40Validation/set1/fusion.bkb')
+    fused_bkb.load('/home/public/data/ncats/90PERCENTValidationAllPatientsWithDrug/set1/fusion.bkb')
     #print(fused_bkb.getAllComponentNames())
-    patient_data_file = '/home/public/data/ncats/90PERCENTValidation200Patients40Validation/set1/patient_data.pk'
-    test_patient_hashes = read_withheldPatientFile('/home/public/data/ncats/90PERCENTValidation200Patients40Validation/set1/withheldPatients.csv')
+    patient_data_file = '/home/public/data/ncats/90PERCENTValidationAllPatientsWithDrug/set1/patient_data.pk'
+    test_patient_hashes = read_withheldPatientFile('/home/public/data/ncats/90PERCENTValidationAllPatientsWithDrug/set1/withheldPatients.csv')
     #print(test_patient_hashes)
     '''
     fused_bkb = BKB()
@@ -197,15 +197,15 @@ if __name__ == '__main__':
     test_patient_hashes = None
     #print(test_patient_hashes)
     '''
-    demo_evidence_static = [('Drug_Name(s)', '==', 'TAMOXIFEN')]
+    #demo_evidence_static = [('Drug_Name(s)', '==', 'TAMOXIFEN')]
     demo_evidence_dynamic = ('Age_of_Diagnosis','>=')
-    demo_evidence_vals = [val for val in range(15000, 30000, 5000)]
+    demo_evidence_vals = [val for val in range(15000, 30000, 1000)]
 
-    demo_target = ('Survival_Time', '>=', 300)
+    demo_target = ('Survival_Time', '>=', 1000)
 
     cross_validator = CrossValidator(fused_bkb, test_patient_hashes, patient_data_file)
     df = cross_validator.run_demo_suite(demo_target, 
-                                        demo_evidence_static=demo_evidence_static, 
+                                        #demo_evidence_static=demo_evidence_static, 
                                         demo_evidence_dynamic=demo_evidence_dynamic, 
                                         demo_evidence_values=demo_evidence_vals)
     print(df)
