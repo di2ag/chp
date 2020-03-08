@@ -20,19 +20,18 @@ class PatientProcessor:
 
     class Patient:
         # will need to account for mutatedReads
-        def __init__(self, patientID, cancerType, mutatedGenes):
+        def __init__(self, patientID, cancerType, mutatedGenes, mutatedGeneVariants, variants):
             # patient gene data
             self.patientID = patientID
             self.cancerType = cancerType
             self.mutatedGenes = mutatedGenes
+            self.mutatedGeneVariants = mutatedGeneVariants
+            self.variants = variants
             self.mutatedGeneReads = list()
 
             # clinical data
             self.ageDiagnos = None
             self.gender = None
-            self.pathT = None
-            self.pathN = None
-            self.pathM = None
             self.survivalTime = None
 
             # radiation data
@@ -49,27 +48,44 @@ class PatientProcessor:
             self.daysToDrugEnd = list()
 
     # processes patient gene data
-    def processPatientGeneData(self, patientMutGenes, patientMutReads, geneReadStats):
+    def processPatientGeneData(self, patientMutGenes, patientMutReads):
         # reading initial patient data
         with open(patientMutGenes, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientGeneDict = dict()
             # row[0] = cancer type row[1] = patientID, row[6] = mutated gene
             next(reader)
-            rows = [(row[0],row[1],row[6]) for row in reader]
+            rows = [(row[0],row[1],row[6],row[7],row[10],row[13],row[16]) for row in reader]
 
         # create all patients
         mutatedPatGenes = list()
+        mutatedPatGeneVariants = list()
+        variants = list()
         cancerType = rows[0][0]
         patID = rows[0][1]
         for row in tqdm.tqdm(rows, desc='Reading patient files'):
+            variantClassifications = list()
             if patID != row[1]:
-                p = self.Patient(patID,cancerType,mutatedPatGenes)
+                p = self.Patient(patID,cancerType,mutatedPatGenes,mutatedPatGeneVariants,variants)
                 self.patients.append(p)
                 patID = row[1]
                 cancerType = row[0]
                 mutatedPatGenes = list()
-            mutatedPatGenes.append(row[2])
+                mutatedPatGeneVariants = list()
+                variants = list()
+            if 'DNP' not in row[3]:
+                variantClassifications.append(row[3])
+            if 'DNP' not in row[4]:
+                variantClassifications.append(row[4])
+            if 'DNP' not in row[5]:
+                variantClassifications.append(row[5])
+            if 'DNP' not in row[6]:
+                variantClassifications.append(row[6])
+            if all(x == variantClassifications[0] for x in variantClassifications):
+                mutatedPatGenes.append(row[2])
+                variants.append(variantClassifications[0])
+                mutatedPatGeneVariants.append(row[2]+"-"+variantClassifications[0])
+
         csv_file.close()
 
         # reading gene reads
@@ -113,19 +129,10 @@ class PatientProcessor:
                 if 'DNP' in row[3]:
                     continue
                 gender = row[3]
-                if 'DNP' in row[4]:
-                    continue
-                pathT = row[4]
-                if 'DNP' in row[5]:
-                    continue
-                pathN = row[5]
-                if 'DNP' in row[6]:
-                    continue
-                pathM = row[6]
                 if 'DNP' in row[7]:
                     continue
                 survTime = int(float(row[7]))
-                patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender, pathT, pathN, pathM, survTime)
+                patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender, survTime)
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
         for p in self.patients[:]:
@@ -133,10 +140,7 @@ class PatientProcessor:
                 clinical = patientClinicalDict[str(p.cancerType)+str(p.patientID)]
                 p.ageDiagnos = clinical[0]
                 p.gender = clinical[1]
-                p.pathT = clinical[2]
-                p.pathN = clinical[3]
-                p.pathM = clinical[4]
-                p.survivalTime = clinical[5]
+                p.survivalTime = clinical[2]
             else:
                 print("No Clinical - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
@@ -284,17 +288,48 @@ class PatientProcessor:
         assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
         #print("Forming Patient BKFs...")
 
+        allGenes = list()
         for pat in tqdm.tqdm(self.patients, desc='Forming patient BKFs'):
             bkf = BKB(name = pat.patientID)
-            for gene in pat.mutatedGenes:
+            variantCompIndices = list()
+            variantCompNames = list()
+            variantCompStateIndices = list()
+            for idx, gene in enumerate(pat.mutatedGenes):
+                allGenes.append(gene)
                 # gene
                 mutGeneComp_idx = bkf.addComponent('mut_{}='.format(gene))
                 iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
-
                 # form SNode  o---->[mut_<genename>=True]
                 bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
 
+                if 'var_'+pat.variants[idx]+'=' in variantCompNames:
+                    cIdx = variantCompNames.index('var_{}='.format(pat.variants[idx]))
+
+                    #mut_var combo
+                    mutVarComp_idx = bkf.addComponent('mut-var_{}='.format(pat.mutatedGeneVariants[idx]))
+                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, 'True')
+                    #mut_var s-node
+                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
+                                                                                   (variantCompIndices[cIdx],variantCompStateIndices[cIdx])]))
+                else:
+                    #var
+                    variantComp_idx = bkf.addComponent('var_{}='.format(pat.variants[idx]))
+                    iNodeVariant_idx = bkf.addComponentState(variantComp_idx, 'True')
+                    #var s-node
+                    bkf.addSNode(BKB_S_node(variantComp_idx, iNodeVariant_idx, 1.0))
+
+                    variantCompIndices.append(variantComp_idx)
+                    variantCompStateIndices.append(iNodeGeneMut_idx)
+                    variantCompNames.append(bkf.getComponentName(variantComp_idx))
+
+                    #mut_var combo
+                    mutVarComp_idx = bkf.addComponent('mut-var_{}='.format(pat.mutatedGeneVariants[idx]))
+                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, 'True')
+                    #mut_var s-node
+                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
+                                                                                   (variantComp_idx, iNodeVariant_idx)]))
             self.bkfs.append(bkf)
+      
 
     def SubsetBKFsToFile(self, outDirect, indices):
         allBKFHashNames = dict()
@@ -334,6 +369,10 @@ class PatientProcessor:
         patientDict["Cancer_Type"] = self.patients[bkfPatientIndex].cancerType
         #patient mutated Genes
         patientDict["Patient_Genes"] = tuple(self.patients[bkfPatientIndex].mutatedGenes)
+        #patient mutated Gene Variants
+        patientDict["Patient_Gene_Variants"] = tuple(self.patients[bkfPatientIndex].mutatedGeneVariants)
+        #patient variants
+        patientDict["Patient_Variants"] = tuple(self.patients[bkfPatientIndex].variants)
         #patient mutated Gene Reads
         patientDict["Patient_Gene_Reads"] = tuple(self.patients[bkfPatientIndex].mutatedGeneReads)
         if self.clinicalCollected:

@@ -142,8 +142,7 @@ class DataHandler:
 
         if self.tumor_rna_expression_file is not None and self.mutation_data_file is not None:
             self.patientProcessor.processPatientGeneData(self.mutation_data_file,
-                                                         self.tumor_rna_expression_file,
-                                                         None)
+                                                         self.tumor_rna_expression_file)
         while True:
             clinic = input('Collect clinical? ([y],n): ') or 'y'
             if clinic == 'y':
@@ -207,7 +206,7 @@ class DataHandler:
             idx = self.patientProcessor.patients.index(patient_name)
             patient_indices.append(idx)
             patient_bkfs.append(self.patientProcessor.bkfs[idx])
-        patient_bkf_files, patient_source_names, dump_loc, patientHash = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
+        patient_bkf_files, patient_source_names, dump_loc = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
 
         holdoutSource = list()
         for patient in patient_bkfs[:]:
