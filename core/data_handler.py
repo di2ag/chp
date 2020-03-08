@@ -5,6 +5,8 @@ import tqdm
 import argparse
 import csv
 import ast
+import random
+import copy
 
 from pybkb.core.cpp_base.fusion import fuse as cpp_fuse
 from pybkb.core.python_base.fusion import fuse as py_fuse
@@ -40,37 +42,57 @@ class DataDriver:
         self.dataHandler.readData()
 
     def run(self, i=0):
+        numValidPats = None
+        numValid = None
         if i == 0:
             print('=' * 50)
             print("Welcome to the BKB Data Driver!\n\tLet's fuse some fragments...")
             input('Press any key to continue...')
-        print('Choose the patients you wish to fuse:')
-        for j, patient in enumerate(self.dataHandler.patientProcessor.patients):
-            print('{})\t{}'.format(j, patient.patientID))
-        print('{})\tAll patients.'.format(j+1))
-        choice = input('Your choices (seperate by spaces): ')
-        try:
-            if int(choice) == j+1:
-                patients = [pat for pat in self.dataHandler.patientProcessor.patients]
-        except ValueError:
-            choice_split = choice.split()
-            patient_indices = [int(pat) for pat in choice_split]
-            patients = [self.dataHandler.patientProcessor.patients[idx] for idx in patient_indices]
+        val = input('Validation set? ([y], n): ') or 'y'
+        if val == 'y':
+            while True:
+                try:
+                    numValidPats = int(input('How many total patients? [1-{}]:'.format(len(self.dataHandler.patientProcessor.patients))))
+                    numValid = int(input('How many for validation? [1-{}]:'.format(numValidPats)))
+                    if numValidPats < 1 or numValidPats > len(self.dataHandler.patientProcessor.patients) or numValid >= numValidPats:
+                        print('invalid selection(s)')
+                    else:
+                        patients = []
+                        while len(patients) < numValidPats:
+                            potential = random.choice(self.dataHandler.patientProcessor.patients)
+                            if potential not in patients:
+                                patients.append(potential)
+                        break
+                except ValueError:
+                    continue
+        else:
+            print('Choose the patients you wish to fuse:')
+            for j, patient in enumerate(self.dataHandler.patientProcessor.patients):
+                print('{})\t{}'.format(j, patient.patientID))
+            print('{})\tAll patients.'.format(j+1))
+            choice = input('Your choices (seperate by spaces): ')
+            try:
+                if int(choice) == j+1:
+                    patients = [pat for pat in self.dataHandler.patientProcessor.patients]
+            except ValueError:
+                choice_split = choice.split()
+                patient_indices = [int(pat) for pat in choice_split]
+                patients = [self.dataHandler.patientProcessor.patients[idx] for idx in patient_indices]
 
-        while True:
-            print('You choose to fuse over the following patients:')
-            if len(patients) == len(self.dataHandler.patientProcessor.patients):
-                print('\tAll patients.')
-            else:
-                for pat in patients:
-                    print('\t{}'.format(pat.patientID))
-            correct = input('Is that correct? ([y], n): ') or 'y'
-            if correct == 'y':
-                break
-            if correct == 'n':
-                self.run(i=i+1)
-            else:
-                print('Response not recognized.')
+            while True:
+                print('You choose to fuse over the following patients:')
+                if len(patients) == len(self.dataHandler.patientProcessor.patients):
+                    print('\tAll patients.')
+                else:
+                    for pat in patients:
+                        print('\t{}'.format(pat.patientID))
+                correct = input('Is that correct? ([y], n): ') or 'y'
+                if correct == 'y':
+                    break
+                if correct == 'n':
+                    self.run(i=i+1)
+                else:
+                    print('Response not recognized.')
 
         while True:
             print('Do you want to fuse with Pathway data?')
@@ -88,7 +110,7 @@ class DataDriver:
             print('Ready to fuse.')
             choice = input('Do you want to continue? ([y],n): ') or 'y'
             if choice == 'y':
-                self.dataHandler.fuse(patients, with_pathways)
+                self.dataHandler.fuse(patients, numValidPats, numValid, with_pathways)
                 break
             if choice == 'n':
                 while True:
@@ -198,7 +220,16 @@ class DataHandler:
         self.readTcgaData()
         self.readPathwayData()
 
-    def fuse(self, patients, with_pathways=True):
+    def fuse(self, patients, numValidPats, numValid, with_pathways=True):
+        if numValidPats != None:
+            validationHoldout = []
+            noDupPats = list()
+            while len(validationHoldout) < numValid:
+                pat = random.choice(patients)
+                if pat not in noDupPats:
+                    validationHoldout.append((pat.cancerType,pat.patientID))
+                    noDupPats.append(pat)
+            self.holdoutPatients = validationHoldout
 
         patient_indices = list()
         patient_bkfs = list()
@@ -209,9 +240,9 @@ class DataHandler:
         patient_bkf_files, patient_source_names, dump_loc = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
 
         holdoutSource = list()
-        for patient in patient_bkfs[:]:
-            for holdoutPatient in self.holdoutPatients:
-                if patient._name == holdoutPatient[1]:
+        for holdoutPatient in self.holdoutPatients:
+            for patient in patient_bkfs:
+                if holdoutPatient[1] == patient._name:
                     idx = patient_bkfs.index(patient)
                     patient_bkfs.pop(idx)
                     holdoutSource.append(patient_source_names.pop(idx))
