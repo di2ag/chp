@@ -9,6 +9,9 @@ import copy
 from concurrent.futures import ProcessPoolExecutor, wait
 import time
 
+sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+from query import Query
+
 from pybkb.core.cpp_base.reasoning import revision as cpp_revision
 from pybkb.core.cpp_base.reasoning import updating as cpp_updating
 from pybkb.core.python_base.reasoning import updating as py_updating
@@ -85,9 +88,9 @@ class Reasoner:
                             self.metadata_ranges[label] = set([val])
                 elif type(val) == list or type(val) == tuple:
                     if label in self.metadata_ranges:
-                        self.metadata_ranges[label].add(self.metadata[hash_key][label])
+                        self.metadata_ranges[label].update(set(val))
                     else:
-                        self.metadata_ranges[label] = set([self.metadata[hash_key][label]])
+                        self.metadata_ranges[label] = set(val)
                 elif type(val) == dict:
                     #-- collapse dict into a set
                     if label in self.metadata_ranges:
@@ -108,7 +111,7 @@ class Reasoner:
     def solve_query(self, query, target_strategy='chain', interpolation='independence'):
         #-- I don't think we need to make a copy of the query.
         #query = copy.deepcopy(query)
-        print('Reasoning...')
+        #print('Reasoning...')
         start_time = time.time()
         if self.cpp_reasoning:
             if query.type == 'revision':
@@ -141,18 +144,10 @@ class Reasoner:
 
         #-- If target strategy is topological multiply all the target probabilities together.
         if target_strategy == 'topological':
-            topo_updates = dict()
-            for update, prob in res.updates.items():
-                comp_idx, state_idx = update
-                comp_name = query.bkb.getComponentName(comp_idx)
-                state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
-                if comp_name not in topo_updates:
-                    topo_updates[comp_name] = {state_name: math.log(prob)}
-                else:
-                    topo_updates[comp_name][state_name] = math.log(prob)
+            updates = query.result.process_updates()
             #-- Convert to actual meta target probability using independence assumption.
             meta_target_updates = dict()
-            for comp_name, state_dict in topo_updates.items():
+            for comp_name, state_dict in updates.items():
                 #-- There should always be two states, i.e. True and False. If theres only one just omit it.
                 if len(state_dict) < 2:
                     continue
@@ -163,14 +158,17 @@ class Reasoner:
                     for state_name, log_prob in state_dict.items():
                         meta_target_updates[meta_target_name][state_name] += log_prob
             #-- Convert to probabilities and Normalize
-            for meta_target, state_dict in meta_target_updates.items():
-                total_prob = 0
-                for target_state, log_prob in state_dict.items():
-                    total_prob += math.exp(log_prob)
-                new_state_dict = dict()
-                for target_state, log_prob in state_dict.items():
-                    new_state_dict[target_state] = float(math.exp(log_prob) / total_prob)
-                meta_target_updates[meta_target] = new_state_dict
+            try:
+                for meta_target, state_dict in meta_target_updates.items():
+                    total_prob = 0
+                    for target_state, log_prob in state_dict.items():
+                        total_prob += math.exp(log_prob)
+                    new_state_dict = dict()
+                    for target_state, log_prob in state_dict.items():
+                        new_state_dict[target_state] = float(math.exp(log_prob) / total_prob)
+                    meta_target_updates[meta_target] = new_state_dict
+            except OverflowError:
+                print('Warning: Encountered an overflow error, so leaving as log probabilities')
             query.result.meta_target_updates = meta_target_updates
         return query
 
@@ -187,7 +185,6 @@ class Reasoner:
             meta_variables = meta_evidence
         else:
             raise ValueError('Target Strategy must be chain or topological.')
-
 
         #-- Collect source hashs that match metadata as well as population stats
         transformed_meta = dict()
@@ -211,13 +208,64 @@ class Reasoner:
             transformed_meta.update(transformed_meta_)
         return transformed_meta, bkb
 
+    def solve_query_independence(self, query, genetic_evidence, target_strategy):
+        bkb = query.bkb
+        queries = list()
+        non_gene_evidence = copy.deepcopy(query.evidence)
+        for gene_key in genetic_evidence:
+            del non_gene_evidence[gene_key]
+        for genetic_comp, genetic_state in genetic_evidence.items():
+            #-- Create individual gene evidence
+            independ_evidence = copy.deepcopy(non_gene_evidence)
+            independ_evidence[genetic_comp] = genetic_state
+            q = Query(evidence=independ_evidence,
+                      targets=query.targets,
+                      type='updating')
+            q.bkb = bkb
+            queries.append(q)
+
+        finished_queries = list()
+        for q_ in queries:
+            finished_queries.append(self.solve_query(q_, target_strategy=target_strategy))
+
+        #-- Run all independent queries in parrellel
+        #with ProcessPoolExecutor(max_workers=15) as executor:
+        #    #finished_queries = list()
+        #    #for q_ in executor.map(self.solve_query, [(q__, target_strategy) for q__ in queries]):
+        #    #    finished_queries.append(q_)
+        #    futures = list()
+        #    for q_ in queries:
+        #        futures.append(executor.submit(self.solve_query, q_, target_strategy))
+        #    finished_queries = [q_.result() for q_ in futures]
+
+        #-- Collect queries and calculate independent probs
+        res = dict()
+        for q_ in finished_queries:
+            updates = q_.result.process_updates()
+            for comp_name, state_dict in updates.items():
+                if len(state_dict) < 2:
+                    continue
+                if comp_name in res:
+                    for state_name, prob in state_dict.items():
+                        #-- If probability is greater than one than its a log prob
+                        if prob > 1:
+                            res[comp_name][state_name] += prob
+                        else:
+                            res[comp_name][state_name] *= prob
+                else:
+                    res[comp_name] = state_dict
+        query.independ_queries = queries
+        query.independ_result = res
+        return query
+
     '''
     Target strategy can be chain, where targets are located in the chain rule (legacy) or
     topological where target is attached to all nodes at the bottom of the topological sort. This
     methodolgy can only except on target then.
     '''
-    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='independence'):
-        #-- Copy BKB
+    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='standard'):
+        #-- Duplicate Gene Evidence
+        genetic_evidence = copy.deepcopy(query.evidence)
         if preprocessed_bkb is not None:
             #bkb = copy.deepcopy(preprocessed_bkb)
 
@@ -236,6 +284,9 @@ class Reasoner:
 
             if save_dir is not None:
                 query.save(save_dir)
+
+            if interpolation == 'independence':
+                return self.solve_query_independence(query, genetic_evidence, target_strategy)
             return self.solve_query(query)
 
         #-- Else use the collapsed bkb that was processed during setup.
@@ -269,7 +320,9 @@ class Reasoner:
 
         if save_dir is not None:
             query.save(save_dir)
-        return self.solve_query(query, target_strategy=target_strategy, interpolation=interpolation)
+        if interpolation == 'independence':
+            return self.solve_query_independence(query, genetic_evidence, target_strategy)
+        return self.solve_query(query, target_strategy=target_strategy)
 
 def _process_operator(op):
     if op == '>=':
@@ -367,7 +420,7 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
 
 def _collectBkbBottomINodes(bkb):
     #-- Collect all I-nodes that are not present in any snode tails. Probably can optimize this. Needs a cycle check.
-    print(bkb)
+    #print(bkb)
     heads = set()
     tails = set()
     for snode in bkb.getAllSNodes():
@@ -389,14 +442,15 @@ def _addTargetToLastTopologVariables(target, bkb, src_population, src_population
         comp_name = bkb.getComponentName(comp_idx)
         if 'mut-var_' == comp_name[:8]:
             #-- If this is a variant component
-            gene = comp_name.split('_')[1]
+            gene = '_'.join(comp_name.split('_')[1:])
             variant = bkb.getComponentINodeName(comp_idx, state_idx)
+            gene_variant = '{}-{}'.format(gene, variant)
             joint_count = 0
             prior_count = 0
             neg_joint_count = 0
             for src_hash, data_dict in src_population_data.items():
                 try:
-                    if src_population_data[src_hash]['Patient_Gene_Variant'][gene] == variant:
+                    if gene_variant in data_dict['Patient_Gene_Variants']:
                         prior_count += 1
                         if op(src_population_data[src_hash][prop], val):
                             joint_count += 1
@@ -404,6 +458,7 @@ def _addTargetToLastTopologVariables(target, bkb, src_population, src_population
                             neg_joint_count += 1
                 except:
                     continue
+
             prob_true_cond = joint_count / prior_count
             prob_false_cond = neg_joint_count / prior_count
 
@@ -424,13 +479,13 @@ def _addTargetToLastTopologVariables(target, bkb, src_population, src_population
                                         init_tail=[(comp_idx, state_idx)]))
         elif 'mut_' == comp_name[:4]:
             #-- If this is a mutation component
-            gene = comp_name.split('_')[1]
+            gene = '_'.join(comp_name.split('_')[1:])
             joint_count = 0
             prior_count = 0
             neg_joint_count = 0
             for src_hash, data_dict in src_population_data.items():
                 try:
-                    if gene in src_population_data[src_hash]['Patient_Genes']:
+                    if gene in data_dict['Patient_Genes']:
                         prior_count += 1
                         if op(src_population_data[src_hash][prop], val):
                             joint_count += 1

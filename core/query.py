@@ -14,6 +14,8 @@ class Query:
         self.meta_targets = meta_targets
         self.result = None
         self.bkb = None
+        self.independ_queries = None
+        self.independ_result = None
         self.compute_time = -1
 
     def save(self, directory, only_json=False):
@@ -83,5 +85,11 @@ class Query:
         if self.result is not None:
             self.result.summary()
             print('Computed in {} sec.'.format(self.compute_time))
+        elif self.independ_result is not None:
+            print('---- Results Using Independence Assumption -----')
+            for update, state_dict in self.independ_result.items():
+                print('\t{}'.format(update))
+                for state, prob in state_dict.items():
+                    print('\t\t{} = {}'.format(state, prob))
         else:
             print('No results found.')

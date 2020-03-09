@@ -88,14 +88,14 @@ demo_ev = [('Age', '>=', 50),
 demo_tar = [('Survival', '>=', 2)]
 
 reasoner = Reasoner(fused_bkb, patient_data_hash)
-
-query0 = Query(evidence=dict(),
+random_genes = {'mut_{}'.format(gene): 'True' for gene in GENES[:5]}
+query0 = Query(evidence=random_genes,
                targets=list(),
                meta_evidence=demo_ev,
                meta_targets=demo_tar,
                type='updating')
 
-query0 = reasoner.analyze_query(query0, target_strategy='topological')
+query0 = reasoner.analyze_query(query0, target_strategy='topological', interpolation='independence')
 query0.getReport()
-print(checkMutex(query0.bkb))
-query0.bkb.makeGraph()
+#print(checkMutex(query0.bkb))
+#query0.bkb.makeGraph()
