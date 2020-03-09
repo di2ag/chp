@@ -9,7 +9,8 @@ import copy
 from concurrent.futures import ProcessPoolExecutor, wait
 import time
 
-sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+sys.path.append('/home/ghyde/bkb-pathway-provider/core')
 from query import Query
 
 from pybkb.core.cpp_base.reasoning import revision as cpp_revision
@@ -397,7 +398,7 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
                 op_ = _process_operator(op_str_)
                 #-- Check if the src_population item is a list of items (useful for drugs):
                 if type(src_population_data[src_name][prop_]) == tuple:
-                    if op_(set(val_), set(src_population_data[src_name][prop_])):
+                    if val_ in src_population_data[src_name][prop_]:
                         res = True
                     else:
                         res = False
@@ -526,7 +527,7 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
     for entity_name, src_name in src_population.items():
         #print(src_population_data[src_name][prop])
         if type(src_population_data[src_name][prop]) == tuple:
-            if op(set(val), set(src_population_data[src_name][prop])):
+            if val in src_population_data[src_name][prop]: #op(set(val).issubset(set(src_population_data[src_name][prop]))):
                 matched_srcs.add(entity_name)
                 pop_count_true += 1
                 res = True
@@ -537,7 +538,6 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
                 matched_srcs.add(entity_name)
                 pop_count_true += 1
     prob = float(pop_count_true / len(src_population))
-
     comp_idx = bkb.addComponent('{} {} {}'.format(prop, op_str, val))
     inode_true_idx = bkb.addComponentState(comp_idx, 'True')
     inode_false_idx = bkb.addComponentState(comp_idx, 'False')
