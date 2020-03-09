@@ -213,7 +213,7 @@ class Reasoner:
             transformed_meta.update(transformed_meta_)
         return transformed_meta, bkb
 
-    def solve_query_independence(self, query, genetic_evidence, target_strategy, parallel=False):
+    def solve_query_independence(self, query, genetic_evidence, target_strategy, parallel=True):
         bkb = query.bkb
         non_gene_evidence = copy.deepcopy(query.evidence)
         for gene_key in genetic_evidence:
@@ -228,10 +228,10 @@ class Reasoner:
                       targets=copy.deepcopy(base_query.targets),
                       type='updating')
 
-            if parallel:
-                q.bkb = copy.deepcopy(bkb)
-            else:
-                q.bkb = bkb
+            #if not parallel:
+            #    q.bkb = copy.deepcopy(bkb)
+            #else:
+            q.bkb = bkb
             return q
 
         queries = list()
@@ -244,8 +244,9 @@ class Reasoner:
                 finished_queries.append(self.solve_query(q_, target_strategy=target_strategy))
 
         else:
+            start_time = time.time()
             #-- Run all independent queries in parrellel
-            with ProcessPoolExecutor(max_workers=15) as executor:
+            with ProcessPoolExecutor(max_workers=30) as executor:
                 #finished_queries = list()
                 #for q_ in executor.map(self.solve_query, [(q__, target_strategy) for q__ in queries]):
                 #    finished_queries.append(q_)
@@ -253,7 +254,7 @@ class Reasoner:
                 for q_ in queries:
                     futures.append(executor.submit(self.solve_query, q_, copy.deepcopy(target_strategy)))
                 finished_queries = [q_.result() for q_ in futures]
-
+            print('Multiprocessing time: {}'.format(time.time() - start_time))
         #-- Collect queries and calculate independent probs
         res = dict()
         for q_ in finished_queries:
@@ -466,7 +467,7 @@ def _addTargetToLastTopologVariables(target, bkb, src_population, src_population
     op = _process_operator(op_str)
 
     transformed_meta = dict()
-    for comp_idx, state_idx in bottom_inodes:
+    for comp_idx, state_idx in tqdm.tqdm(bottom_inodes, desc='Implementing Topological Strategy', leave=False):
         comp_name = bkb.getComponentName(comp_idx)
         if 'mut-var_' == comp_name[:8]:
             #-- If this is a variant component
