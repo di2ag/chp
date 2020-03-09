@@ -124,6 +124,9 @@ class CrossValidator:
                                                target_strategy=self.target_strategy, interpolation=self.interpolation)
             self.processed_bkb = copy.deepcopy(query.bkb)
             self.first = False
+            #print(query.result)
+            #print(query.independ_result)
+            #input('Stopping.')
             query.getReport()
             #summary = query.result.summary()
             #query.result.summary()

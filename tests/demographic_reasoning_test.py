@@ -17,9 +17,9 @@ sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core'
 from reasoner import Reasoner
 from query import Query
 
-PATIENTS = ['Patient{}'.format(i) for i in range(50)]
+PATIENTS = ['Patient{}'.format(i) for i in range(10)]
 GENES = ['Gene{}'.format(i) for i in range(10)]
-GENE_VARIANTS = ['Variant{}'.format(i) for i in range(2)]
+GENE_VARIANTS = ['Variant{}'.format(i) for i in range(5)]
 
 #-- Add demographic evidence.
 GENDER_OPTIONS = ('Male', 'Female')

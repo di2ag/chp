@@ -9,8 +9,8 @@ import copy
 from concurrent.futures import ProcessPoolExecutor, wait
 import time
 
-#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-sys.path.append('/home/ghyde/bkb-pathway-provider/core')
+sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/ghyde/bkb-pathway-provider/core')
 from query import Query
 
 from pybkb.core.cpp_base.reasoning import revision as cpp_revision
@@ -146,31 +146,35 @@ class Reasoner:
         #-- If target strategy is topological multiply all the target probabilities together.
         if target_strategy == 'topological':
             updates = query.result.process_updates()
+            #print(updates)
+            #input()
             #-- Convert to actual meta target probability using independence assumption.
             meta_target_updates = dict()
             for comp_name, state_dict in updates.items():
                 #-- There should always be two states, i.e. True and False. If theres only one just omit it.
+                if min(state_dict.values()) < 0:
+                    continue
                 if len(state_dict) < 2:
                     continue
                 meta_target_name = comp_name.split('_')[0]
                 if meta_target_name not in meta_target_updates:
                     meta_target_updates[meta_target_name] = state_dict
-                else:
-                    for state_name, log_prob in state_dict.items():
-                        meta_target_updates[meta_target_name][state_name] += log_prob
-            #-- Convert to probabilities and Normalize
-            try:
-                for meta_target, state_dict in meta_target_updates.items():
-                    total_prob = 0
-                    for target_state, log_prob in state_dict.items():
-                        total_prob += math.exp(log_prob)
-                    new_state_dict = dict()
-                    for target_state, log_prob in state_dict.items():
-                        new_state_dict[target_state] = float(math.exp(log_prob) / total_prob)
-                    meta_target_updates[meta_target] = new_state_dict
-            except OverflowError:
-                print('Warning: Encountered an overflow error, so leaving as log probabilities')
-            query.result.meta_target_updates = meta_target_updates
+                elif min(state_dict.values()) > 0:
+                    for state_name, prob in state_dict.items():
+                        if meta_target_updates[meta_target_name][state_name] < 0:
+                            meta_target_updates[meta_target_name][state_name] = prob
+                        else:
+                            meta_target_updates[meta_target_name][state_name] *= prob
+                #-- Normalize
+                total_prob = 0
+                for state_name, unnorm_prob in meta_target_updates[meta_target_name].items():
+                    total_prob += unnorm_prob
+                new_state_dict = dict()
+                for state_name, unnorm_prob in meta_target_updates[meta_target_name].items():
+                    new_state_dict[state_name] = unnorm_prob / total_prob
+                meta_target_updates[meta_target_name] = new_state_dict
+            if len(meta_target_updates) > 0:
+                query.result.meta_target_updates = meta_target_updates
         return query
 
     def process_metaVariables(self, bkb, meta_evidence, meta_targets, target_strategy='chain'):
@@ -209,40 +213,53 @@ class Reasoner:
             transformed_meta.update(transformed_meta_)
         return transformed_meta, bkb
 
-    def solve_query_independence(self, query, genetic_evidence, target_strategy):
+    def solve_query_independence(self, query, genetic_evidence, target_strategy, parallel=False):
         bkb = query.bkb
-        queries = list()
         non_gene_evidence = copy.deepcopy(query.evidence)
         for gene_key in genetic_evidence:
             del non_gene_evidence[gene_key]
-        for genetic_comp, genetic_state in genetic_evidence.items():
-            #-- Create individual gene evidence
+
+        def make_independent_query(base_query, bkb, non_gene_evidence, genetic_comp, genetic_state, parallel):
             independ_evidence = copy.deepcopy(non_gene_evidence)
             independ_evidence[genetic_comp] = genetic_state
+            #print(independ_evidence)
+            #input('Stopped')
             q = Query(evidence=independ_evidence,
-                      targets=query.targets,
+                      targets=copy.deepcopy(base_query.targets),
                       type='updating')
-            q.bkb = bkb
-            queries.append(q)
 
-        finished_queries = list()
-        for q_ in queries:
-            finished_queries.append(self.solve_query(q_, target_strategy=target_strategy))
+            if parallel:
+                q.bkb = copy.deepcopy(bkb)
+            else:
+                q.bkb = bkb
+            return q
 
-        #-- Run all independent queries in parrellel
-        #with ProcessPoolExecutor(max_workers=15) as executor:
-        #    #finished_queries = list()
-        #    #for q_ in executor.map(self.solve_query, [(q__, target_strategy) for q__ in queries]):
-        #    #    finished_queries.append(q_)
-        #    futures = list()
-        #    for q_ in queries:
-        #        futures.append(executor.submit(self.solve_query, q_, target_strategy))
-        #    finished_queries = [q_.result() for q_ in futures]
+        queries = list()
+        for genetic_comp, genetic_state in tqdm.tqdm(genetic_evidence.items(), desc='Setting up independent runs', leave=False):
+            queries.append(make_independent_query(query, bkb, non_gene_evidence, genetic_comp, genetic_state, parallel))
+
+        if not parallel:
+            finished_queries = list()
+            for q_ in tqdm.tqdm(queries, desc='Solving Independent Queries', leave=False):
+                finished_queries.append(self.solve_query(q_, target_strategy=target_strategy))
+
+        else:
+            #-- Run all independent queries in parrellel
+            with ProcessPoolExecutor(max_workers=15) as executor:
+                #finished_queries = list()
+                #for q_ in executor.map(self.solve_query, [(q__, target_strategy) for q__ in queries]):
+                #    finished_queries.append(q_)
+                futures = list()
+                for q_ in queries:
+                    futures.append(executor.submit(self.solve_query, q_, copy.deepcopy(target_strategy)))
+                finished_queries = [q_.result() for q_ in futures]
 
         #-- Collect queries and calculate independent probs
         res = dict()
         for q_ in finished_queries:
             updates = q_.result.process_updates()
+            #print(updates)
+            #print('stopped')
             for comp_name, state_dict in updates.items():
                 state_keys = state_dict.keys()
                 state_probs = state_dict.values()
@@ -254,11 +271,11 @@ class Reasoner:
                 if comp_name in res:
                     sumStateProbs = sum(state_probs)
                     for state_name, prob in state_dict.items():
-                        #-- If probability is greater than one than its a log prob
-                        if prob > 1:
-                            res[comp_name][state_name] += prob
-                        else:
-                            res[comp_name][state_name] *= (prob/sumStateProbs)
+                        ##-- If probability is greater than one than its a log prob
+                        #if prob > 1:
+                        #    res[comp_name][state_name] += prob
+                        #else:
+                        res[comp_name][state_name] *= (prob/sumStateProbs)
                 else:
                     res[comp_name] = state_dict
                 resProbs = res[comp_name].values()
