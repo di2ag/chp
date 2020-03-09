@@ -252,14 +252,19 @@ class Reasoner:
                 if len(state_dict) < 2:
                     continue
                 if comp_name in res:
+                    sumStateProbs = sum(state_probs)
                     for state_name, prob in state_dict.items():
                         #-- If probability is greater than one than its a log prob
                         if prob > 1:
                             res[comp_name][state_name] += prob
                         else:
-                            res[comp_name][state_name] *= prob
+                            res[comp_name][state_name] *= (prob/sumStateProbs)
                 else:
                     res[comp_name] = state_dict
+                resProbs = res[comp_name].values()
+                sumResProbs = sum(resProbs)
+                for state_key in res[comp_name].keys():
+                    res[comp_name][state_key] /= sumResProbs
         query.independ_queries = queries
         query.independ_result = res
         return query
