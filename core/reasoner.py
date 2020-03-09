@@ -243,6 +243,11 @@ class Reasoner:
         for q_ in finished_queries:
             updates = q_.result.process_updates()
             for comp_name, state_dict in updates.items():
+                state_keys = state_dict.keys()
+                state_probs = state_dict.values()
+                # skip -1 where there is no inference on a particular state_key
+                if min(state_probs) <= 0:
+                    continue
                 if len(state_dict) < 2:
                     continue
                 if comp_name in res:
