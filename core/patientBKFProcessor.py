@@ -114,6 +114,7 @@ class PatientProcessor:
                 print("No Reads - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
 
+
     def processClinicalData(self, clinicalData):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
         with open(clinicalData, 'r') as csv_file:
@@ -288,46 +289,49 @@ class PatientProcessor:
         assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
         #print("Forming Patient BKFs...")
 
-        allGenes = list()
         for pat in tqdm.tqdm(self.patients, desc='Forming patient BKFs'):
             bkf = BKB(name = pat.patientID)
-            variantCompIndices = list()
-            variantCompNames = list()
-            variantCompStateIndices = list()
+ #           variantCompIndices = list()
+ #           variantCompNames = list()
+ #           variantCompStateIndices = list()
             for idx, gene in enumerate(pat.mutatedGenes):
-                allGenes.append(gene)
                 # gene
-                mutGeneComp_idx = bkf.addComponent('mut_{}='.format(gene))
+                mutGeneComp_idx = bkf.addComponent('mut_{}'.format(gene))
                 iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
                 # form SNode  o---->[mut_<genename>=True]
                 bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
 
-                if 'var_'+pat.variants[idx]+'=' in variantCompNames:
-                    cIdx = variantCompNames.index('var_{}='.format(pat.variants[idx]))
-
-                    #mut_var combo
-                    mutVarComp_idx = bkf.addComponent('mut-var_{}='.format(pat.mutatedGeneVariants[idx]))
-                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, 'True')
-                    #mut_var s-node
-                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
-                                                                                   (variantCompIndices[cIdx],variantCompStateIndices[cIdx])]))
-                else:
-                    #var
-                    variantComp_idx = bkf.addComponent('var_{}='.format(pat.variants[idx]))
-                    iNodeVariant_idx = bkf.addComponentState(variantComp_idx, 'True')
-                    #var s-node
-                    bkf.addSNode(BKB_S_node(variantComp_idx, iNodeVariant_idx, 1.0))
-
-                    variantCompIndices.append(variantComp_idx)
-                    variantCompStateIndices.append(iNodeGeneMut_idx)
-                    variantCompNames.append(bkf.getComponentName(variantComp_idx))
-
-                    #mut_var combo
-                    mutVarComp_idx = bkf.addComponent('mut-var_{}='.format(pat.mutatedGeneVariants[idx]))
-                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, 'True')
-                    #mut_var s-node
-                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
-                                                                                   (variantComp_idx, iNodeVariant_idx)]))
+                #mut_var combo
+                mutVarComp_idx = bkf.addComponent('mut-var_{}'.format(gene))
+                iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, pat.variants[idx])
+                # form SNode [mut_<genename>=True]---->o---->[mut-var_<genename>=<varianttype>]
+                bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
+#                if 'var_'+pat.variants[idx]+'=' in variantCompNames:
+#                    cIdx = variantCompNames.index('var_{}='.format(pat.variants[idx]))
+#
+#                    #mut_var combo
+#                    mutVarComp_idx = bkf.addComponent('mut-var_{}='.format(pat.mutatedGeneVariants[idx]))
+#                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, 'True')
+#                    #mut_var s-node
+#                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
+#                                                                                   (variantCompIndices[cIdx],variantCompStateIndices[cIdx])]))
+#                else:
+#                    #var
+#                    variantComp_idx = bkf.addComponent('var_{}='.format(pat.variants[idx]))
+#                    iNodeVariant_idx = bkf.addComponentState(variantComp_idx, 'True')
+#                    #var s-node
+#                    bkf.addSNode(BKB_S_node(variantComp_idx, iNodeVariant_idx, 1.0))
+#
+#                    variantCompIndices.append(variantComp_idx)
+#                    variantCompStateIndices.append(iNodeGeneMut_idx)
+#                    variantCompNames.append(bkf.getComponentName(variantComp_idx))
+#
+#                    #mut_var combo
+#                    mutVarComp_idx = bkf.addComponent('mut-var_{}='.format(pat.mutatedGeneVariants[idx]))
+#                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, 'True')
+#                    #mut_var s-node
+#                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
+#                                                                                   (variantComp_idx, iNodeVariant_idx)]))
             self.bkfs.append(bkf)
       
 

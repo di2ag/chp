@@ -7,13 +7,14 @@ import pandas as pd
 import tqdm
 import csv
 import pickle
+import time
 
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
 from pybkb.core.python_base.fusion import fuse
 
-#sys.path.append('/home/ghyde/bkb-pathway-provider/core')
-sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+sys.path.append('/home/ghyde/bkb-pathway-provider/core')
+#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
 
 from reasoner import Reasoner
 from query import Query
@@ -50,6 +51,7 @@ class CrossValidator:
         self.reasoner = Reasoner(self.bkb, None)
         self.reasoner.set_src_metadata(self.patient_data_file)
         self.reasoner.cpp_reasoning = False
+
         #queryResults = list()
         #probs = list()
         #summaries = list()
@@ -142,14 +144,13 @@ class CrossValidator:
 if __name__ == '__main__':
     fused_bkb = BKB()
 
-    fused_bkb.load('/home/public/data/ncats/663Pats6Holdouts/fusion.bkb')
-    patient_data_file = '/home/public/data/ncats/663Pats6Holdouts/patient_data.pk'
-    withheld_patients_file = '/home/public/data/ncats/663Pats6Holdouts/withheldPatients.csv'
+    fused_bkb.load('/home/public/data/ncats/660Pats6Holdout/fusion.bkb')
+    patient_data_file = '/home/public/data/ncats/660Pats6Holdout/patient_data.pk'
+    withheld_patients_file = '/home/public/data/ncats/660Pats6Holdout/withheldPatients.csv'
 
-    #fused_bkb.load('/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/fusion.bkb')
-    #patient_data_file = '/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/patient_data.pk'
-    #withheld_patients_file = '/home/public/data/ncats/90PERCENTValidation50Patients10Validation/set1/withheldPatients.csv'
-
+    #fused_bkb.load('/home/public/data/ncats/660Pats20PercentHoldout/fusion.bkb')
+    #patient_data_file = '/home/public/data/ncats/660Pats20PercentHoldout/patient_data.pk'
+    #withheld_patients_file = '/home/public/data/ncats/660Pats20PercentHoldout/withheldPatients.csv'
 
     compNames = fused_bkb.getAllComponentNames()
     f = open(withheld_patients_file, 'r')
@@ -163,17 +164,18 @@ if __name__ == '__main__':
         withheldPatientDict = patientDict[int(withheldPatientHash)]
         if count < 102:
             patientIDs.append(withheldPatientDict["Patient_ID"])
-            pgv = withheldPatientDict["Patient_Gene_Variants"]
+            pgv = withheldPatientDict["Patient_Genes"]
             patientDynamicEvidence = []
             for mut in pgv:
-                compName = 'mut-var_'+mut+'='
+                compName = 'mut_'+mut
                 if compName in compNames:
                     dict = {compName:'True'}
                     patientDynamicEvidence.append(dict) #          [('Patient_Gene_Variants', '==', tuple([mut]))])
             patientsDynamicEvidence.append(patientDynamicEvidence)
         count += 1
     target = ('Survival_Time', '<=', 943)
-
+    print(withheldPatientHashes)
+   
     cross_validator = CrossValidator(fused_bkb,withheldPatientHashes, patient_data_file)
     df = cross_validator.run_demo_suite(target,
                                         patientIDs,
