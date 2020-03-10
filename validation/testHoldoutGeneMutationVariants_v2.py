@@ -80,7 +80,7 @@ class CrossValidator:
                 print(probOneState, one, probTwoState, two, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
                 print(summaries[i])
                 if one == -1 and two == -1:
-                    print("FUCK")
+                    print("")
                 elif one == -1 and two != -1:
                     two = 1.0
                     one = 0.0
@@ -107,8 +107,8 @@ class CrossValidator:
                 #print(summaries[i])
 
     def run_demo_only(self, target, patID, evidence):
-        #print(evidence)
-        #print([target])
+        print(evidence)
+        print([target])
         #-- Make query and analyze
         query = Query(evidence=evidence,
                       targets=[],

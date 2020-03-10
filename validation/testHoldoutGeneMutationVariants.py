@@ -38,71 +38,30 @@ def _process_operator(op):
         raise ValueError('Unknown Operator')
 
 class CrossValidator:
-    def __init__(self, bkb, test_patient_hashes, patient_data_file):
+    def __init__(self, bkb, test_patient_hashes, patient_data_file, patient_dict):
         self.bkb = bkb
+        self.processed_bkb = None
         self.queryCopy = None
         self.test_patient_hashes = test_patient_hashes
         self.patient_data_file = patient_data_file
+        self.patient_dict = patient_dict
         self.first = True
 
-    def run_demo_suite(self, target, patientIDs, patientsDynamicEvidence):
+        self.target_strategy = 'topological'
+        self.interpolation = 'independence'
+
+    def run_demo_suite(self, target, patientIDs, patientsMutationVariantEvidence):
         #-- Set Up Reasoner
         self.reasoner = Reasoner(self.bkb, None)
         self.reasoner.set_src_metadata(self.patient_data_file)
         self.reasoner.cpp_reasoning = False
-        #queryResults = list()
-        #probs = list()
-        #summaries = list()
+        holdoutResults = list()
+
         for idx, patID in tqdm.tqdm(enumerate(patientIDs)):
-            queryResults = list()
-            probs = list()
-            summaries = list()
-            evs = list()
-            probOneState = ""
-            probOne = 1
-            probTwoState = ""
-            probTwo = 1
-            badGenes = list()
-            for patientDynamicEvidence in tqdm.tqdm(patientsDynamicEvidence[idx]):
-                prob, summary = self.run_demo_only(target, patID, patientDynamicEvidence)
-                evs.append(patientDynamicEvidence)
-                queryResults.append(patID)
-                probs.append(prob)
-                summaries.append(summary)
-            for i in range(0, len(queryResults)):
-                probOneState = probs[i][0][1]
-                probTwoState = probs[i][1][1]
-                one = float(probs[i][0][2])
-                two = float(probs[i][1][2])
-                print(target, evs[i])
-                print(probOneState, one, probTwoState, two, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-                print(summaries[i])
-                if one == -1 and two == -1:
-                    print("FUCK")
-                elif one == -1 and two != -1:
-                    two = 1.0
-                    one = 0.0
-                elif one != -1 and two == -1:
-                    one = 1.0
-                    two = 0
-                else:
-                    sum = one + two
-                    one /= sum
-                    two /= sum
-                if one != 0 and two != 0:
-                    probOne *= one
-                    probTwo *= two
-                    sum = probOne + probTwo
-                    probOne /= sum
-                    probTwo /= sum
-                else:
-                    badGenes.append(evs[i])
-            print(patID,"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-            print(probOneState,probTwoState)
-            print(probOne, probTwo)
-            for badGene in badGenes:
-                print(badGene, end='', sep=', ')
-                #print(summaries[i])
+            prob = self.run_demo_only(target, patID, patientsMutationVariantEvidence[idx])
+            holdoutResults.append((prob[0],prob[1]))
+
+        self.getResults(target, holdoutResults, patientIDs)
 
     def run_demo_only(self, target, patID, evidence):
         print(evidence)
@@ -110,34 +69,76 @@ class CrossValidator:
         #-- Make query and analyze
         query = Query(evidence=evidence,
                       targets=[],
-                      meta_evidence=[],
+                      meta_evidence=None,
                       meta_targets=[target],
                       type='updating')
         probs = list()
         summary = None
         if self.first:
-            query = self.reasoner.analyze_query(copy.deepcopy(query), save_dir=None)
+            query = self.reasoner.analyze_query(copy.deepcopy(query),
+                                                target_strategy=self.target_strategy, interpolation=self.interpolation)
             self.processed_bkb = copy.deepcopy(query.bkb)
             self.first = False
-            summary = query.result.summary()
-            #query.result.summary()
-            for update, prob in query.result.updates.items():
-                comp_idx, state_idx = update
-                comp_name = query.bkb.getComponentName(comp_idx)
-                state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
-                probs.append((comp_name, state_name, prob))
+            for comp_name, state_dict in query.independ_result.items():
+                for state_name, prob in state_dict.items():
+                    probs.append((comp_name, state_name, prob))
         else:
-            query = self.reasoner.analyze_query(copy.deepcopy(query), preprocessed_bkb=self.processed_bkb)
-            summary = query.result.summary()
-            #query.result.summary()
-            for update, prob in query.result.updates.items():
-                comp_idx, state_idx = update
-                comp_name = query.bkb.getComponentName(comp_idx)
-                state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
-                probs.append((comp_name, state_name, prob))
+            query = self.reasoner.analyze_query(copy.deepcopy(query), preprocessed_bkb=self.processed_bkb,
+                                                target_strategy=self.target_strategy, interpolation=self.interpolation)
+            for comp_name, state_dict in query.independ_result.items():
+                for state_name, prob in state_dict.items():
+                    probs.append((comp_name, state_name, prob))
 
-        return (probs[0],probs[1]),summary
+        return (probs[0],probs[1])
 
+    def getResults(self, target, holdoutResults, patientIDs):
+        assert len(holdoutResults) == len(self.test_patient_hashes), "results mismatch with test patients"
+        print("P("+target[0] + " " + target[1] + " " + str(target[2]) + " | geneVariants)")
+        numCorrect = 0
+        numWrong = 0
+        for idx, tph in enumerate(self.test_patient_hashes):
+            targetVal = int(self.patient_dict[int(tph)][target[0]])
+            patID = self.patient_dict[int(tph)]['Patient_ID']
+            assert patID == patientIDs[idx], "holdout patient mismatch"
+            op = _process_operator(target[1])
+
+            indexTrue = None
+            indexFalse = None
+            if holdoutResults[idx][0][1] == 'True':
+                indexTrue = 0
+                indexFalse = 1
+            else:
+                indexTrue = 1
+                indexFalse = 0
+
+            probOne = holdoutResults[idx][indexFalse][2] #false
+            probTwo = holdoutResults[idx][indexTrue][2] #true
+            sum = probOne + probTwo
+            probOne /= sum
+            probTwo /= sum
+            if op(targetVal, target[2]):
+                print(patID)
+                print(holdoutResults[idx][indexFalse],holdoutResults[idx][indexTrue])
+                print(probOne, probTwo)
+                if holdoutResults[idx][indexTrue][2] > holdoutResults[idx][indexFalse][2]:
+                    print("\ttrue -",targetVal, "CORRECT")
+                    numCorrect += 1
+                else:
+                    print("\ttrue -",targetVal, "WRONG")
+                    numWrong += 1
+            else:
+                print(patID)
+                print(holdoutResults[idx][indexFalse],holdoutResults[idx][indexTrue])
+                print(probOne, probTwo)
+                if holdoutResults[idx][indexFalse][2] > holdoutResults[idx][indexTrue][2]:
+                    print("\tfalse -",targetVal, "CORRECT")
+                    numCorrect += 1
+                else:
+                    print("\tfalse -",targetVal, "WRONG")
+                    numWrong += 1
+
+        print("Number correct:", numCorrect)
+        print("Number wrong:", numWrong)
 
 if __name__ == '__main__':
     fused_bkb = BKB()
@@ -146,40 +147,37 @@ if __name__ == '__main__':
     patient_data_file = '/home/public/data/ncats/660Pats6Holdout/patient_data.pk'
     withheld_patients_file = '/home/public/data/ncats/660Pats6Holdout/withheldPatients.csv'
 
-    #fused_bkb.load('/home/public/data/ncats/660Pats20PercentHoldout/fusion.bkb')
-    #patient_data_file = '/home/public/data/ncats/660Pats20PercentHoldout/patient_data.pk'
-    #withheld_patients_file = '/home/public/data/ncats/660Pats20PercentHoldout/withheldPatients.csv'
+    #fused_bkb.load('/home/public/data/ncats/660Pats5PercentHoldout/fusion.bkb')
+    #patient_data_file = '/home/public/data/ncats/660Pats5PercentHoldout/patient_data.pk'
+    #withheld_patients_file = '/home/public/data/ncats/660Pats5PercentHoldout/withheldPatients.csv'
 
     compNames = fused_bkb.getAllComponentNames()
     f = open(withheld_patients_file, 'r')
     withheldPatientHashes = f.read().split(',')
 
     patientDict = pickle.load(open(patient_data_file, 'rb'))
-    patientsDynamicEvidence = []
+    patientsMutationVariantEvidence = []
     patientIDs = []
-    count = 0
     for withheldPatientHash in withheldPatientHashes:
         withheldPatientDict = patientDict[int(withheldPatientHash)]
-        if count < 102:
-            patientIDs.append(withheldPatientDict["Patient_ID"])
-            genes = withheldPatientDict["Patient_Genes"]
-            variant = withheldPatientDict["Patient_Variants"]
-            patientDynamicEvidence = []
-            for idx, mut in enumerate(genes):
-                compName = 'mut-var_'+mut
-                if compName in compNames:
-                    compIDX = fused_bkb.getComponentIndex(compName)
-                    compStatesIDXs = fused_bkb.getAllComponentINodeIndices(compIDX)
-                    stateNames = [fused_bkb.getComponentINodeName(compIDX,csIdx) for csIdx in compStatesIDXs]
-                    if variant[idx] in stateNames:
-                        dict = {compName:variant[idx]}
-                        patientDynamicEvidence.append(dict) #          [('Patient_Gene_Variants', '==', tuple([mut]))])
-            patientsDynamicEvidence.append(patientDynamicEvidence)
-        count += 1
+        patientIDs.append(withheldPatientDict["Patient_ID"])
+        genes = withheldPatientDict["Patient_Genes"]
+        variants = withheldPatientDict["Patient_Variants"]
+        patientMutationVariantEvidence = dict()
+        for idx, mut in enumerate(genes[0:5]):
+            compName = 'mut-var_'+mut
+            if compName in compNames:
+                compIDX = fused_bkb.getComponentIndex(compName)
+                compStatesIDXs = fused_bkb.getAllComponentINodeIndices(compIDX)
+                stateNames = [fused_bkb.getComponentINodeName(compIDX,csIdx) for csIdx in compStatesIDXs]
+                if variants[idx] in stateNames:
+                    patientMutationVariantEvidence[compName] = variants[idx]
+        patientsMutationVariantEvidence.append(patientMutationVariantEvidence)
     target = ('Survival_Time', '<=', 943)
 
-    cross_validator = CrossValidator(fused_bkb,withheldPatientHashes, patient_data_file)
-    df = cross_validator.run_demo_suite(target,
-                                        patientIDs,
-                                        patientsDynamicEvidence)
-    #print(df)
+    cross_validator = CrossValidator(fused_bkb,withheldPatientHashes, patient_data_file, patientDict)
+    cross_validator.run_demo_suite(target,
+                                   patientIDs,
+                                   patientsMutationVariantEvidence)
+
+

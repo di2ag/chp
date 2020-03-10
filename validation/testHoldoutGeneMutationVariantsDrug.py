@@ -7,7 +7,6 @@ import pandas as pd
 import tqdm
 import csv
 import pickle
-import time
 
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
@@ -45,7 +44,7 @@ class CrossValidator:
         self.test_patient_hashes = test_patient_hashes
         self.patient_data_file = patient_data_file
         self.patient_dict = patient_dict
-        self.first = True
+        self.drug = None
 
         self.target_strategy = 'topological'
         self.interpolation = 'independence'
@@ -58,24 +57,41 @@ class CrossValidator:
         holdoutResults = list()
 
         for idx, patID in tqdm.tqdm(enumerate(patientIDs)):
-            prob = self.run_demo_only(target, patID, patientsMutationEvidence[idx])
+            probs = list()
+            for mutationDrugEvidence in patientsMutationEvidence[idx]:
+                print(patientsMutationEvidence[idx])
+                prob = self.run_demo_only(target, patID, mutationDrugEvidence)
+                probs.append(prob)
+            probOne = 1.0
+            probTwo = 1.0
+            for prob in probs:
+                sumProbs = prob[0][2] + prob[1][2]
+                probOne *= (prob[0][2]/sumProbs)
+                probTwo *= (prob[1][2]/sumProbs)
+                sumProbs = probOne + probTwo
+                probOne /= sumProbs
+                probTwo /= sumProbs
+            prob = list()
+            prob.append((probs[0][0], probs[0][1], probOne))
+            prob.append((probs[1][0], probs[1][1], probTwo))
+            print(prob)
             holdoutResults.append((prob[0],prob[1]))
 
         self.getResults(target, holdoutResults, patientIDs)
 
     def run_demo_only(self, target, patID, evidence):
         #-- Make query and analyze
-        query = Query(evidence=evidence,
+        query = Query(evidence=evidence[1],
                       targets=[],
-                      meta_evidence=None,
+                      meta_evidence=evidence[0],
                       meta_targets=[target],
                       type='updating')
         probs = list()
-        if self.first:
+        if self.drug != evidence[0][0][2]:
             query = self.reasoner.analyze_query(copy.deepcopy(query), save_dir=None,
                                                target_strategy=self.target_strategy, interpolation=self.interpolation)
             self.processed_bkb = copy.deepcopy(query.bkb)
-            self.first = False
+            self.drug == evidence[0][0][2]
             query.getReport()
             for comp_name, state_dict in query.independ_result.items():
                 for state_name, prob in state_dict.items():
@@ -87,7 +103,7 @@ class CrossValidator:
             for comp_name, state_dict in query.independ_result.items():
                 for state_name, prob in state_dict.items():
                     probs.append((comp_name, state_name, prob))
-
+        print(probs)
         return (probs[0],probs[1])
 
     def getResults(self, target, holdoutResults, patientIDs):
@@ -135,6 +151,7 @@ class CrossValidator:
                 else:
                     print("\tfalse -",targetVal, "WRONG")
                     numWrong += 1
+
         print("Number correct:", numCorrect)
         print("Number wrong:", numWrong)
 
@@ -154,21 +171,33 @@ if __name__ == '__main__':
     withheldPatientHashes = f.read().split(',')
 
     patientDict = pickle.load(open(patient_data_file, 'rb'))
-    patientsMutationEvidence = []
+    patientsMutationVariantEvidence = []
     patientIDs = []
     for withheldPatientHash in withheldPatientHashes:
         withheldPatientDict = patientDict[int(withheldPatientHash)]
         patientIDs.append(withheldPatientDict["Patient_ID"])
-        pgv = withheldPatientDict["Patient_Genes"]
-        patientMutationEvidence = dict()
-        for mut in pgv:
-            compName = 'mut_'+mut
+        genes = withheldPatientDict["Patient_Genes"]
+        variants = withheldPatientDict["Patient_Variants"]
+        patientMutationVariantEvidence = dict()
+        patientMutationVariantDrugEvidence = []
+        for idx, mut in enumerate(genes):
+            compName = 'mut-var_'+mut
             if compName in compNames:
-                patientMutationEvidence[compName] = 'True'
-        patientsMutationEvidence.append(patientMutationEvidence)
+                compIDX = fused_bkb.getComponentIndex(compName)
+                compStatesIDXs = fused_bkb.getAllComponentINodeIndices(compIDX)
+                stateNames = [fused_bkb.getComponentINodeName(compIDX,csIdx) for csIdx in compStatesIDXs]
+                if variants[idx] in stateNames:
+                    patientMutationVariantEvidence[compName] = variants[idx]
+        drugs = withheldPatientDict["Drug_Name(s)"]
+        for drug in drugs:
+            drugEvidence = [('Drug_Name(s)', '==', drug)]
+            patientMutationVariantDrugEvidence.append((drugEvidence, patientMutationVariantEvidence))
+        patientsMutationVariantEvidence.append(patientMutationVariantDrugEvidence)
     target = ('Survival_Time', '<=', 943)
 
     cross_validator = CrossValidator(fused_bkb,withheldPatientHashes, patient_data_file, patientDict)
-    df = cross_validator.run_demo_suite(target,
-                                        patientIDs,
-                                        patientsMutationEvidence)
+    cross_validator.run_demo_suite(target,
+                                   patientIDs,
+                                   patientsMutationVariantEvidence)
+
+
