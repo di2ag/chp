@@ -20,11 +20,12 @@ from pybkb.core.python_base.fusion_collapse import collapse_sources
 from pybkb.core.common.bayesianKnowledgeBase import BKB_S_node
 
 class Reasoner:
-    def __init__(self, fused_bkb, patient_data=None, cpp_reasoning=False):
+    def __init__(self, fused_bkb=None, collapsed_bkb=None,  patient_data=None, cpp_reasoning=False):
         self.fused_bkb = fused_bkb
         self.metadata = patient_data
         self.cpp_reasoning = cpp_reasoning
         self.metadata = patient_data
+        self.collapsed_bkb = collapsed_bkb
         if patient_data is not None:
             try:
                 self.setup()
@@ -33,23 +34,31 @@ class Reasoner:
 
     def setup(self):
         #-- Collapse sources in fused bkb
-        self.collapsed_bkb = collapse_sources(self.fused_bkb)
+        if self.collapsed_bkb is None:
+            if self.fused_bkb is None:
+                raise ValueError('You must pass either a fused or already collapsed bkb.')
+            self.collapsed_bkb = collapse_sources(self.fused_bkb)
+        #self.collapsed_bkb.save('collapsed.bkb')
 
         #-- Preprocess src hash values
         src_component_indices = self.fused_bkb.getSrcComponents()
         src_hashs = dict()
+        src_hashs_inverse = dict()
         for comp_idx in src_component_indices:
             for state_idx in range(self.fused_bkb.getNumberComponentINodes(comp_idx)):
                 state_name = self.fused_bkb.getComponentINodeName(comp_idx, state_idx)
                 #-- Collect src numbers and string name or hash
                 src_num = int(state_name.split('_')[0][1:-1])
                 try:
-                    src_hashs[src_num] = int(''.join(state_name.split('_')[1:]))
+                    src_hash = int(''.join(state_name.split('_')[1:]))
+                    src_hashs[src_num] = src_hash
+                    src_hashs_inverse[src_hash] = src_num
                 except ValueError:
                     continue
                     #src_hashs[src_num] = state_name
         #self.src_hashs = set(src_hashs)
         self.src_hashs = src_hashs
+        self.src_hashs_inverse = src_hashs_inverse
 
         #-- Preprocess Patient Variant data into dictionary
         for src_hash, data_dict in self.metadata.items():
@@ -204,7 +213,7 @@ class Reasoner:
             comp_idx = bkb.getComponentIndex('{} {} {}'.format(meta[0], meta[1], meta[2]))
             inode_true_idx = bkb.getComponentINodeIndex(comp_idx, 'True')
             inode_false_idx = bkb.getComponentINodeIndex(comp_idx, 'False')
-            bkb = _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, self.src_hashs)
+            bkb = _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, self.src_hashs, self.src_hashs_inverse)
 
         #-- If topological target stradegy connect target to each bottom I node.
         if target_strategy == 'topological':
@@ -213,7 +222,7 @@ class Reasoner:
             transformed_meta.update(transformed_meta_)
         return transformed_meta, bkb
 
-    def solve_query_independence(self, query, genetic_evidence, target_strategy, parallel=True):
+    def solve_query_independence(self, query, genetic_evidence, target_strategy, parallel=False):
         bkb = query.bkb
         non_gene_evidence = copy.deepcopy(query.evidence)
         for gene_key in genetic_evidence:
@@ -255,12 +264,13 @@ class Reasoner:
                     futures.append(executor.submit(self.solve_query, q_, copy.deepcopy(target_strategy)))
                 finished_queries = [q_.result() for q_ in futures]
             print('Multiprocessing time: {}'.format(time.time() - start_time))
+
         #-- Collect queries and calculate independent probs
         res = dict()
         for q_ in finished_queries:
             updates = q_.result.process_updates()
             #print(updates)
-            #print('stopped')
+            #input('Stopped')
             for comp_name, state_dict in updates.items():
                 state_keys = state_dict.keys()
                 state_probs = state_dict.values()
@@ -285,6 +295,9 @@ class Reasoner:
                     res[comp_name][state_key] /= sumResProbs
         query.independ_queries = queries
         query.independ_result = res
+        for q in query.independ_queries:
+            q.getReport()
+            input('Stopped')
         return query
 
     '''
@@ -346,7 +359,8 @@ class Reasoner:
         query.targets.extend(transformed_meta_targets)
 
         query.bkb = bkb
-
+        #bkb.save('collapsed_and_link.bkb')
+        #input('Saved')
         if save_dir is not None:
             query.save(save_dir)
         if interpolation == 'independence':
@@ -582,14 +596,18 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
     return bkb, options_dict, matched_srcs
 
 def _linkSource(src_comp, src_state, non_src_comp, non_src_state, other_non_src_tails, prob,
-                comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_population):
+                comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashs, src_hashs_inverse):
     #-- Process the source name collection
     src_state_name = bkb.getComponentINodeName(src_comp, src_state)
     src_split = src_state_name.split('_')
     src_nums_str = src_split[0][1:-1]
     src_name_str = ''.join(src_split[1:])
-    src_nums = [int(num) for num in src_nums_str.split(',')]
     src_names = src_name_str.split(',')
+    src_nums = [int(num) for num in src_nums_str.split(',')]
+    #-- If this source component has format [num]_hash1,hash2, ... then it used fusion hack.
+    if len(src_nums) != len(src_names):
+        #-- Go through and process src nums by looking at hashes.
+        src_nums = [src_hashs_inverse[int(src_hash)] for src_hash in src_names]
 
     #-- Delete the source node and snodes
     #-- Actually leaving states in for speed.
@@ -635,7 +653,7 @@ def _linkSource(src_comp, src_state, non_src_comp, non_src_state, other_non_src_
 
     return bkb
 
-def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_population):
+def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashes, src_hashs_inverse):
     #-- Attach to source nodes
     src_comp_indices = bkb.getSrcComponents()
     non_src_comp_indices = set(bkb.getAllComponentIndices()) - set(src_comp_indices)
@@ -658,7 +676,7 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
                     prior_src_snode = S_nodes_by_head[src_tail_comp][src_tail_state][0]
                     prob = prior_src_snode.probability
                     bkb = _linkSource(src_tail_comp, src_tail_state, non_src_comp, non_src_state, non_src_tails, prob,
-                                      comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_population)
+                                      comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashes, src_hashs_inverse)
                     #-- delete the prior snode
                     try:
                         bkb.removeSNode(prior_src_snode)
