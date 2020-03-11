@@ -1,11 +1,15 @@
 import csv
 import tqdm
 import os
-
+import itertools
+import operator
+import functools
+import math
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb import BKB_S_node, BKB_component, BKB_I_node
 import matplotlib.pyplot as plt
 import pickle
+#from concurrent.futures import ThreadPool
 
 class PatientProcessor:
     def __init__(self):
@@ -299,6 +303,68 @@ class PatientProcessor:
                 self.patients.remove(p)
         self.drugCollected = True
 
+    #-- Default interaction is pair-wise.
+    def getGeneInteractions(self, interaction=2):
+        #-- Construct Patient Data dict
+        patient_data = dict()
+        pop_genes = set()
+        counts_B = dict()
+        counts_AB = dict()
+        for i in tqdm.tqdm(range(len(self.patients)), desc='Processing patients', leave=False):
+            patientHash, patientDict = self.BKFHash(i)
+            patient_data[patientHash] = patientDict
+            pat_genes = patientDict['Patient_Genes']
+            pop_genes.update(set(pat_genes))
+            total_combos = math.factorial(len(pat_genes)) / (math.factorial(interaction-1) * math.factorial(len(pat_genes) - (interaction-1)))
+            for A in tqdm.tqdm(pat_genes, desc='Processing interactions', leave=False):
+                #if A in gene_counts:
+                #    gene_counts[A] += 1
+                #else:
+                #    gene_counts[A] = 1
+                for B in itertools.combinations(set(pat_genes)-{A}, interaction-1):
+                    AB = tuple([A] + list(B))
+                    if B in counts_B:
+                        counts_B[B] += 1
+                    else:
+                        counts_B[B] = 1
+                    if AB in counts_AB:
+                        counts_AB[AB] += 1
+                    else:
+                        counts_AB[AB] = 1
+        probs = dict()
+        for AB, count_AB in tqdm.tqdm(counts_AB.items(), desc='Calculating probabilities', leave=False):
+            A = AB[0]
+            B = AB[1:]
+            if A not in probs:
+                probs[A] = {B: count_AB / counts_B[B]}
+            else:
+                probs[A][B] = count_AB / counts_B[B]
+        return probs
+
+        '''
+        #-- Calculate gene conditional probabilities
+        probs = {gene: dict() for gene in pop_genes}
+        total_combos = math.factorial(len(pop_genes)) / (math.factorial(interaction-1) * math.factorial(len(pop_genes) - (interaction-1)))
+        for A in tqdm.tqdm(pop_genes, desc='Calculating Interaction Probabilities', leave=False):
+            for B in tqdm.tqdm(itertools.combinations(set(pop_genes) - {A}, interaction - 1), total=total_combos):
+                AB_set = set(list(B) + [A])
+                #-- Calculating P(A|B) = P(A,B) / P(B)
+                count_AB = 0
+                count_B = 0
+                for _, data_dict in patient_data.items():
+                    if len(AB_set - set(data_dict['Patient_Genes'])) == 0:
+                        count_AB += 1
+                    if len(set(B) - set(data_dict['Patient_Genes'])) == 0:
+                        count_B += 1
+                prob_AB = float(count_AB / len(patient_data))
+                prob_B = float(count_B / len(patient_data))
+                try:
+                    prob_A_B = prob_AB / prob_B
+                    probs[A][B] = prob_A_B
+                except ZeroDivisionError:
+                    continue
+        return probs
+        '''
     # should be called after all Patient objects have been cosntructed
     def processPatientBKF(self):
         assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
@@ -411,8 +477,9 @@ class PatientProcessor:
 if __name__ == '__main__':
     PP = PatientProcessor()
     PP.processPatientGeneData('/home/public/data/ncats/data_drop_02-11-2020/wxs.csv',
-                              '/home/public/data/ncats/data_drop_02-11-2020/rnaseq_fpkm_uq_primary_tumor.csv',
-                              '/home/public/data/ncats/data_drop_02-11-2020/geneReadsStats.csv')
+                              '/home/public/data/ncats/data_drop_02-11-2020/rnaseq_fpkm_uq_primary_tumor.csv')
     #PP.processClinicalData('data/clinical.csv')
     PP.processPatientBKF()
-    PP.BKFsToFile('BKFs/')
+    #PP.BKFsToFile('BKFs/')
+    probs = PP.getGeneInteractions()
+    print(probs)
