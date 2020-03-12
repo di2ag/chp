@@ -86,11 +86,12 @@ class Query:
             most_sig_inodes = list()
             max_contrib = -1
             for inode, contrib in contrib_dict.items():
+                inode_str = ' '.join(inode)
                 if contrib > max_contrib:
-                    most_sig_inodes = [inode]
+                    most_sig_inodes = [inode_str]
                     max_contrib = contrib
                 elif contrib == max_contrib:
-                    most_sig_inodes.append(inode)
+                    most_sig_inodes.append(inode_str)
                 else:
                     continue
             contrib_explain = 'The most sensitivity variables for {} are {}'.format(target_str,
