@@ -87,7 +87,7 @@ class Reasoner:
                     if label in self.metadata_ranges:
                         self.metadata_ranges[label].update(set(self.metadata[hash_key][label]))
                     else:
-                        self.metadata_ranges[label] = set([self.metadata[hash_key][label]])
+                        self.metadata_ranges[label] = set(self.metadata[hash_key][label])
                 elif type(val) == dict:
                     #-- collapse dict into a set
                     if label in self.metadata_ranges:
