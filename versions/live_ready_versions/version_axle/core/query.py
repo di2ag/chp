@@ -50,7 +50,7 @@ class Query:
             inode_contrib = self.result.process_inode_contributions()
             result_dict = {'result': {'Updates': self.result.process_updates(),
                                       'Contributions': {' '.join(target): df.to_dict()
-                                                        for target, df in self.result.contibs_to_dataframes(inode_contrib)}}}
+                                                        for target, df in self.result.contribs_to_dataframes(inode_contrib).items()}}}
             json_dict.update(result_dict)
         json_file = os.path.join(directory, '{}.json'.format(self.name))
         with open(json_file, 'w') as f_:
