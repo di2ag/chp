@@ -17,6 +17,7 @@ from query import Query
 from pybkb.core.cpp_base.reasoning import revision as cpp_revision
 from pybkb.core.cpp_base.reasoning import updating as cpp_updating
 from pybkb.core.python_base.reasoning import updating as py_updating
+from pybkb.core.python_base.reasoning import checkMutex
 from pybkb.core.python_base.fusion_collapse import collapse_sources
 from pybkb.core.common.bayesianKnowledgeBase import BKB_S_node
 from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
@@ -141,6 +142,8 @@ class Reasoner:
         #-- I don't think we need to make a copy of the query.
         #query = copy.deepcopy(query)
         #print('Reasoning...')
+        #print(checkMutex(query.bkb))
+        #query.bkb.makeGraph()
         start_time = time.time()
         if self.cpp_reasoning:
             if query.type == 'revision':
@@ -631,7 +634,7 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
     return bkb, options_dict, matched_srcs
 
 def _linkSource(src_comp, src_state, non_src_comp, non_src_state, other_non_src_tails, prob,
-                comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashs, src_hashs_inverse):
+                comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashs, src_hashs_inverse, processed_srcs):
     #-- Process the source name collection
     src_state_name = bkb.getComponentINodeName(src_comp, src_state)
     src_split = src_state_name.split('_')
@@ -668,25 +671,28 @@ def _linkSource(src_comp, src_state, non_src_comp, non_src_state, other_non_src_
         #-- Now connect with S nodes
         bkb.addSNode(BKB_S_node(init_component_index=non_src_comp,
                                 init_state_index=non_src_state,
-                                init_probability=1,
+                                init_probability=prob,
                                 init_tail=[(src_comp, src_true_idx)] + other_non_src_tails))
-        bkb.addSNode(BKB_S_node(init_component_index=src_comp,
-                                init_state_index=src_true_idx,
-                                init_probability=prob*true_prob,
-                                init_tail=[(comp_idx, inode_true_idx)]))
+        if (src_comp, src_true_idx) not in processed_srcs:
+            bkb.addSNode(BKB_S_node(init_component_index=src_comp,
+                                    init_state_index=src_true_idx,
+                                    init_probability=prob*true_prob,
+                                    init_tail=[(comp_idx, inode_true_idx)]))
+        processed_srcs.add((src_comp, src_true_idx))
     if (1 - true_prob) > 0:
         src_false_idx = bkb.addComponentState(src_comp, false_state_name)
         #-- Now connect with S nodes
         bkb.addSNode(BKB_S_node(init_component_index=non_src_comp,
                                 init_state_index=non_src_state,
-                                init_probability=1,
+                                init_probability=prob,
                                 init_tail=[(src_comp, src_false_idx)] + other_non_src_tails))
-        bkb.addSNode(BKB_S_node(init_component_index=src_comp,
-                                init_state_index=src_false_idx,
-                                init_probability=prob*(1 - true_prob),
-                                init_tail=[(comp_idx, inode_false_idx)]))
-
-    return bkb
+        if (src_comp, src_false_idx) not in processed_srcs:
+            bkb.addSNode(BKB_S_node(init_component_index=src_comp,
+                                    init_state_index=src_false_idx,
+                                    init_probability=prob*(1 - true_prob),
+                                    init_tail=[(comp_idx, inode_false_idx)]))
+        processed_srcs.add((src_comp, src_false_idx))
+    return bkb, processed_srcs
 
 def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashes, src_hashs_inverse):
     #-- Attach to source nodes
@@ -694,10 +700,13 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
     non_src_comp_indices = set(bkb.getAllComponentIndices()) - set(src_comp_indices)
     S_nodes_by_head = bkb.constructSNodesByHead()
 
+    processed_srcs = set()
+
     for non_src_comp in tqdm.tqdm(non_src_comp_indices, desc='Linking Sources', leave=False):
         for non_src_state in bkb.getAllComponentINodeIndices(non_src_comp):
             snodes = S_nodes_by_head[non_src_comp][non_src_state]
             for snode in snodes:
+                prob = snode.probability
                 src_tails = list()
                 non_src_tails = list()
                 for tail_idx in range(snode.getNumberTail()):
@@ -718,9 +727,9 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
                     if found_illegal:
                         continue
                     prior_src_snode = S_nodes_by_head[src_tail_comp][src_tail_state][0]
-                    prob = prior_src_snode.probability
-                    bkb = _linkSource(src_tail_comp, src_tail_state, non_src_comp, non_src_state, non_src_tails, prob,
-                                      comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashes, src_hashs_inverse)
+                    #prob = prior_src_snode.probability
+                    bkb, processed_srcs = _linkSource(src_tail_comp, src_tail_state, non_src_comp, non_src_state, non_src_tails, prob,
+                                      comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashes, src_hashs_inverse, processed_srcs)
                     #-- delete the prior snode
                     try:
                         bkb.removeSNode(prior_src_snode)
