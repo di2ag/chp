@@ -8,6 +8,7 @@ import tqdm
 import copy
 from concurrent.futures import ProcessPoolExecutor, wait
 import time
+import zlib
 
 sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
 #sys.path.append('/home/ghyde/bkb-pathway-provider/core')
@@ -18,6 +19,10 @@ from pybkb.core.cpp_base.reasoning import updating as cpp_updating
 from pybkb.core.python_base.reasoning import updating as py_updating
 from pybkb.core.python_base.fusion_collapse import collapse_sources
 from pybkb.core.common.bayesianKnowledgeBase import BKB_S_node
+from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+
+CACHED_BKB_DIR = '/home/public/data/ncats/cachedCollapsedBkb'
+ILLEGAL_SOURCE_STRINGS = ['PatientX']
 
 class Reasoner:
     def __init__(self, fused_bkb=None, collapsed_bkb=None,  patient_data=None, cpp_reasoning=False):
@@ -32,12 +37,26 @@ class Reasoner:
             except:
                 raise ValueError('Likely patient data is not in the right format.')
 
+    def getCollapsedBKB(self, fused_bkb):
+        #-- First check to see if this bkb has already been collapsed and saved.
+        collapsed_bkb_hash_name = zlib.adler32(fused_bkb.to_str().encode('utf-8'))
+        collapsed_bkb_path = os.path.join(CACHED_BKB_DIR, '{}.bkb'.format(collapsed_bkb_hash_name))
+        if os.path.exists(collapsed_bkb_path):
+            print('Loaded collapsed BKB from memory.')
+            collapsed_bkb = BKB()
+            collapsed_bkb.load(collapsed_bkb_path)
+        else:
+            collapsed_bkb = collapse_sources(fused_bkb)
+            #-- Save collapsed bkb using fused_bkb hash as file name.
+            collapsed_bkb.save(collapsed_bkb_path)
+        return collapsed_bkb
+
     def setup(self):
         #-- Collapse sources in fused bkb
         if self.collapsed_bkb is None:
             if self.fused_bkb is None:
                 raise ValueError('You must pass either a fused or already collapsed bkb.')
-            self.collapsed_bkb = collapse_sources(self.fused_bkb)
+            self.collapsed_bkb = self.getCollapsedBKB(self.fused_bkb)
         #self.collapsed_bkb.save('collapsed.bkb')
 
         #-- Preprocess src hash values
@@ -306,11 +325,26 @@ class Reasoner:
     methodolgy can only except on target then.
     '''
     def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='standard'):
+        #-- Make a bkb query hash.
+        query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.to_str(),
+                                               str(query.meta_evidence),
+                                               str(query.meta_targets),
+                                               target_strategy,
+                                               interpolation]).encode('utf-8'))
+        query_bkb_path = os.path.join(CACHED_BKB_DIR, '{}.bkb'.format(query_bkb_hash))
+
         #-- Duplicate Gene Evidence
         genetic_evidence = copy.deepcopy(query.evidence)
+        #-- See if we can find a preprocessed bkb.
         if preprocessed_bkb is not None:
-            #bkb = copy.deepcopy(preprocessed_bkb)
+            query.bkb = preprocessed_bkb
+        elif os.path.exists(query_bkb_path):
+            print('Loaded query BKB from memory.')
+            query.bkb = BKB()
+            query.bkb.load(query_bkb_path)
 
+        #-- If we have a preprocessed passed or from memory BKB
+        if query.bkb is not None:
             if query.meta_targets is not None:
                 transformed_meta_targets = ['{} {} {}'.format(target[0], target[1], target[2]) for target in query.meta_targets]
 
@@ -322,7 +356,6 @@ class Reasoner:
                     query.evidence.update(transformed_meta_evidence)
 
             query.targets.extend(transformed_meta_targets)
-            query.bkb = preprocessed_bkb
 
             if save_dir is not None:
                 query.save(save_dir)
@@ -359,6 +392,8 @@ class Reasoner:
         query.targets.extend(transformed_meta_targets)
 
         query.bkb = bkb
+        bkb.save(query_bkb_path)
+
         #bkb.save('collapsed_and_link.bkb')
         #input('Saved')
         if save_dir is not None:
@@ -673,6 +708,15 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
                     else:
                         non_src_tails.append((tail_comp, tail_state))
                 for src_tail_comp, src_tail_state in src_tails:
+                    #-- If source state contains illegal values such as PatientX, etc, don't link.
+                    src_name = bkb.getComponentINodeName(src_tail_comp, src_tail_state)
+                    found_illegal = False
+                    for illegal_src_val in ILLEGAL_SOURCE_STRINGS:
+                        if illegal_src_val in src_name:
+                            found_illegal = True
+                            break
+                    if found_illegal:
+                        continue
                     prior_src_snode = S_nodes_by_head[src_tail_comp][src_tail_state][0]
                     prob = prior_src_snode.probability
                     bkb = _linkSource(src_tail_comp, src_tail_state, non_src_comp, non_src_state, non_src_tails, prob,

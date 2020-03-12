@@ -213,7 +213,7 @@ class Driver:
 
     def collectVariables(self):
         #-- Demographics exposed to the user.
-        availableDemographics = set(['Gender', 'Patient ID', 'Survival_Time', 'Age_of_Diagnosis'])
+        availableDemographics = set(['Gender', 'Patient ID', 'Survival_Time', 'Age_of_Diagnosis', 'Drug_Name(s)'])
         #-- Get all inodes
         all_inode_names = self.fused_bkb.getINodeNames()
         #-- Filter out sources
