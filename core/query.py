@@ -50,7 +50,8 @@ class Query:
             inode_contrib = self.result.process_inode_contributions()
             result_dict = {'result': {'Updates': self.result.process_updates(),
                                       'Contributions': {' '.join(target): df.to_dict()
-                                                        for target, df in self.result.contribs_to_dataframes(inode_contrib).items()}}}
+                                                        for target, df in self.result.contribs_to_dataframes(inode_contrib).items()},
+                                      'Explanations': self.getExplanations()}}
             json_dict.update(result_dict)
         json_file = os.path.join(directory, '{}.json'.format(self.name))
         with open(json_file, 'w') as f_:
@@ -71,6 +72,32 @@ class Query:
             return Query(**query_dict)
         else:
             raise ValueError('Unrecognized file format: {}'.format(file_format))
+
+    def getExplanations(self):
+        explain_dict = dict()
+        if self.independ_result is not None:
+            explain_dict['Assumptions'] = 'Query assumes independence between genetic evidence.'
+        else:
+            explain_dict['Assumptions'] = 'Query does not assume independence between genetic evidence.'
+        inode_dict = self.result.process_inode_contributions()
+        explain_dict['Sensitivity'] = list()
+        for target, contrib_dict in inode_dict.items():
+            target_str = ' '.join(target)
+            most_sig_inodes = list()
+            max_contrib = -1
+            for inode, contrib in contrib_dict.items():
+                if contrib > max_contrib:
+                    most_sig_inodes = [inode]
+                    max_contrib = contrib
+                elif contrib == max_contrib:
+                    most_sig_inodes.append(inode)
+                else:
+                    continue
+            contrib_explain = 'The most sensitivity variables for {} are {}'.format(target_str,
+                                                                                    ', '.join(most_sig_inodes))
+            explain_dict['Sensitivity'].append(contrib_explain)
+        explain_dict['MostSignificantPatients'] = ['Unknown']
+        return explain_dict
 
     def getReport(self):
         string = '---- Query Details -----\n'
