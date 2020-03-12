@@ -15,12 +15,18 @@ class PatientProcessor:
     def __init__(self):
         # self.bkfs[i] and self.patients[i] reference each other
         self.bkfs = list()
+        self.patientXBKF = None
+        self.geneFrags = None
+        self.geneReliabilities = None
+        self.geneFragmentsSources = None
         self.patients = list()
+        self.holdouts = list()
         self.clinicalCollected = False
         self.radiationCollected = False
         self.radNameOnly = True
         self.drugCollected = False
         self.drugNameOnly = True
+        self.sort = True
 
     class Patient:
         # will need to account for mutatedReads
@@ -70,6 +76,7 @@ class PatientProcessor:
         variants = list()
         cancerType = rows[0][0]
         patID = rows[0][1]
+       
         for row in tqdm.tqdm(rows, desc='Reading patient files'):
             variantClassifications = list()
             if patID != row[1]:
@@ -303,6 +310,23 @@ class PatientProcessor:
                 self.patients.remove(p)
         self.drugCollected = True
 
+    def setAsideHoldouts(self, patients, holdouts):
+        #self.patients should = patients at end. These will be placed in newPatients
+        #self.holdouts = holdouts at end. these will be placed in newHoldouts
+        #everything else is removed
+        newPatients = list()
+        newHoldouts = list()
+        holdoutIDs = [ho[1] for ho in holdouts]
+        for pat in self.patients:
+            if pat.patientID in holdoutIDs:
+                newHoldouts.append(pat)
+            elif pat in patients:
+                newPatients.append(pat)
+            else:
+                print("removing:",pat.patientID)
+        self.patients = newPatients
+        self.holdouts = newHoldouts
+
     #-- Default interaction is pair-wise.
     def getGeneInteractions(self, interaction=2):
         #-- Construct Patient Data dict
@@ -311,7 +335,7 @@ class PatientProcessor:
         counts_B = dict()
         counts_AB = dict()
         for i in tqdm.tqdm(range(len(self.patients)), desc='Processing patients', leave=False):
-            patientHash, patientDict = self.BKFHash(i)
+            patientHash, patientDict = self.BKFHash(i,True)
             patient_data[patientHash] = patientDict
             pat_genes = patientDict['Patient_Genes']
             pop_genes.update(set(pat_genes))
@@ -365,113 +389,202 @@ class PatientProcessor:
                     continue
         return probs
         '''
-    # should be called after all Patient objects have been cosntructed
-    def processPatientBKF(self):
-        assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
-        #print("Forming Patient BKFs...")
 
+    # should be called after all Patient objects have been cosntructed
+    def processPatientBKF(self, patientFalses=True):
+        assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
+        # collect list of all unqiue genes
+        all_gene_mutations = list()
+        for pat in self.patients:
+            for gene in pat.mutatedGenes:
+                if gene not in all_gene_mutations:
+                    all_gene_mutations.append(gene)
+
+        # get gene causeality dictionary
+        geneCauses = self.getGeneInteractions()
+
+        geneFreqNotIn = None
+        geneFreqHashSource = None
+        if not patientFalses:
+            geneFreqNotIn = dict()
+            geneFreqHashSource = dict()
+            for gene in all_gene_mutations:
+                geneFreqNotIn[gene] = 0
+                geneFreqHashSource[gene] = []
+
+
+        # make all patient BKFs
         for pat in tqdm.tqdm(self.patients, desc='Forming patient BKFs'):
             bkf = BKB(name = pat.patientID)
-            for idx, gene in enumerate(pat.mutatedGenes):
-                # gene
-                mutGeneComp_idx = bkf.addComponent('mut_{}'.format(gene))
-                iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
-                # form SNode  o---->[mut_<genename>=True]
-                bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
+            for aGene in all_gene_mutations:
+                mutGeneComp_idx = bkf.addComponent('mut_{}'.format(aGene))
+                if aGene in pat.mutatedGenes:
+                    iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
+                    bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
 
-                #mut_var combo
-                mutVarComp_idx = bkf.addComponent('mut-var_{}'.format(gene))
-                iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, pat.variants[idx])
-                # form SNode [mut_<genename>=True]---->o---->[mut-var_<genename>=<varianttype>]
-                bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
+                    _mutGeneComp_idx = bkf.addComponent('_mut_{}'.format(aGene))
+                    _iNodeGeneMut_idx = bkf.addComponentState(_mutGeneComp_idx, 'True')
+
+                    mutVarComp_idx = bkf.addComponent('mut-var_{}'.format(aGene))
+                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, pat.variants[pat.mutatedGenes.index(aGene)])
+
+                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(_mutGeneComp_idx, _iNodeGeneMut_idx)]))
+
+                else:
+                    if geneFreqNotIn is not None:
+                        geneFreqNotIn[aGene] += 1
+                        geneFreqHashSource[aGene].append(hash(pat.patientID))
+                    else:
+                        iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'False')
+                        bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
             self.bkfs.append(bkf)
 
+        #add individual gene false fragments
+        if not patientFalses:
+            self.geneFrags = list()
+            self.geneReliabilities = list()
+            self.geneFragmentsSources = list()
+            for aGene in all_gene_mutations:
+                genebkf = BKB(name = aGene)
+                mutGeneComp_idx = genebkf.addComponent('mut_{}'.format(aGene))
+                iNodeGeneMut_idx = genebkf.addComponentState(mutGeneComp_idx, 'False')
+                genebkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
+                self.geneFrags.append(genebkf)
+                self.geneReliabilities.append(geneFreqNotIn[aGene])
+                source = None
+                if self.sort:
+                    source = ','.join([str(hashName) for hashName in sorted(geneFreqHashSource[aGene])]) 
+                else:
+                    source = ','.join([str(hashName) for hashName in geneFreqHashSource[aGene]])
+                self.geneFragmentsSources.append(source)
+
+        self.patientXBKF = BKB(name = "patientX")
+        for aGene in all_gene_mutations:
+            mutGeneComp_idx = self.patientXBKF.addComponent('mut_{}'.format(aGene))
+            iNodeGeneMutTrue_idx = self.patientXBKF.addComponentState(mutGeneComp_idx, 'True')
+            iNodeGeneMutFalse_idx = self.patientXBKF.addComponentState(mutGeneComp_idx, 'False')
+
+            #get causality gene
+            causes = geneCauses[aGene].keys()
+            vals = geneCauses[aGene].values()
+            maxCauseGene = None
+            maxCauseVal = 0
+            for bGene, val in geneCauses[aGene].items():
+                if val > maxCauseVal and bGene[0] != aGene:
+                    maxCauseVal = val
+                    maxCauseGene = bGene[0]
+
+            cMutGeneComp_idx = self.patientXBKF.addComponent('mut_{}'.format(maxCauseGene))
+            iNodeCGeneMut_idx = self.patientXBKF.addComponentState(cMutGeneComp_idx, 'True')
+
+            _mutGeneComp_idx = self.patientXBKF.addComponent('_mut_{}'.format(aGene))
+            _iNodeGeneMut_idx = self.patientXBKF.addComponentState(_mutGeneComp_idx, 'True')
+
+            self.patientXBKF.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
+            self.patientXBKF.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, maxCauseVal, [(mutGeneComp_idx, iNodeGeneMutFalse_idx),
+                                                                                                    (cMutGeneComp_idx, iNodeCGeneMut_idx)]))
+
     def SubsetBKFsToFile(self, outDirect, indices):
+        #return bkf_files, source_names, patient_data_file
         allBKFHashNames = dict()
         bkf_files = list()
         source_names = list()
         for idx in indices:
-            patientHashVal, patientDict = self.BKFHash(idx)
+            patientHashVal, patientDict = self.BKFHash(idx, True)
             allBKFHashNames[patientHashVal] = patientDict
             bkf_files.append(outDirect + str(patientHashVal) + '.bkf')
             self.bkfs[idx].save(outDirect + str(patientHashVal) + '.bkf')
             source_names.append(str(patientHashVal))
+        holdout_source_names = list()
+        for i in range(0, len(self.holdouts)):
+            patientHashVal, patientDict = self.BKFHash(i,False)
+            allBKFHashNames[patientHashVal] = patientDict
+            holdout_source_names.append(str(patientHashVal))
         # write all patient BKF hashs to file
         patient_data_file = outDirect + 'patient_data.pk'
         with open(patient_data_file, 'wb') as f_:
             pickle.dump(file=f_, obj=allBKFHashNames)
-        return bkf_files, source_names, patient_data_file
+        return bkf_files, source_names, holdout_source_names, patient_data_file
+
 
     def BKFsToFile(self, outDirect):
         print("Writing patient BKFs to file...")
         allBKFHashNames = dict()
         for i in range(0, len(self.bkfs)):
             #i matches the self.patients to self.bkfs.
-            patientHashVal, patientDict = self.BKFHash(i)
+            patientHashVal, patientDict = self.BKFHash(i,True)
             allBKFHashNames[patientHashVal] = patientDict
             self.bkfs[i].save(outDirect + str(self.bkfs[i].getName()) + '.bkf')
+        for i in range(0, len(self.holdouts)):
+            patientHashVal, patientDict = self.BKFHash(i,False)
+            allBKFHashNames[patientHashVal] = patientDict
         # write all patient BKF hashs to file
         with open(outDirect + 'patient_data.pk', 'wb') as f_:
             pickle.dump(file=f_, obj=allBKFHashNames)
         print("Patient BKFs written.")
 
 
-    def BKFHash(self, bkfPatientIndex):
+    def BKFHash(self,index, patient):
+        pat = None
+        if patient:
+            pat = self.patients[index]
+        else:
+            pat = self.holdouts[index]
         patientDict = dict()
         #patientID
-        patientDict["Patient_ID"] = self.patients[bkfPatientIndex].patientID
+        patientDict["Patient_ID"] = pat.patientID
         #patient Cancer type
-        patientDict["Cancer_Type"] = self.patients[bkfPatientIndex].cancerType
+        patientDict["Cancer_Type"] = pat.cancerType
         #patient mutated Genes
-        patientDict["Patient_Genes"] = tuple(self.patients[bkfPatientIndex].mutatedGenes)
+        patientDict["Patient_Genes"] = tuple(pat.mutatedGenes)
         #patient mutated Gene Variants
-        patientDict["Patient_Gene_Variants"] = tuple(self.patients[bkfPatientIndex].mutatedGeneVariants)
+        patientDict["Patient_Gene_Variants"] = tuple(pat.mutatedGeneVariants)
         #patient variants
-        patientDict["Patient_Variants"] = tuple(self.patients[bkfPatientIndex].variants)
+        patientDict["Patient_Variants"] = tuple(pat.variants)
         #patient mutated Gene Reads
-        patientDict["Patient_Gene_Reads"] = tuple(self.patients[bkfPatientIndex].mutatedGeneReads)
+        patientDict["Patient_Gene_Reads"] = tuple(pat.mutatedGeneReads)
         if self.clinicalCollected:
             #patient age of diagnosis
-            patientDict["Age_of_Diagnosis"] = self.patients[bkfPatientIndex].ageDiagnos
+            patientDict["Age_of_Diagnosis"] = pat.ageDiagnos
             #patient gender
-            patientDict["Gender"] = self.patients[bkfPatientIndex].gender
+            patientDict["Gender"] = pat.gender
             #pathT
-            patientDict["PathT"] = self.patients[bkfPatientIndex].pathT
+            patientDict["PathT"] = pat.pathT
             #pathN
-            patientDict["PathN"] = self.patients[bkfPatientIndex].pathN
+            patientDict["PathN"] = pat.pathN
             #pathM
-            patientDict["PathM"] = self.patients[bkfPatientIndex].pathM
+            patientDict["PathM"] = pat.pathM
             #patient survival time
-            patientDict["Survival_Time"] = self.patients[bkfPatientIndex].survivalTime
+            patientDict["Survival_Time"] = pat.survivalTime
         #patients can have no radiation data associated with them --------------------v
-        if self.radiationCollected and len(self.patients[bkfPatientIndex].therapyName) > 0:
+        if self.radiationCollected and len(pat.therapyName) > 0:
             if self.radNameOnly:
-                patientDict["Therapy_Name(s)"] = tuple(self.patients[bkfPatientIndex].therapyName)
+                patientDict["Therapy_Name(s)"] = tuple(pat.therapyName)
             else:
                 # patient therapy name(s)
-                patientDict["Therapy_Name(s)"] = tuple(self.patients[bkfPatientIndex].therapyName)
+                patientDict["Therapy_Name(s)"] = tuple(pat.therapyName)
                 # patient therapy site(s)
-                patientDict["Therapy_Site(s)"] = tuple(self.patients[bkfPatientIndex].therapySite)
+                patientDict["Therapy_Site(s)"] = tuple(pat.therapySite)
                 # patient radiation dose(s)
-                patientDict["Radiation_Dose(s)"] = tuple(self.patients[bkfPatientIndex].radiationDose)
+                patientDict["Radiation_Dose(s)"] = tuple(pat.radiationDose)
                 # patient days to therapy start
-                patientDict["Days_To_Therapy_Start(s)"] = tuple(self.patients[bkfPatientIndex].daysToTherapyStart)
+                patientDict["Days_To_Therapy_Start(s)"] = tuple(pat.daysToTherapyStart)
                 # patient days to therapy end
-                patientDict["Days_To_Therapy_End(s)"] = tuple(self.patients[bkfPatientIndex].daysToTherapyEnd)
-        if self.drugCollected and len(self.patients[bkfPatientIndex].drugName) > 0:
+                patientDict["Days_To_Therapy_End(s)"] = tuple(pat.daysToTherapyEnd)
+        if self.drugCollected and len(pat.drugName) > 0:
             if self.drugNameOnly:
-                patientDict["Drug_Name(s)"] = tuple(self.patients[bkfPatientIndex].drugName)
+                patientDict["Drug_Name(s)"] = tuple(pat.drugName)
             else:
                 # patient drug name(s)
-                patientDict["Drug_Name(s)"] = tuple(self.patients[bkfPatientIndex].drugName)
+                patientDict["Drug_Name(s)"] = tuple(pat.drugName)
                 # patient drug dose(s)
-                patientDict["Drug_Dose(s)"] = tuple(self.patients[bkfPatientIndex].drugDose)
+                patientDict["Drug_Dose(s)"] = tuple(pat.drugDose)
                 # patient days to drug start
-                patientDict["Days_To_Drug_Start(s)"] = tuple(self.patients[bkfPatientIndex].daysToDrugStart)
+                patientDict["Days_To_Drug_Start(s)"] = tuple(pat.daysToDrugStart)
                 # patient days to drug end
-                patientDict["Days_To_Drug_End(s)"] = tuple(self.patients[bkfPatientIndex].daysToDrugEnd)
+                patientDict["Days_To_Drug_End(s)"] = tuple(pat.daysToDrugEnd)
 
-        patientHashVal = hash(self.patients[bkfPatientIndex].patientID)
+        patientHashVal = hash(pat.patientID)
         return patientHashVal, patientDict
 
 if __name__ == '__main__':

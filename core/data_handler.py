@@ -10,7 +10,7 @@ import copy
 
 from pybkb.core.cpp_base.fusion import fuse as cpp_fuse
 from pybkb.core.python_base.fusion import fuse as py_fuse
-from patientBKFProcessor import PatientProcessor
+from patientBKFProcessor_v2 import PatientProcessor
 from pathwayBKFProcessor import PathwayProcessor
 from reactomePathwayProcessor import ReactomePathwayProcessor
 
@@ -153,6 +153,7 @@ class DataHandler:
         self.patient_holdout  = patient_holdout
         self.working_dir = working_dir
         self.cpp_fuse_option = cpp_fuse_option
+        self.falsesInPatients = False
 
     def readTcgaData(self):
         self.patientProcessor = PatientProcessor()
@@ -198,8 +199,6 @@ class DataHandler:
             else:
                 print('Response not recognized')
 
-        self.patientProcessor.processPatientBKF()
-
     def readPathwayData(self):
         self.pathwayProcessor = PathwayProcessor()
         if self.pathway_file is not None:
@@ -231,21 +230,30 @@ class DataHandler:
                     noDupPats.append(pat)
             self.holdoutPatients = validationHoldout
 
+        self.patientProcessor.setAsideHoldouts(patients, self.holdoutPatients)
+        self.patientProcessor.processPatientBKF(patientFalses=self.falsesInPatients)
+
         patient_indices = list()
         patient_bkfs = list()
-        for patient_name in patients:
-            idx = self.patientProcessor.patients.index(patient_name)
-            patient_indices.append(idx)
-            patient_bkfs.append(self.patientProcessor.bkfs[idx])
-        patient_bkf_files, patient_source_names, dump_loc = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
+        for patient in patients:
+            if patient in self.patientProcessor.patients:
+                idx = self.patientProcessor.patients.index(patient)
+                patient_indices.append(idx)
+                patient_bkfs.append(self.patientProcessor.bkfs[idx])
 
-        holdoutSource = list()
-        for holdoutPatient in self.holdoutPatients:
-            for patient in patient_bkfs:
-                if holdoutPatient[1] == patient._name:
-                    idx = patient_bkfs.index(patient)
-                    patient_bkfs.pop(idx)
-                    holdoutSource.append(patient_source_names.pop(idx))
+        patient_bkf_files, patient_source_names, holdout_source_names, dump_loc = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
+
+        patient_bkfs.append(self.patientProcessor.patientXBKF)
+        patient_bkf_files.append(self.working_dir + 'PatientX.bkf')
+        patient_source_names.append('PatientX')
+        self.patientProcessor.patientXBKF.save(self.working_dir + 'PatientX.bkf')
+        lenPatientsBefore = len(patient_bkfs)
+
+        geneReliabilityIdx = len(patient_bkfs)
+        for idx, genebkf in enumerate(self.patientProcessor.geneFrags):
+            patient_bkfs.append(genebkf)
+            patient_bkf_files.append(self.working_dir + genebkf._name +'.bkf')
+            patient_source_names.append(self.patientProcessor.geneFragmentsSources[idx])
 
         if with_pathways:
             pathway_bkf_files, pathway_source_names = self.pathwayProcessor.BKFsToFile(self.working_dir)
@@ -262,21 +270,26 @@ class DataHandler:
         bkf_files = patient_bkf_files + pathway_bkf_files + reactome_bkf_files
         source_names = patient_source_names + pathway_source_names + reactome_source_names
 
+        newReliabilities = [1 for _ in range(len(bkf_files))]
+        if self.falsesInPatients == False:
+            for idx, geneReli in enumerate(self.patientProcessor.geneReliabilities):
+                newReliabilities[lenPatientsBefore + idx] = geneReli
+
         if self.cpp_fuse_option:
             cpp_fuse(bkf_files,
-                 reliabilities=[1 for _ in range(len(bkf_files))],
+                 reliabilities=newReliabilities,
                  source_names=source_names,
                  consistency_check=True,
                  working_dir=self.working_dir)
         else:
             py_fuse(bkfs,
-                 reliabilities=[1 for _ in range(len(bkfs))],
+                 reliabilities=newReliabilities,
                  source_names=source_names,
                  working_dir=self.working_dir)
 
         f = open(self.working_dir +  'withheldPatients.csv', 'w')
         withheldHashes = ''
-        for HOSource in holdoutSource:
+        for HOSource in holdout_source_names:
             withheldHashes += HOSource + ','
         f.write(withheldHashes[:-1])
         f.close()
