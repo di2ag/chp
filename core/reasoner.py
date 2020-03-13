@@ -716,6 +716,7 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
                         src_tails.append((tail_comp, tail_state))
                     else:
                         non_src_tails.append((tail_comp, tail_state))
+                had_illegal = False
                 for src_tail_comp, src_tail_state in src_tails:
                     #-- If source state contains illegal values such as PatientX, etc, don't link.
                     src_name = bkb.getComponentINodeName(src_tail_comp, src_tail_state)
@@ -723,6 +724,7 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
                     for illegal_src_val in ILLEGAL_SOURCE_STRINGS:
                         if illegal_src_val in src_name:
                             found_illegal = True
+                            had_illegal = True
                             break
                     if found_illegal:
                         continue
@@ -735,7 +737,7 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
                         bkb.removeSNode(prior_src_snode)
                     except:
                         pass
-                if len(src_tails) > 0:
+                if len(src_tails) > 0 and not had_illegal:
                     #-- Delete other S node
                     try:
                         bkb.removeSNode(snode)
