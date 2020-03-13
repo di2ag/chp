@@ -328,6 +328,7 @@ class Reasoner:
     methodolgy can only except on target then.
     '''
     def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='standard'):
+        query.patient_data = self.metadata
         #-- Make a bkb query hash.
         query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.to_str(),
                                                str(query.meta_evidence),
@@ -396,7 +397,6 @@ class Reasoner:
 
         query.bkb = bkb
         bkb.save(query_bkb_path)
-
         #bkb.save('collapsed_and_link.bkb')
         #input('Saved')
         if save_dir is not None:
