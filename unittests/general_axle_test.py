@@ -20,7 +20,7 @@ fused_bkb.load('/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/fusion.b
 patient_data_file = '/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/patient_data.pk'
 withheld_patients_file = '/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/withheldPatients.csv'
 
-#-- Instiante reasoner
+#-- Instaniate reasoner
 reasoner = Reasoner(fused_bkb=fused_bkb)
 
 #-- Set the patient data file 
@@ -41,9 +41,3 @@ query = reasoner.analyze_query(query0, check_mutex=False, interpolation='indepen
 
 #-- Return the report
 query.getReport()
-#print(query.result.print_contributions())
-#print(query.result.completed_inferences_report())
-#query.bkb.makeGraph()
-
-#-- Check for mutex if you want to.
-#print(checkMutex(query.bkb))

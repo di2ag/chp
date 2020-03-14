@@ -263,6 +263,7 @@ class Reasoner:
             #    q.bkb = copy.deepcopy(bkb)
             #else:
             q.bkb = bkb
+            q.patient_data = self.metadata
             return q
 
         queries = list()
@@ -296,9 +297,17 @@ class Reasoner:
             for comp_name, state_dict in updates.items():
                 state_keys = state_dict.keys()
                 state_probs = state_dict.values()
-                # skip -1 where there is no inference on a particular state_key
+                # We were skipping -1 where there is no inference on a particular state_key but now lets just make it really small
                 if min(state_probs) <= 0:
-                    continue
+                    state_probs_ = list()
+                    for key, prob_ in zip(state_keys, state_probs):
+                        if prob_ < 0:
+                            state_probs_.append(1e-10)
+                            state_dict[key] = 1e-10
+                        else:
+                            state_probs_.append(prob_)
+                            state_dict[key] = prob_
+                    state_probs = state_probs_
                 if len(state_dict) < 2:
                     continue
                 if comp_name in res:
@@ -317,9 +326,9 @@ class Reasoner:
                     res[comp_name][state_key] /= sumResProbs
         query.independ_queries = queries
         query.independ_result = res
-        for q in query.independ_queries:
-            q.getReport()
-            input('Stopped')
+        #for q in query.independ_queries:
+        #    q.getReport()
+        #    input('Stopped')
         return query
 
     '''
@@ -327,8 +336,12 @@ class Reasoner:
     topological where target is attached to all nodes at the bottom of the topological sort. This
     methodolgy can only except on target then.
     '''
-    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='standard', check_mutex=False):
+    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='independence', check_mutex=False):
+        #-- Set up query parameters
         query.patient_data = self.metadata
+        query.target_strategy = target_strategy
+        query.interpolation = interpolation
+
         #-- Make a bkb query hash.
         query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.to_str(),
                                                str(query.meta_evidence),

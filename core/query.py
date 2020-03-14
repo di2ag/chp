@@ -10,8 +10,7 @@ class Query:
                  type='updating',
                  name='query0',
                  meta_evidence=None,
-                 meta_targets=None,
-                 interpolation=None):
+                 meta_targets=None):
         self.evidence = evidence
         self.targets = targets
         self.marginal_evidence = marginal_evidence
@@ -25,7 +24,8 @@ class Query:
         self.independ_result = None
         self.compute_time = -1
         self.patient_data = None
-        self.interpolation = interpolation
+        self.interpolation = None
+        self.target_strategy = None
 
     def save(self, directory, only_json=False):
         if not only_json:
@@ -60,7 +60,12 @@ class Query:
             result_dict = {'result': {'Updates': self.result.process_updates(),
                                       'Contributions': {' '.join(target): df.to_dict()
                                                         for target, df in self.result.contribs_to_dataframes(inode_contrib).items()},
-                                      'Explanations': self.getExplanations()}}
+                                      'Explanations': self.jsonExplanations()}}
+        elif self.independ_result is not None:
+            result_dict = {'result': {'Updates': self.independ_result,
+                                      'Contributions': None,
+                                      'Explanations': self.jsonExplanations()}}
+
             json_dict.update(result_dict)
         json_file = os.path.join(directory, '{}.json'.format(self.name))
         with open(json_file, 'w') as f_:
@@ -82,10 +87,17 @@ class Query:
         else:
             raise ValueError('Unrecognized file format: {}'.format(file_format))
 
-    def getExplanations(self, interpolation_stradegy='patientX'):
+    def getExplanations(self):
         explain_dict = dict()
         if self.independ_result is not None:
             explain_dict['Assumptions'] = 'Query assumes independence between genetic evidence.'
+            explain_dict['Sensitivity'] = ['No sensitivity information for results with independence assumption yet, try correlation.']
+            mostSigPatsIndepend = dict()
+            for q in self.independ_queries:
+                mostSigPatsIndepend.update(q.getSourcePatientAnalysis())
+            explain_dict['Most Significant Patients'] = mostSigPatsIndepend
+            explain_dict['Interpolation Strategy'] = 'Used gene and variant independence as interpolation strategy.'
+            return explain_dict
         else:
             explain_dict['Assumptions'] = 'Query does not assume independence between genetic evidence.'
         inode_dict = self.result.process_inode_contributions()
@@ -163,6 +175,22 @@ class Query:
                 data[target] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash] for src_hash in src_hashs}
         return data
 
+    def jsonExplanations(self):
+        explain = self.getExplanations()
+        jsonSigPatients = dict()
+        for target, pat_data_dict in explain['Most Significant Patients'].items():
+            if pat_data_dict is not None:
+                target_str = '{} = {}'.format(target[0], target[1])
+                jsonSigPatients[target_str] = dict()
+                for patient_idx, data_dict in pat_data_dict.items():
+                    jsonSigPatients[target_str][patient_idx] = dict()
+                    for info_name, data in data_dict.items():
+                        if type(data) == tuple:
+                            data = list(data)
+                        jsonSigPatients[target_str][patient_idx][info_name] = data
+        explain['Most Significant Patients'] = jsonSigPatients
+        return explain
+
     def printExplanations(self):
         explain = self.getExplanations()
         string = 'Assumptions: {}\n'.format(explain['Assumptions'])
@@ -221,9 +249,15 @@ class Query:
             print(self.printExplanations())
         elif self.independ_result is not None:
             print('---- Results Using Independence Assumption -----')
+            print('Total Result:')
             for update, state_dict in self.independ_result.items():
                 print('\t{}'.format(update))
                 for state, prob in state_dict.items():
                     print('\t\t{} = {}'.format(state, prob))
+            print('------ Explanations ------')
+            print(self.printExplanations())
+            print('--------Individual Query Reports -------')
+            for q in self.independ_queries:
+                q.getReport()
         else:
             print('No results found.')
