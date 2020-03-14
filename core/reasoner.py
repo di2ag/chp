@@ -327,7 +327,7 @@ class Reasoner:
     topological where target is attached to all nodes at the bottom of the topological sort. This
     methodolgy can only except on target then.
     '''
-    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='standard'):
+    def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='standard', check_mutex=False):
         query.patient_data = self.metadata
         #-- Make a bkb query hash.
         query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.to_str(),
@@ -361,6 +361,8 @@ class Reasoner:
 
             query.targets.extend(transformed_meta_targets)
 
+            if check_mutex:
+                print('No Mutex Issues:', checkMutex(query.bkb))
             if save_dir is not None:
                 query.save(save_dir)
 
@@ -396,6 +398,8 @@ class Reasoner:
         query.targets.extend(transformed_meta_targets)
 
         query.bkb = bkb
+        if check_mutex:
+            print('No Mutex Issues:', checkMutex(bkb))
         bkb.save(query_bkb_path)
         #bkb.save('collapsed_and_link.bkb')
         #input('Saved')
@@ -464,10 +468,12 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
         head, tail = combo
         #-- Put head and tail in one list
         combo = [head] + tail
-        count = 0
+        count_joint = 0
+        count_prior = 0
         for entity_name, src_name in src_population.items():
-            truth = list()
-            for ev_state in combo:
+            truth_joint = list()
+            truth_prior = list()
+            for k, ev_state in enumerate(combo):
                 ev_, state = ev_state
                 prop_, op_str_, val_ = ev_
                 op_ = _process_operator(op_str_)
@@ -479,12 +485,18 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
                         res = False
                 else:
                     res = op_(src_population_data[src_name][prop_], val_)
-                truth.append(res == state)
-            if all(truth):
-                count += 1
-        counts.append(count)
+                truth_joint.append(res == state)
+                if k > 0:
+                    truth_prior.append(res == state)
+            if all(truth_joint):
+                count_joint += 1
+            if all(truth_prior):
+                count_prior += 1
+        counts.append((count_joint, count_prior))
 
-    probs = [float(count) / len(src_population) for count in counts]
+    probs_joint = [float(count[0]) / len(src_population) for count in counts]
+    probs_prior = [float(count[1]) / len(src_population) for count in counts]
+    probs_cond = [probs_joint[i] / probs_prior[i] for i in range(len(counts))]
 
     #-- Setup each S-node
     for j, combo in enumerate(combos):
@@ -494,8 +506,8 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
         #-- Process Tail
         processed_tail = _processDependecyTail(tail, bkb)
         #-- Add Snode
-        if probs[j] > 0:
-            bkb.addSNode(BKB_S_node(init_component_index=comp_head_idx, init_state_index=i_node_head_idx, init_probability=probs[j], init_tail=processed_tail))
+        if probs_cond[j] > 0:
+            bkb.addSNode(BKB_S_node(init_component_index=comp_head_idx, init_state_index=i_node_head_idx, init_probability=probs_cond[j], init_tail=processed_tail))
 
     return bkb
 
@@ -704,7 +716,11 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
 
     for non_src_comp in tqdm.tqdm(non_src_comp_indices, desc='Linking Sources', leave=False):
         for non_src_state in bkb.getAllComponentINodeIndices(non_src_comp):
-            snodes = S_nodes_by_head[non_src_comp][non_src_state]
+            try:
+                snodes = S_nodes_by_head[non_src_comp][non_src_state]
+            except KeyError:
+                print('Warning: {} = {} has no incoming S nodes.'.format(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(non_src_comp, non_src_state)))
+                continue
             for snode in snodes:
                 prob = snode.probability
                 src_tails = list()

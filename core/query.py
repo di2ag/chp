@@ -4,7 +4,14 @@ import pickle
 import json
 
 class Query:
-    def __init__(self, evidence=dict(), targets=list(), marginal_evidence=None, type='updating', name='query0', meta_evidence=None, meta_targets=None):
+    def __init__(self, evidence=dict(),
+                 targets=list(),
+                 marginal_evidence=None,
+                 type='updating',
+                 name='query0',
+                 meta_evidence=None,
+                 meta_targets=None,
+                 interpolation=None):
         self.evidence = evidence
         self.targets = targets
         self.marginal_evidence = marginal_evidence
@@ -18,6 +25,7 @@ class Query:
         self.independ_result = None
         self.compute_time = -1
         self.patient_data = None
+        self.interpolation = interpolation
 
     def save(self, directory, only_json=False):
         if not only_json:
@@ -74,7 +82,7 @@ class Query:
         else:
             raise ValueError('Unrecognized file format: {}'.format(file_format))
 
-    def getExplanations(self):
+    def getExplanations(self, interpolation_stradegy='patientX'):
         explain_dict = dict()
         if self.independ_result is not None:
             explain_dict['Assumptions'] = 'Query assumes independence between genetic evidence.'
@@ -100,8 +108,39 @@ class Query:
             contrib_explain = 'The most sensitive variables for {} are {}'.format(target_str,
                                                                                     ', '.join(most_sig_inodes))
             explain_dict['Sensitivity'].append(contrib_explain)
-        explain_dict['MostSignificantPatientsAnalysis'] = self.getSourcePatientAnalysis()
+        explain_dict['Most Significant Patients'] = self.getSourcePatientAnalysis()
+        if self.interpolation is None:
+            explain_dict['Interpolation Strategy'] = 'No interpolation stradegy was used.'
+        elif self.interpolation == 'independence':
+            explain_dict['Interpolation Strategy'] = 'Independent interpolation strategy was such that all genetic pieces of evidence \
+                    and the product of their probabilities were used in determing the posterior distribtion on the targets.'
+        elif self.interpolation == 'correlation':
+            explain_dict['Interpolation Strategy'] = dict()
+            explain_dict['Interpolation Strategy']['Description'] = 'Interpolated using mutation correlations.'
+            explain_dict['Interpolation Strategy']['Correlation Contribution Chain'] = self.getPatientXExplanations()
+        else:
+            raise ValueError('Interpolation stradegy: {} was not recognized.'.format(self.interpolation))
         return explain_dict
+
+    def chainSearch(self, head, chain, target, snode_contribs):
+        for tail_list, contrib in snode_contribs[target][head].items():
+            for tail in tail_list:
+                tail_comp, tail_state = tail
+                if '_mut_' in tail_comp and 'Source' not in tail_comp:
+                    chain.append((tail_comp, contrib))
+                    self.chainSearch(tail, chain, target, snode_contribs)
+        return chain
+
+    def getPatientXExplanations(self):
+        snode_contribs = self.result.process_contributions()
+        patientX_chain = dict()
+        for target, head_tail_contrib in snode_contribs.items():
+            patientX_chain[target] = dict()
+            for evid_comp, evid_state in self.evidence.items():
+                chain = self.chainSearch((evid_comp, evid_state), list(), target, snode_contribs)
+                if len(chain) > 0:
+                    patientX_chain[target][(evid_comp, evid_state)] = chain
+        return patientX_chain
 
     def getSourcePatientAnalysis(self):
         inode_dict = self.result.process_inode_contributions()
@@ -113,10 +152,11 @@ class Query:
                 if 'Source' in comp_name:
                     src_split1 = state_name.split('_')[-1]
                     src_split2 = src_split1.split(',')
-                    if len(src_hashs) == 0:
-                        src_hashs = set([int(src_hash_str) for src_hash_str in src_split2])
-                    else:
-                        src_hashs = src_hashs.intersection(set([int(src_hash_str) for src_hash_str in src_split2]))
+                    for src_hash_str in src_split2:
+                        try:
+                            src_hashs.add(int(src_hash_str))
+                        except ValueError:
+                            continue
             if len(src_hashs) == 0:
                 data[target] = None
             else:
@@ -130,20 +170,35 @@ class Query:
         for sense in explain['Sensitivity']:
             string += '\t{}.\n'.format(sense)
         string += 'Most Significant Patient Information:\n'
-        for target, pat_data_dict in explain['MostSignificantPatientsAnalysis'].items():
-            string += '{}\n'.format(target)
-            for patient_id, data_dict in pat_data_dict.items():
-                string += '\t{}:\n'.format(patient_id)
-                for info_name, data in data_dict.items():
-                    if type(data) == list or type(data) == tuple:
-                        data_str = ','.join([str(val) for val in data])
-                        if len(data_str) > 100:
-                            data_str = data_str[:100] + '...'
-                            string += '\t\t{} = {}\n'.format(info_name, data_str)
-                    elif type(data) == dict:
-                        continue
-                    else:
-                        string += '\t\t{} = {}\n'.format(info_name, data)
+        for target, pat_data_dict in explain['Most Significant Patients'].items():
+            if pat_data_dict is not None:
+                string += '{}\n'.format(target)
+                for patient_id, data_dict in pat_data_dict.items():
+                    string += '\t{}:\n'.format(patient_id)
+                    for info_name, data in data_dict.items():
+                        if type(data) == list or type(data) == tuple:
+                            data_str = ','.join([str(val) for val in data])
+                            if len(data_str) > 100:
+                                data_str = data_str[:100] + '...'
+                                string += '\t\t{} = {}\n'.format(info_name, data_str)
+                        elif type(data) == dict:
+                            continue
+                        else:
+                            string += '\t\t{} = {}\n'.format(info_name, data)
+        string += 'Interpolation Strategy Details:\n'
+        if type(explain['Interpolation Strategy']) == dict:
+            for label, info in explain['Interpolation Strategy'].items():
+                if type(info) == dict:
+                    string += '{}:\n'.format(label)
+                    for target, evid_chain in info.items():
+                        string += '\tTarget: {} = {}\n'.format(target[0], target[1])
+                        for evid, chain in evid_chain.items():
+                            string += '\t\tEvidence: {} = {}\n'.format(evid[0], evid[1])
+                            string += '\t\tChain: {}\n'.format(chain)
+                else:
+                    string += '{}: {}\n'.format(label, info)
+        else:
+            string += str(explain['Interpolation Strategy']) + '\n'
         return string
 
     def getReport(self):
