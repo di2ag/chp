@@ -67,6 +67,7 @@ class Query:
                                                         for target, df in self.result.contribs_to_dataframes(inode_contrib).items()},
                                       'Explanations': self.jsonExplanations(),
                                       'Report': self.getReportString()}}
+            json_dict.update(result_dict)
         elif self.independ_result is not None:
             result_dict = {'result': {'Updates': self.independ_result,
                                       'Contributions': None,
