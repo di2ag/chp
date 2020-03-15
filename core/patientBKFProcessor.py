@@ -32,6 +32,9 @@ class PatientProcessor:
             # clinical data
             self.ageDiagnos = None
             self.gender = None
+            self.pathT = None
+            self.pathN = None
+            self.pathM = None
             self.survivalTime = None
 
             # radiation data
@@ -87,7 +90,7 @@ class PatientProcessor:
                 mutatedPatGeneVariants.append(row[2]+"-"+variantClassifications[0])
 
         csv_file.close()
-
+        '''
         # reading gene reads
         with open(patientMutReads, 'r') as csv_file:
             reader = csv.reader(csv_file)
@@ -113,7 +116,7 @@ class PatientProcessor:
             if len(p.mutatedGenes) == 0:
                 print("No Reads - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
-
+        '''
 
     def processClinicalData(self, clinicalData):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
@@ -130,10 +133,19 @@ class PatientProcessor:
                 if 'DNP' in row[3]:
                     continue
                 gender = row[3]
+                if 'DNP' in row[4]:
+                    continue
+                pathT = row[4]
+                if 'DNP' in row[5]:
+                    continue
+                pathN = row[5]
+                if 'DNP' in row[6]:
+                    continue
+                pathM = row[6]
                 if 'DNP' in row[7]:
                     continue
                 survTime = int(float(row[7]))
-                patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender, survTime)
+                patientClinicalDict[str(row[0])+str(row[1])] = (ageDiag,gender,pathT,pathN,pathM,survTime)
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
         for p in self.patients[:]:
@@ -141,7 +153,10 @@ class PatientProcessor:
                 clinical = patientClinicalDict[str(p.cancerType)+str(p.patientID)]
                 p.ageDiagnos = clinical[0]
                 p.gender = clinical[1]
-                p.survivalTime = clinical[2]
+                p.pathT = clinical[2]
+                p.pathN = clinical[3]
+                p.pathM = clinical[4]
+                p.survivalTime = clinical[5]
             else:
                 print("No Clinical - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
@@ -283,7 +298,6 @@ class PatientProcessor:
                 rint("No Drug - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
         self.drugCollected = True
-
     # should be called after all Patient objects have been cosntructed
     def processPatientBKF(self):
         assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
@@ -291,9 +305,6 @@ class PatientProcessor:
 
         for pat in tqdm.tqdm(self.patients, desc='Forming patient BKFs'):
             bkf = BKB(name = pat.patientID)
- #           variantCompIndices = list()
- #           variantCompNames = list()
- #           variantCompStateIndices = list()
             for idx, gene in enumerate(pat.mutatedGenes):
                 # gene
                 mutGeneComp_idx = bkf.addComponent('mut_{}'.format(gene))
@@ -306,34 +317,7 @@ class PatientProcessor:
                 iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, pat.variants[idx])
                 # form SNode [mut_<genename>=True]---->o---->[mut-var_<genename>=<varianttype>]
                 bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx)]))
-#                if 'var_'+pat.variants[idx]+'=' in variantCompNames:
-#                    cIdx = variantCompNames.index('var_{}='.format(pat.variants[idx]))
-#
-#                    #mut_var combo
-#                    mutVarComp_idx = bkf.addComponent('mut-var_{}='.format(pat.mutatedGeneVariants[idx]))
-#                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, 'True')
-#                    #mut_var s-node
-#                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
-#                                                                                   (variantCompIndices[cIdx],variantCompStateIndices[cIdx])]))
-#                else:
-#                    #var
-#                    variantComp_idx = bkf.addComponent('var_{}='.format(pat.variants[idx]))
-#                    iNodeVariant_idx = bkf.addComponentState(variantComp_idx, 'True')
-#                    #var s-node
-#                    bkf.addSNode(BKB_S_node(variantComp_idx, iNodeVariant_idx, 1.0))
-#
-#                    variantCompIndices.append(variantComp_idx)
-#                    variantCompStateIndices.append(iNodeGeneMut_idx)
-#                    variantCompNames.append(bkf.getComponentName(variantComp_idx))
-#
-#                    #mut_var combo
-#                    mutVarComp_idx = bkf.addComponent('mut-var_{}='.format(pat.mutatedGeneVariants[idx]))
-#                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, 'True')
-#                    #mut_var s-node
-#                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
-#                                                                                   (variantComp_idx, iNodeVariant_idx)]))
             self.bkfs.append(bkf)
-      
 
     def SubsetBKFsToFile(self, outDirect, indices):
         allBKFHashNames = dict()
@@ -384,6 +368,12 @@ class PatientProcessor:
             patientDict["Age_of_Diagnosis"] = self.patients[bkfPatientIndex].ageDiagnos
             #patient gender
             patientDict["Gender"] = self.patients[bkfPatientIndex].gender
+            #pathT
+            patientDict["PathT"] = self.patients[bkfPatientIndex].pathT
+            #pathN
+            patientDict["PathN"] = self.patients[bkfPatientIndex].pathN
+            #pathM
+            patientDict["PathM"] = self.patients[bkfPatientIndex].pathM
             #patient survival time
             patientDict["Survival_Time"] = self.patients[bkfPatientIndex].survivalTime
         #patients can have no radiation data associated with them --------------------v
@@ -415,7 +405,6 @@ class PatientProcessor:
                 patientDict["Days_To_Drug_End(s)"] = tuple(self.patients[bkfPatientIndex].daysToDrugEnd)
 
         patientHashVal = hash(self.patients[bkfPatientIndex].patientID)
-        #self.bkfs[bkfPatientIndex].name = patientHashVal
         return patientHashVal, patientDict
 
 if __name__ == '__main__':

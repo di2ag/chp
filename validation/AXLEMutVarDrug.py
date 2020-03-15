@@ -72,6 +72,7 @@ class CrossValidator:
                 sumProbs = probOne + probTwo
                 probOne /= sumProbs
                 probTwo /= sumProbs
+            print(probs)
             prob = list()
             prob.append((probs[0][0], probs[0][1], probOne))
             prob.append((probs[1][0], probs[1][1], probTwo))
@@ -82,6 +83,8 @@ class CrossValidator:
 
     def run_demo_only(self, target, patID, evidence):
         #-- Make query and analyze
+        print(evidence[1])
+        print(evidence[0])
         query = Query(evidence=evidence[1],
                       targets=[],
                       meta_evidence=evidence[0],

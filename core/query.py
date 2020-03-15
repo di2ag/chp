@@ -2,6 +2,7 @@ import os
 import sys
 import pickle
 import json
+import csv
 
 class Query:
     def __init__(self, evidence=dict(),
@@ -26,6 +27,8 @@ class Query:
         self.patient_data = None
         self.interpolation = None
         self.target_strategy = None
+        self.gene_var_direct = None
+        self.max_new_ev = None
 
     def save(self, directory, only_json=False):
         if not only_json:
@@ -121,7 +124,7 @@ class Query:
                                                                                     ', '.join(most_sig_inodes))
             explain_dict['Sensitivity'].append(contrib_explain)
         explain_dict['Most Significant Patients'] = self.getSourcePatientAnalysis()
-        if self.interpolation is None:
+        if self.interpolation is None or self.interpolation == 'standard':
             explain_dict['Interpolation Strategy'] = 'No interpolation stradegy was used.'
         elif self.interpolation == 'independence':
             explain_dict['Interpolation Strategy'] = 'Independent interpolation strategy was such that all genetic pieces of evidence \
@@ -228,6 +231,38 @@ class Query:
         else:
             string += str(explain['Interpolation Strategy']) + '\n'
         return string
+
+    def checkAndAdjustEvidence(self):
+        #print(self.evidence)
+        allVar = True
+        #list of var types we want
+        vars = list()
+        for key in self.evidence.keys():
+            if key[0:4] != 'var_':
+                allVar = False
+            vars.append(key[4:])
+        #print(vars)
+        if allVar and len(vars) != 0:
+            geneVarFreq = list()
+            with open(self.gene_var_direct, 'r') as csv_file:
+                reader = csv.reader(csv_file)
+                for row in reader:
+                    geneVarFreq.append(row[0])
+            count = 0
+            newEvidenceDict = dict()
+            for geneVar in geneVarFreq:
+                varType = geneVar.split('-')[1]+'='
+                #print(varType)
+                if varType in vars:
+                    newEvidenceDict['mut-var_'+geneVar+'='] = 'True'
+                    count += 1
+                if count == self.max_new_ev:
+                    break
+            self.evidence = newEvidenceDict
+            return True
+        else:
+            return False
+        #print(self.evidence)
 
     def getReport(self):
         string = '---- Query Details -----\n'

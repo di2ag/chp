@@ -27,7 +27,7 @@ CACHED_BKB_DIR = '/home/public/data/ncats/cachedCollapsedBkb'
 ILLEGAL_SOURCE_STRINGS = ['PatientX', 'noGeneEvidence', 'geneEvidence']
 
 class Reasoner:
-    def __init__(self, fused_bkb=None, collapsed_bkb=None,  patient_data=None, cpp_reasoning=False):
+    def __init__(self, fused_bkb=None, collapsed_bkb=None,  patient_data=None, cpp_reasoning=False, gene_var_direct=None, max_new_ev=None):
         self.fused_bkb = fused_bkb
         self.metadata = patient_data
         self.cpp_reasoning = cpp_reasoning
@@ -38,6 +38,8 @@ class Reasoner:
                 self.setup()
             except:
                 raise ValueError('Likely patient data is not in the right format.')
+        self.gene_var_direct = gene_var_direct
+        self.max_new_ev = max_new_ev
 
     def getCollapsedBKB(self, fused_bkb):
         #-- First check to see if this bkb has already been collapsed and saved.
@@ -437,6 +439,12 @@ class Reasoner:
         query.patient_data = self.metadata
         query.target_strategy = target_strategy
         query.interpolation = interpolation
+
+        if self.gene_var_direct is not None and self.max_new_ev is not None:
+                    query.gene_var_direct = self.gene_var_direct
+                    query.max_new_ev = self.max_new_ev
+                    needed = query.checkAndAdjustEvidence()
+
         #-- Check if there is any genetic evidence
         num_gene_evidence = len(query.evidence)
 

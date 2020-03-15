@@ -5,6 +5,7 @@ import itertools
 import operator
 import functools
 import math
+import random
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb import BKB_S_node, BKB_component, BKB_I_node
 import matplotlib.pyplot as plt
@@ -76,7 +77,7 @@ class PatientProcessor:
         variants = list()
         cancerType = rows[0][0]
         patID = rows[0][1]
-       
+
         for row in tqdm.tqdm(rows, desc='Reading patient files'):
             variantClassifications = list()
             if patID != row[1]:
@@ -96,9 +97,9 @@ class PatientProcessor:
             if 'DNP' not in row[6]:
                 variantClassifications.append(row[6])
             if all(x == variantClassifications[0] for x in variantClassifications):
-                mutatedPatGenes.append(row[2])
-                variants.append(variantClassifications[0])
-                mutatedPatGeneVariants.append(row[2]+"-"+variantClassifications[0])
+                    mutatedPatGenes.append(row[2])
+                    variants.append(variantClassifications[0])
+                    mutatedPatGeneVariants.append(row[2]+"-"+variantClassifications[0])
 
         csv_file.close()
         '''
@@ -458,31 +459,55 @@ class PatientProcessor:
                     source = ','.join([str(hashName) for hashName in geneFreqHashSource[aGene]])
                 self.geneFragmentsSources.append(source)
 
+        #read in topological sorting freq file
+        topological = dict()
+        with open('/home/public/data/ncats/data_drop_03-04-2020/gene_freq_in_wxs.csv', 'r') as csv_file:
+            reader = csv.reader(csv_file)
+            next(reader)
+            count = 0
+            for row in reader:
+                topological[str(row[0])] = count
+                count += 1
+
         self.patientXBKF = BKB(name = "patientX")
+        geneOrderings = dict()
+        orderFrom = list()
         for aGene in all_gene_mutations:
             mutGeneComp_idx = self.patientXBKF.addComponent('mut_{}'.format(aGene))
             iNodeGeneMutTrue_idx = self.patientXBKF.addComponentState(mutGeneComp_idx, 'True')
             iNodeGeneMutFalse_idx = self.patientXBKF.addComponentState(mutGeneComp_idx, 'False')
 
             #get causality gene
-            causes = geneCauses[aGene].keys()
-            vals = geneCauses[aGene].values()
             maxCauseGene = None
             maxCauseVal = 0
+            matches = list()
             for bGene, val in geneCauses[aGene].items():
-                if val > maxCauseVal and bGene[0] != aGene:
+                if val > maxCauseVal and bGene[0] != aGene and topological[bGene[0]] < topological[aGene]:
+                    print(bGene[0],topological[bGene[0]])
+                    print(aGene,topological[aGene])
+                    print()
                     maxCauseVal = val
                     maxCauseGene = bGene[0]
+            if maxCauseGene is None:
+                print("no gene link for",aGene)
 
-            cMutGeneComp_idx = self.patientXBKF.addComponent('mut_{}'.format(maxCauseGene))
-            iNodeCGeneMut_idx = self.patientXBKF.addComponentState(cMutGeneComp_idx, 'True')
+                _mutGeneComp_idx = self.patientXBKF.addComponent('_mut_{}'.format(aGene))
+                _iNodeGeneMut_idx = self.patientXBKF.addComponentState(_mutGeneComp_idx, 'True')
 
-            _mutGeneComp_idx = self.patientXBKF.addComponent('_mut_{}'.format(aGene))
-            _iNodeGeneMut_idx = self.patientXBKF.addComponentState(_mutGeneComp_idx, 'True')
+                self.patientXBKF.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
+                self.patientXBKF.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, maxCauseVal, [(mutGeneComp_idx, iNodeGeneMutFalse_idx)]))
 
-            self.patientXBKF.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
-            self.patientXBKF.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, maxCauseVal, [(mutGeneComp_idx, iNodeGeneMutFalse_idx),
-                                                                                                    (cMutGeneComp_idx, iNodeCGeneMut_idx)]))
+            else:
+
+                cMutGeneComp_idx = self.patientXBKF.addComponent('_mut_{}'.format(maxCauseGene))
+                iNodeCGeneMut_idx = self.patientXBKF.addComponentState(cMutGeneComp_idx, 'True')
+
+                _mutGeneComp_idx = self.patientXBKF.addComponent('_mut_{}'.format(aGene))
+                _iNodeGeneMut_idx = self.patientXBKF.addComponentState(_mutGeneComp_idx, 'True')
+
+                self.patientXBKF.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
+                self.patientXBKF.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, maxCauseVal, [(mutGeneComp_idx, iNodeGeneMutFalse_idx),
+                                                                                                        (cMutGeneComp_idx, iNodeCGeneMut_idx)]))
 
     def SubsetBKFsToFile(self, outDirect, indices):
         #return bkf_files, source_names, patient_data_file

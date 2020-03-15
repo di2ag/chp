@@ -10,7 +10,7 @@ import copy
 
 from pybkb.core.cpp_base.fusion import fuse as cpp_fuse
 from pybkb.core.python_base.fusion import fuse as py_fuse
-from patientBKFProcessor_v2 import PatientProcessor
+from patientBKFProcessor_Axle import PatientProcessor
 from pathwayBKFProcessor import PathwayProcessor
 from reactomePathwayProcessor import ReactomePathwayProcessor
 
@@ -153,7 +153,7 @@ class DataHandler:
         self.patient_holdout  = patient_holdout
         self.working_dir = working_dir
         self.cpp_fuse_option = cpp_fuse_option
-        self.falsesInPatients = False
+        self.falsesInPatients = True
 
     def readTcgaData(self):
         self.patientProcessor = PatientProcessor()
@@ -243,17 +243,24 @@ class DataHandler:
 
         patient_bkf_files, patient_source_names, holdout_source_names, dump_loc = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
 
-        patient_bkfs.append(self.patientProcessor.patientXBKF)
-        patient_bkf_files.append(self.working_dir + 'PatientX.bkf')
-        patient_source_names.append('PatientX')
-        self.patientProcessor.patientXBKF.save(self.working_dir + 'PatientX.bkf')
-        lenPatientsBefore = len(patient_bkfs)
+        try:
+            patient_bkfs.append(self.patientProcessor.patientXBKF)
+            patient_bkf_files.append(self.working_dir + 'PatientX.bkf')
+            patient_source_names.append('PatientX')
+            self.patientProcessor.patientXBKF.save(self.working_dir + 'PatientX.bkf')
+            lenPatientsBefore = len(patient_bkfs)
+        except:
+            print("Must not be using PatientX")
 
-        geneReliabilityIdx = len(patient_bkfs)
-        for idx, genebkf in enumerate(self.patientProcessor.geneFrags):
-            patient_bkfs.append(genebkf)
-            patient_bkf_files.append(self.working_dir + genebkf._name +'.bkf')
-            patient_source_names.append(self.patientProcessor.geneFragmentsSources[idx])
+
+        try:
+            geneReliabilityIdx = len(patient_bkfs)
+            for idx, genebkf in enumerate(self.patientProcessor.geneFrags):
+                patient_bkfs.append(genebkf)
+                patient_bkf_files.append(self.working_dir + genebkf._name +'.bkf')
+                patient_source_names.append(self.patientProcessor.geneFragmentsSources[idx])
+        except:
+            print("must not be using gene frags")
 
         if with_pathways:
             pathway_bkf_files, pathway_source_names = self.pathwayProcessor.BKFsToFile(self.working_dir)

@@ -50,9 +50,9 @@ class CrossValidator:
         self.target_strategy = 'chain'
         self.interpolation = 'independence'
 
-    def run_demo_suite(self, target, patientIDs, patientsMutationEvidence):
+    def run_demo_suite(self, target, patientIDs, patientsMutationEvidence, freq_file, maxNewEv):
         #-- Set Up Reasoner
-        self.reasoner = Reasoner(self.bkb, None)
+        self.reasoner = Reasoner(self.bkb, None, gene_var_direct=freq_file, max_new_ev=maxNewEv)
         self.reasoner.set_src_metadata(self.patient_data_file)
         self.reasoner.cpp_reasoning = False
         holdoutResults = list()
@@ -91,11 +91,15 @@ class CrossValidator:
         if True: #self.drug != evidence[0][0][2]:
             query = self.reasoner.analyze_query(copy.deepcopy(query), save_dir=None,
                                                target_strategy=self.target_strategy, interpolation=self.interpolation)
-            query.result.summary()
             query.getReport()
             for comp_name, state_dict in query.independ_result.items():
                 for state_name, prob in state_dict.items():
                     probs.append((comp_name, state_name, prob))
+            #query.result.summary()
+            #query.getReport()
+            #for comp_name, state_dict in query.independ_result.items():
+            #    for state_name, prob in state_dict.items():
+            #        probs.append((comp_name, state_name, prob))
         else:
             query = self.reasoner.analyze_query(copy.deepcopy(query), preprocessed_bkb=self.processed_bkb,
                                                target_strategy=self.target_strategy, interpolation=self.interpolation)
@@ -157,9 +161,11 @@ class CrossValidator:
 if __name__ == '__main__':
     fused_bkb = BKB()
 
-    fused_bkb.load('/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/fusion.bkb')
-    patient_data_file = '/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/patient_data.pk'
-    withheld_patients_file = '/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/withheldPatients.csv'
+    fused_bkb.load('/home/ghyde/bkb-pathway-provider/core/AXLEBKB/fusion.bkb')
+    patient_data_file = '/home/ghyde/bkb-pathway-provider/core/AXLEBKB/patient_data.pk'
+    withheld_patients_file = '/home/ghyde/bkb-pathway-provider/core/AXLEBKB/withheldPatients.csv'
+    freq_file = '/home/ghyde/bkb-pathway-provider/core/AXLEBKB/geneFreqAnal.csv'
+    maxNewEv = 20
 
     #fused_bkb.load('/home/public/data/ncats/660Pats5PercentHoldout/fusion.bkb')
     #patient_data_file = '/home/public/data/ncats/660Pats5PercentHoldout/patient_data.pk'
@@ -175,28 +181,28 @@ if __name__ == '__main__':
     for withheldPatientHash in withheldPatientHashes:
         withheldPatientDict = patientDict[int(withheldPatientHash)]
         patientIDs.append(withheldPatientDict["Patient_ID"])
-        pgv = withheldPatientDict["Patient_Genes"]
+        pgv = withheldPatientDict["Patient_Variants"]
         patientMutationEvidence = dict()
         patientMutationPathEvidence = []
         for mut in pgv:
-            compName = 'mut_'+mut+'='
+            compName = 'var_'+mut+'='
             if compName in compNames:
                 patientMutationEvidence[compName] = 'True'
         pathT = withheldPatientDict["PathT"]
         pathEvidence = [("PathT", "==", pathT)]
-        patientMutationPathEvidence.append((pathEvidence, patientMutationEvidence))
         pathN = withheldPatientDict["PathN"]
-        pathEvidence = [("PathN", "==", pathN)]
-        patientMutationPathEvidence.append((pathEvidence, patientMutationEvidence))
+        pathEvidence.append(("PathN", "==", pathN))
         pathM = withheldPatientDict["PathM"]
-        pathEvidence = [("PathM", "==", pathM)]
-        patientMutationPathEvidence.append((pathEvidence, patientMutationEvidence))
+        pathEvidence.append(("PathM", "==", pathM))
+        patientsMutationPathEvidence.append((pathEvidence, patientMutationEvidence))
 
-        patientsMutationPathEvidence.append(patientMutationPathEvidence)
+        #patientsMutationPathEvidence.append(patientMutationPathEvidence)
 
     target = ('Survival_Time', '<=', 943)
 
     cross_validator = CrossValidator(fused_bkb,withheldPatientHashes, patient_data_file, patientDict)
     df = cross_validator.run_demo_suite(target,
                                         patientIDs,
-                                        patientsMutationPathEvidence)
+                                        patientsMutationPathEvidence,
+                                        freq_file,
+                                        maxNewEv)
