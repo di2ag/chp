@@ -108,7 +108,7 @@ class Query:
             max_contrib = -1
             for inode, contrib in contrib_dict.items():
                 inode_str = ' '.join(inode)
-                if 'Source' in inode_str or target_str in inode_str:
+                if 'Source' in inode_str or target_str in inode_str or 'Collection' in inode_str:
                     continue
                 if contrib > max_contrib:
                     most_sig_inodes = [inode_str]

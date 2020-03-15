@@ -18,12 +18,13 @@ from pybkb.core.cpp_base.reasoning import revision as cpp_revision
 from pybkb.core.cpp_base.reasoning import updating as cpp_updating
 from pybkb.core.python_base.reasoning import updating as py_updating
 from pybkb.core.python_base.reasoning import checkMutex
+from pybkb.core.python_base.fusion import fuse
 from pybkb.core.python_base.fusion_collapse import collapse_sources
 from pybkb.core.common.bayesianKnowledgeBase import BKB_S_node
 from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 
 CACHED_BKB_DIR = '/home/public/data/ncats/cachedCollapsedBkb'
-ILLEGAL_SOURCE_STRINGS = ['PatientX']
+ILLEGAL_SOURCE_STRINGS = ['PatientX', 'noGeneEvidence', 'geneEvidence']
 
 class Reasoner:
     def __init__(self, fused_bkb=None, collapsed_bkb=None,  patient_data=None, cpp_reasoning=False):
@@ -144,6 +145,10 @@ class Reasoner:
         #print('Reasoning...')
         #print(checkMutex(query.bkb))
         #query.bkb.makeGraph()
+        #print(query.evidence)
+        #input()
+        #print(query.targets)
+        #input()
         start_time = time.time()
         if self.cpp_reasoning:
             if query.type == 'revision':
@@ -208,7 +213,7 @@ class Reasoner:
                 query.result.meta_target_updates = meta_target_updates
         return query
 
-    def process_metaVariables(self, bkb, meta_evidence, meta_targets, target_strategy='chain'):
+    def process_metaVariables(self, bkb, meta_evidence, meta_targets, target_strategy='chain', num_gene_evidence=0):
         if target_strategy == 'chain':
             meta_variables = []
             if meta_evidence is not None:
@@ -219,6 +224,95 @@ class Reasoner:
             if len(meta_targets) > 1:
                 raise NotImplementedError('Only one target can be specified and must be a demographic target.')
             meta_variables = meta_evidence
+        elif target_strategy == 'explicit':
+            meta_variables = []
+            if meta_evidence is not None:
+                meta_variables += meta_evidence
+            if meta_targets is not None:
+                meta_variables += meta_targets
+
+            #-- First make a chained demographic bkb
+            demo_chain_bkb = BKB()
+            for i, meta in enumerate(meta_variables):
+                demo_chained_bkb, _, _ = _addDemographicOption(meta, demo_chain_bkb, self.src_hashs, self.metadata, option_dependencies=meta_variables[:i], include_src_tags=True)
+            #print('Fuck YOu')
+            #demo_chained_bkb.makeGraph()
+            #print(checkMutex(demo_chained_bkb))
+            demo_dummy_bkb = _makeDemoDummyBKB(meta_variables)
+            #demo_dummy_bkb.makeGraph()
+            #-- Fuse demographically chained bkb with dummy BKB
+            demo_fused_bkb = fuse([demo_chained_bkb, demo_dummy_bkb],
+                                  [1, 1],
+                                  ['noGeneEvidence', 'geneEvidence'])
+            demo_fused_bkb.save('demo_fused_t1.bkb')
+            #-- Clean demo fusion graph, i.e. delete weird inodes
+            S_nodes_by_head = demo_fused_bkb.constructSNodesByHead()
+            src_comp_indices = demo_fused_bkb.getSrcComponents()
+            for src_comp in src_comp_indices:
+                for src_state in demo_fused_bkb.getAllComponentINodeIndices(src_comp):
+                    if len(S_nodes_by_head[src_comp][src_state]) > 0:
+                        #print('Here')
+                        for snode in S_nodes_by_head[src_comp][src_state][1:]:
+                            demo_fused_bkb.removeSNode(snode)
+            #print(checkMutex(demo_fused_bkb))
+            #demo_fused_bkb.makeGraph()
+            #input()
+
+            #-- Construct geneEvidence helper
+            helper_evidence = _getExplicitHelperEvidence(demo_fused_bkb, num_gene_evidence)
+            '''
+            if num_gene_evidence == 0:
+                src_comp_indices = demo_fused_bkb.getSrcComponents()
+                for src_comp in src_comp_indices:
+                        src_state = demo_fused_bkb.findINode(src_comp, 'noGeneEvidence', contains=True)
+                        if src_state != -1:
+                            helper_evidence[demo_fused_bkb.getComponentName(src_comp)] = demo_fused_bkb.getComponentINodeName(src_comp, src_state)
+            else:
+                src_comp_indices = demo_fused_bkb.getSrcComponents()
+                for src_comp in src_comp_indices:
+                        src_state = demo_fused_bkb.findINode(src_comp, 'geneEvidence', contains=True)
+                        if src_state != -1:
+                            helper_evidence[demo_fused_bkb.getComponentName(src_comp)] = demo_fused_bkb.getComponentINodeName(src_comp, src_state)
+            print(helper_evidence)
+            '''
+            #-- Merge demographic fused bkb into gene bkb
+            for comp_name, state_name in demo_fused_bkb.getINodeNames():
+                comp_idx = bkb.addComponent(comp_name)
+                bkb.addComponentState(comp_idx, state_name)
+            for snode in demo_fused_bkb.getAllSNodes():
+                head_comp, head_state = snode.getHead()
+                head_comp_name = demo_fused_bkb.getComponentName(head_comp)
+                head_state_name = demo_fused_bkb.getComponentINodeName(head_comp, head_state)
+                head_comp_idx = bkb.getComponentIndex(head_comp_name)
+                head_state_idx = bkb.getComponentINodeIndex(head_comp_idx, head_state_name)
+                tail = list()
+                for tail_idx in range(snode.getNumberTail()):
+                    tail_comp, tail_state = snode.getTail(tail_idx)
+                    tail_comp_name = demo_fused_bkb.getComponentName(tail_comp)
+                    tail_state_name = demo_fused_bkb.getComponentINodeName(tail_comp, tail_state)
+                    tail_comp_idx = bkb.getComponentIndex(tail_comp_name)
+                    tail_state_idx = bkb.getComponentINodeIndex(tail_comp_idx, tail_state_name)
+                    tail.append((tail_comp_idx, tail_state_idx))
+                prob = snode.probability
+                bkb.addSNode(BKB_S_node(init_component_index=head_comp_idx,
+                                        init_state_index=head_state_idx,
+                                        init_probability=prob,
+                                        init_tail=tail))
+            #bkb.makeGraph()
+
+
+
+            #-- Process demo options explicity
+            bkb = _addDemographicOptionsExplicitly(meta_variables, bkb, self.src_hashs, self.src_hashs_inverse, self.metadata)
+            #-- Construct transformed meta variables
+            transformed_meta = dict()
+            for meta in meta_variables:
+                transformed_meta['{} {} {}'.format(meta[0], meta[1], meta[2])] = 'True'
+
+            #-- Update with gene helper
+            transformed_meta.update(helper_evidence)
+            print(transformed_meta)
+            return transformed_meta, bkb
         else:
             raise ValueError('Target Strategy must be chain or topological.')
 
@@ -245,6 +339,8 @@ class Reasoner:
         return transformed_meta, bkb
 
     def solve_query_independence(self, query, genetic_evidence, target_strategy, parallel=False):
+        if len(genetic_evidence) == 0:
+            return self.solve_query(query, target_strategy)
         bkb = query.bkb
         non_gene_evidence = copy.deepcopy(query.evidence)
         for gene_key in genetic_evidence:
@@ -341,6 +437,8 @@ class Reasoner:
         query.patient_data = self.metadata
         query.target_strategy = target_strategy
         query.interpolation = interpolation
+        #-- Check if there is any genetic evidence
+        num_gene_evidence = len(query.evidence)
 
         #-- Make a bkb query hash.
         query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.to_str(),
@@ -372,6 +470,11 @@ class Reasoner:
                     transformed_meta_evidence[meta_name] = 'True'
                     query.evidence.update(transformed_meta_evidence)
 
+            #--Collect all helper evidence
+            if target_strategy == 'explicit':
+                helper_evidence = _getExplicitHelperEvidence(query.bkb, num_gene_evidence)
+                query.evidence.update(helper_evidence)
+
             query.targets.extend(transformed_meta_targets)
 
             if check_mutex:
@@ -389,7 +492,7 @@ class Reasoner:
         if query.meta_targets is not None:
             transformed_meta_targets = ['{} {} {}'.format(target[0], target[1], target[2]) for target in query.meta_targets]
 
-        transformed_meta, bkb = self.process_metaVariables(bkb, query.meta_evidence, query.meta_targets, target_strategy)
+        transformed_meta, bkb = self.process_metaVariables(bkb, query.meta_evidence, query.meta_targets, target_strategy, num_gene_evidence=num_gene_evidence)
 
         #-- Collect Evidence
         transformed_meta_evidence = dict()
@@ -406,6 +509,13 @@ class Reasoner:
                 for name in transformed_meta:
                     if meta_name in name:
                         transformed_meta_targets[name] = transformed_meta[name]
+        #--Collect all helper evidence
+        if target_strategy == 'explicit':
+            helper_evidence = dict()
+            for comp, state in transformed_meta.items():
+                if comp not in transformed_meta_evidence and comp not in transformed_meta_targets:
+                    helper_evidence[comp] = state
+            query.evidence.update(helper_evidence)
 
         query.evidence.update(transformed_meta_evidence)
         query.targets.extend(transformed_meta_targets)
@@ -421,6 +531,39 @@ class Reasoner:
         if interpolation == 'independence':
             return self.solve_query_independence(query, genetic_evidence, target_strategy)
         return self.solve_query(query, target_strategy=target_strategy)
+
+def _getExplicitHelperEvidence(bkb, num_gene_evidence):
+    #-- Construct geneEvidence helper
+    helper_evidence = dict()
+    if num_gene_evidence == 0:
+        src_comp_indices = bkb.getSrcComponents()
+        for src_comp in src_comp_indices:
+                src_state = bkb.findINode(src_comp, 'noGeneEvidence', contains=True)
+                if src_state != -1:
+                    helper_evidence[bkb.getComponentName(src_comp)] = bkb.getComponentINodeName(src_comp, src_state)
+    else:
+        src_comp_indices = bkb.getSrcComponents()
+        for src_comp in src_comp_indices:
+                src_state = bkb.findINode(src_comp, 'geneEvidence', contains=True)
+                if src_state != -1:
+                    helper_evidence[bkb.getComponentName(src_comp)] = bkb.getComponentINodeName(src_comp, src_state)
+    return helper_evidence
+
+
+def _makeDemoDummyBKB(meta_variables):
+    bkb = BKB()
+    for meta in meta_variables:
+        comp_idx = bkb.addComponent('{} {} {}'.format(meta[0], meta[1], meta[2]))
+        stateTrue_idx = bkb.addComponentState(comp_idx, 'True')
+        stateFalse_idx = bkb.addComponentState(comp_idx, 'False')
+        #-- Add snodes
+        bkb.addSNode(BKB_S_node(init_component_index=comp_idx,
+                                init_state_index=stateTrue_idx, 
+                                init_probability=1))
+        bkb.addSNode(BKB_S_node(init_component_index=comp_idx,
+                                init_state_index=stateFalse_idx, 
+                                init_probability=1))
+    return bkb
 
 def _process_operator(op):
     if op == '>=':
@@ -460,7 +603,165 @@ def _processDependecyTail(tail, bkb):
         processed_tail.append((comp_tail_idx, i_node_tail_idx))
     return processed_tail
 
-def _processOptionDependency(option, option_dependencies, bkb, src_population, src_population_data):
+def _getDemographicCombos(meta_variables):
+    #-- Get demographic options
+    demo_product = [combo for combo in itertools.product(meta_variables, [True, False])]
+    #-- Get only legal demographic combos, i.e. we don't want a combo like [(Age >= 50 == True), (Age >= 50 = False), (Surival >= 365 = True)]...
+    demo_combos_list = list()
+    for combo in itertools.combinations(demo_product, r=len(meta_variables)):
+        combo = list(combo)
+        prop_set = set()
+        for ev_state in combo:
+            ev_, state = ev_state
+            prop_, op_, val_ = ev_
+            prop_set.add(prop_)
+        if len(prop_set) == len(combo):
+            demo_combos_list.append(tuple(combo))
+
+    #-- Instiante a demographic combination dict to capture which sources match each demo combo.
+    demo_combos = {combo: list() for combo in demo_combos_list}
+    return demo_combos
+
+def _linkSrcToDemographicCombinations(demo_combos, bkb, non_src_head, src, non_src_tail, prior_prob, src_hashs, src_hashs_inverse, src_population_data, processed_meta_variable_priors):
+    #-- Copy democombos dictionary
+    demo_combos = copy.deepcopy(demo_combos)
+    
+    src_comp, src_state = src
+    #-- Process the source name collection
+    src_state_name = bkb.getComponentINodeName(src_comp, src_state)
+    src_split = src_state_name.split('_')
+    src_nums_str = src_split[0][1:-1]
+    src_name_str = ''.join(src_split[1:])
+    src_names_str = src_name_str.split(',')
+    src_names = [int(src_hash) for src_hash in src_names_str]
+    src_nums = [int(num) for num in src_nums_str.split(',')]
+    #-- If this source component has format [num]_hash1,hash2, ... then it used fusion hack.
+    if len(src_nums) != len(src_names):
+        #-- Go through and process src nums by looking at hashes.
+        src_nums = [src_hashs_inverse[int(src_hash)] for src_hash in src_names_str]
+
+    #-- Collect all sources that match the respective meta variable combinations
+    for src_name in src_names:
+        for combo in demo_combos:
+            truth = list()
+            for meta_var in combo:
+                var_, state = meta_var
+                prop_, op_str_, val_ = var_
+                op_ = _process_operator(op_str_)
+                #-- Check if the src_population item is a list of items (useful for drugs):
+                if type(src_population_data[src_name][prop_]) == tuple:
+                    if val_ in src_population_data[src_name][prop_]:
+                        res = True
+                    else:
+                        res = False
+                else:
+                    res = op_(src_population_data[src_name][prop_], val_)
+                truth.append(res == state)
+            if all(truth):
+                demo_combos[combo].append(src_name)
+    #print(demo_combos)
+    #input()
+    #-- Build all the joint snodes
+    for combo, srcs in demo_combos.items():
+        if len(srcs) == 0:
+            continue
+        #-- Remake the source collection component
+        src_nums_ = [src_hashs_inverse[src_hash] for src_hash in srcs]
+        src_state_name = '[{}]_{}'.format(','.join([str(src_num) for src_num in src_nums]),
+                                          ','.join([str(src_hash) for src_hash in srcs]))
+        new_src_state = bkb.addComponentState(src_comp, src_state_name)
+        new_state_prob = float(len(srcs) / len(src_names))
+        #-- Add new source collection prior
+        bkb.addSNode(BKB_S_node(init_component_index=src_comp,
+                                init_state_index=new_src_state,
+                                init_probability=new_state_prob*prior_prob))
+        #-- Get the demographic combination tail
+        combo_tail = list()
+        for meta_var in combo:
+            var_, state = meta_var
+            var_comp = bkb.addComponent('{} {} {}'.format(var_[0], var_[1], var_[2]))
+            if state:
+                var_state = bkb.addComponentState(var_comp, 'True')
+            else:
+                var_state = bkb.addComponentState(var_comp, 'False')
+            #-- Link src to each demographic option
+            #bkb.addSNode(BKB_S_node(init_component_index=var_comp,
+            #                        init_state_index=var_state,
+            #                        init_probability=1,
+            #                        init_tail=[src]))
+            #processed_meta_variable_priors.add((var_comp, var_state))
+            combo_tail.append((var_comp, var_state))
+        #-- Make Joint S-node
+        complete_tail = combo_tail + [(src_comp, new_src_state)] + non_src_tail
+        non_src_head_comp, non_src_head_state = non_src_head
+        bkb.addSNode(BKB_S_node(init_component_index=non_src_head_comp,
+                                init_state_index=non_src_head_state,
+                                init_probability=1,
+                                init_tail=complete_tail))
+    return bkb, processed_meta_variable_priors
+
+def _addDemographicOptionsExplicitly(meta_variables, bkb, src_hashs, src_hashs_inverse, src_population_data):
+    src_comp_indices = bkb.getSrcComponents()
+    non_src_comp_indices = set(bkb.getAllComponentIndices()) - set(src_comp_indices)
+    S_nodes_by_head = bkb.constructSNodesByHead()
+
+    illegal_source_strings = ILLEGAL_SOURCE_STRINGS + [meta[0] for meta in meta_variables]
+
+    processed_meta_variable_priors = set()
+    #-- Construct demographic combo dictionary
+    demo_combos = _getDemographicCombos(meta_variables)
+
+    for non_src_comp in tqdm.tqdm(non_src_comp_indices, desc='Linking Sources', leave=False):
+        for non_src_state in bkb.getAllComponentINodeIndices(non_src_comp):
+            #print(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(*(non_src_comp, non_src_state)))
+            try:
+                snodes = S_nodes_by_head[non_src_comp][non_src_state]
+            except KeyError:
+                print('Warning: {} = {} has no incoming S nodes.'.format(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(non_src_comp, non_src_state)))
+                continue
+            for snode in snodes:
+                non_src_tail = list()
+                for tail_idx in range(snode.getNumberTail()):
+                    tail_comp, tail_state = snode.getTail(tail_idx)
+                    if tail_comp in src_comp_indices:
+                        src_ = (tail_comp, tail_state)
+                    else:
+                        non_src_tail.append((tail_comp, tail_state))
+                #-- Check for illegal source before linking. 
+                found_illegal = False
+                for illegal_src_val in illegal_source_strings:
+                    if illegal_src_val in bkb.getComponentINodeName(*src_):
+                        found_illegal = True
+                        break
+                if found_illegal:
+                    continue
+                prior_snode = S_nodes_by_head[src_[0]][src_[1]][0]
+                prior_prob = prior_snode.probability
+                bkb, processed_meta_variable_priors = _linkSrcToDemographicCombinations(demo_combos,
+                                                                                        bkb,
+                                                                                        (non_src_comp,
+                                                                                         non_src_state),
+                                                                                        src_,
+                                                                                        non_src_tail,
+                                                                                        prior_prob,
+                                                                                        src_hashs,
+                                                                                        src_hashs_inverse,
+                                                                                        src_population_data,
+                                                                                        processed_meta_variable_priors)
+                #-- delete the prior snode
+                try:
+                    bkb.removeSNode(prior_snode)
+                except:
+                    pass
+                if not found_illegal:
+                    #-- Delete other S node
+                    try:
+                        bkb.removeSNode(snode)
+                    except:
+                        pass
+    return bkb
+
+def _processOptionDependency(option, option_dependencies, bkb, matched_srcs, src_population, src_population_data, include_src_tags):
     #-- Get consistent option combinations
     tail_product = [combo for combo in itertools.product(option_dependencies, [True, False])]
     tail_combos = list()
@@ -511,6 +812,7 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
     probs_prior = [float(count[1]) / len(src_population) for count in counts]
     probs_cond = [probs_joint[i] / probs_prior[i] for i in range(len(counts))]
 
+    processed_src_tags = set()
     #-- Setup each S-node
     for j, combo in enumerate(combos):
         head, tail = combo
@@ -518,12 +820,50 @@ def _processOptionDependency(option, option_dependencies, bkb, src_population, s
         comp_head_idx, i_node_head_idx = _processDependencyHead(head, bkb)
         #-- Process Tail
         processed_tail = _processDependecyTail(tail, bkb)
+        if include_src_tags:
+            bkb, src_tag, processed_src_tags = _processSrcTags(bkb, comp_head_idx, i_node_head_idx, matched_srcs, src_population, processed_src_tags)
+            src_tag = [src_tag]
+        else:
+            src_tag = list()
         #-- Add Snode
         if probs_cond[j] > 0:
-            bkb.addSNode(BKB_S_node(init_component_index=comp_head_idx, init_state_index=i_node_head_idx, init_probability=probs_cond[j], init_tail=processed_tail))
-
+            bkb.addSNode(BKB_S_node(init_component_index=comp_head_idx, init_state_index=i_node_head_idx, init_probability=probs_cond[j], init_tail=processed_tail + src_tag))
     return bkb
 
+def _processSrcTags(bkb, comp_head, state_head, matched_srcs, src_population, processed_src_tags):
+    #print(matched_srcs)
+    #print(src_population)
+    #input()
+    #print('Processing: {} {}'.format(comp_head, state_head))
+    #input()
+    if bkb.getComponentINodeName(comp_head, state_head) == 'True':
+        src_name = '[{}]_{}'.format(','.join([str(src_num) for src_num in matched_srcs]),
+                                    ','.join([str(src_population[src_num]) for src_num in matched_srcs]))
+    else:
+        src_name = '[{}]_{}'.format(','.join([str(src_num) for src_num in set(src_population.keys()) - matched_srcs]),
+                                     ','.join([str(src_population[src_num]) for src_num in set(src_population.keys()) - matched_srcs]))
+
+    src_tag_comp = bkb.addComponent('Collection[{} = {}]'.format(bkb.getComponentName(comp_head), bkb.getComponentINodeName(comp_head, state_head)))
+    src_tag_state = bkb.addComponentState(src_tag_comp, src_name)
+    #-- Add tag priors
+    if (src_tag_comp, src_tag_state) not in processed_src_tags:
+        bkb.addSNode(BKB_S_node(init_component_index=src_tag_comp,
+                                init_state_index=src_tag_state,
+                                init_probability=1))
+        processed_src_tags.add((src_tag_comp, src_tag_state))
+    return bkb, (src_tag_comp, src_tag_state), processed_src_tags
+'''
+    if other_tail is None:
+        snode_1 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_true_idx, init_probability=prob, init_tail=[(src_tag_true_comp, src_tag_true_state)])
+        snode_2 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_false_idx, init_probability=1-prob, init_tail=[(src_tag_false_comp, src_tag_false_state)])
+    else:
+        snode_1 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_true_idx, init_probability=prob, init_tail=[(src_tag_true_comp, src_tag_true_state)] + other_tail)
+        snode_2 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_false_idx, init_probability=1-prob, init_tail=[(src_tag_false_comp, src_tag_false_state)] + other_tail)
+
+        bkb.addSNode(snode_1)
+        bkb.addSNode(snode_2)
+    return bkb
+'''
 def _collectBkbBottomINodes(bkb):
     #-- Collect all I-nodes that are not present in any snode tails. Probably can optimize this. Needs a cycle check.
     #print(bkb)
@@ -619,7 +959,7 @@ def _addTargetToLastTopologVariables(target, bkb, src_population, src_population
         transformed_meta[bkb.getComponentName(target_comp_idx)] = 'True'
     return bkb, transformed_meta
 
-def _addDemographicOption(option, bkb, src_population, src_population_data, option_dependencies=list()):
+def _addDemographicOption(option, bkb, src_population, src_population_data, option_dependencies=list(), include_src_tags=False):
     prop, op_str, val = option
     op = _process_operator(op_str)
     matched_srcs = set()
@@ -641,20 +981,29 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
     comp_idx = bkb.addComponent('{} {} {}'.format(prop, op_str, val))
     inode_true_idx = bkb.addComponentState(comp_idx, 'True')
     inode_false_idx = bkb.addComponentState(comp_idx, 'False')
+    #bkb.makeGraph()
 
     #-- Create option dictionary
     options_dict = {bkb.getComponentName(comp_idx): bkb.getComponentINodeName(comp_idx, inode_true_idx)}
 
     #-- If no chain rule dependencies, just add prior s-nodes
     if len(option_dependencies) == 0:
-        snode_1 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_true_idx, init_probability=prob)
-        snode_2 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_false_idx, init_probability=1-prob)
+        if include_src_tags:
+            bkb, src_tag_true, _ = _processSrcTags(bkb, comp_idx, inode_true_idx, matched_srcs, src_population, set())
+            bkb, src_tag_false, _ = _processSrcTags(bkb, comp_idx, inode_false_idx, matched_srcs, src_population, set())
+            src_tag_true = [src_tag_true]
+            src_tag_false = [src_tag_false]
+        else:
+            src_tag_true = list()
+            src_tag_false = list()
+        snode_1 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_true_idx, init_probability=prob, init_tail=src_tag_true)
+        snode_2 = BKB_S_node(init_component_index=comp_idx, init_state_index=inode_false_idx, init_probability=1-prob, init_tail=src_tag_false)
         bkb.addSNode(snode_1)
         bkb.addSNode(snode_2)
 
     #-- Process Dependencies
     else:
-        bkb = _processOptionDependency(option, option_dependencies, bkb, src_population, src_population_data)
+        bkb = _processOptionDependency(option, option_dependencies, bkb, matched_srcs, src_population, src_population_data, include_src_tags)
 
     return bkb, options_dict, matched_srcs
 
