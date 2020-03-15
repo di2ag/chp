@@ -3,6 +3,8 @@ import sys
 import pickle
 import json
 import csv
+import io
+import contextlib
 
 class Query:
     def __init__(self, evidence=dict(),
@@ -59,15 +61,17 @@ class Query:
 
         #-- Potentially save out JSON Results
         if self.result is not None:
-            inode_contrib = self.result.process_inode_contributions()
+            inode_contrib = self.result.process_inode_contributions(include_srcs=False)
             result_dict = {'result': {'Updates': self.result.process_updates(),
                                       'Contributions': {' '.join(target): df.to_dict()
                                                         for target, df in self.result.contribs_to_dataframes(inode_contrib).items()},
-                                      'Explanations': self.jsonExplanations()}}
+                                      'Explanations': self.jsonExplanations(),
+                                      'Report': self.getReportString()}}
         elif self.independ_result is not None:
             result_dict = {'result': {'Updates': self.independ_result,
                                       'Contributions': None,
-                                      'Explanations': self.jsonExplanations()}}
+                                      'Explanations': self.jsonExplanations(),
+                                      'Report': self.getReportString()}}
 
             json_dict.update(result_dict)
         json_file = os.path.join(directory, '{}.json'.format(self.name))
@@ -264,6 +268,13 @@ class Query:
             return False
         #print(self.evidence)
 
+    def getReportString(self):
+        #-- Redirect sys.stdout to a string memory buffer.
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            self.getReport()
+        return f.getvalue()
+
     def getReport(self):
         string = '---- Query Details -----\n'
         string += 'Demographic Evidence:\n'
@@ -278,7 +289,7 @@ class Query:
             string += '\t{}\n'.format(target)
         print(string)
         if self.result is not None:
-            self.result.summary()
+            self.result.summary(include_srcs=False)
             print('Computed in {} sec.'.format(self.compute_time))
             print('------ Explanations ------')
             print(self.printExplanations())

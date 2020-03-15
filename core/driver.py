@@ -8,9 +8,18 @@ import pickle
 from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 
 sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/ncats/src/bkb-pathway-provider/core')
 
 from reasoner import Reasoner
 from query import Query
+
+#-- Reasoner Controls
+INTERPOLATION = 'independence'
+TARGET_STRATEGY = 'explicit'
+MAX_NEW_EV = 5
+
+AVALIABLE_DEMOGRAPHICS= set(['Gender', 'Process_Activity(s)', 'PathM', 'Process_Type(s)',\
+                             'PathN', 'Survival_Time', 'Biological_Object(s)', 'PathT', 'Age_of_Diagnosis'])
 
 class Driver:
     def __init__(self, config_file):
@@ -23,14 +32,15 @@ class Driver:
         self.fused_bkb_path = self.config['fused_bkb_path']
         self.ncats_dir = self.config['ncats_dir']
         self.src_metadata_path = self.config['src_metadata_path']
+        self.gene_var_direct = self.config['gene_var_direct']
 
         self.fused_bkb = BKB()
         self.fused_bkb.load(self.fused_bkb_path)
-        self.reasoner = Reasoner(self.fused_bkb, None)
+        self.reasoner = Reasoner(self.fused_bkb, gene_var_direct=self.gene_var_direct, max_new_ev=MAX_NEW_EV)
         self.reasoner.set_src_metadata(self.src_metadata_path)
 
     def run_query(self, query):
-        result_query = self.reasoner.analyze_query(query)
+        result_query = self.reasoner.analyze_query(query, target_strategy=TARGET_STRATEGY, interpolation=INTERPOLATION)
         return result_query
 
     def run(self, i=0):
@@ -212,8 +222,6 @@ class Driver:
                     print('Unrecognized selection.')
 
     def collectVariables(self):
-        #-- Demographics exposed to the user.
-        availableDemographics = set(['Gender', 'Patient ID', 'Survival_Time', 'Age_of_Diagnosis', 'Drug_Name(s)'])
         #-- Get all inodes
         all_inode_names = self.fused_bkb.getINodeNames()
         #-- Filter out sources
@@ -221,7 +229,7 @@ class Driver:
         #-- Collect avaliable demographics
         demographics = {demo_name: list(demo_range)
                         for demo_name, demo_range in self.reasoner.metadata_ranges.items()
-                        if demo_name in availableDemographics}
+                        if demo_name in AVALIABLE_DEMOGRAPHICS}
         return {'genetic_info': inode_names,
                 'demographic_info': demographics}
 

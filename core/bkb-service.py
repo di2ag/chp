@@ -6,6 +6,7 @@ import pickle
 import subprocess
 
 sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/ncats/src/bkb-pathway-provider/core')
 
 #from reasoner import Reasoner
 from query import Query
@@ -15,14 +16,22 @@ PASSED_JSON_FILE = '/home/cyakaboski/passed_message.json'
 NODE = 'c-dell-m630-0-11'
 SAVE_DIR = '/home/cyakaboski/temp'
 BKB_PATHWAY_CORE_DIR = '/home/cyakaboski/src/python/projects/bkb-pathway-provider/core'
-
+'''
+PASSED_JSON_FILE = '/home/ncats/passed_message.json'
+NODE = 'c-dell-m630-0-11'
+SAVE_DIR = '/home/ncats/tmp'
+BKB_PATHWAY_CORE_DIR = '/home/ncats/src/bkb-pathway-provider/core'
+'''
 def processUiQuery(dict_):
     query_dict = dict()
     query_dict['name'] = dict_['name']
     query_dict['evidence'] = dict_['genetic_evidence']
     query_dict['targets'] = dict_['genetic_targets']
-    query_dict['meta_evidence'] = dict_['demographic_evidence']
-    query_dict['meta_targets'] = dict_['demographic_targets']
+    if len(dict_['demographic_evidence']) == 0:
+        query_dict['meta_evidence'] = None
+    else:
+        query_dict['meta_evidence'] = [tuple(demo) for demo in dict_['demographic_evidence']]
+    query_dict['meta_targets'] = [tuple(demo) for demo in dict_['demographic_targets']]
 
     query = Query(**query_dict)
     return query
