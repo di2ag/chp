@@ -815,10 +815,15 @@ def _processOptionDependency(option, option_dependencies, bkb, matched_srcs, src
             if all(truth_prior):
                 count_prior += 1
         counts.append((count_joint, count_prior))
-
     probs_joint = [float(count[0]) / len(src_population) for count in counts]
     probs_prior = [float(count[1]) / len(src_population) for count in counts]
-    probs_cond = [probs_joint[i] / probs_prior[i] for i in range(len(counts))]
+    probs_cond = []
+    for idx, prob_join in enumerate(probs_joint):
+        if probs_prior[idx] == 0:
+            probs_cond.append(0)
+        else:
+            probs_cond.append( prob_join / probs_prior[idx] )
+    #probs_cond = [probs_joint[i] / probs_prior[i] for i in range(len(counts))]
 
     processed_src_tags = set()
     #-- Setup each S-node
