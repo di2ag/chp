@@ -3,13 +3,13 @@ import sys
 import subprocess
 import json
 
-#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-sys.path.append('/home/ncats/live/core')
+sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/ncats/live/core')
 
 from query import Query
 
-#SERVICE_PATH = '/home/cyakaboski/src/python/projects/bkb-pathway-provider/core'
-SERVICE_PATH = '/home/ncats/live/core'
+SERVICE_PATH = '/home/cyakaboski/src/python/projects/bkb-pathway-provider/core'
+#SERVICE_PATH = '/home/ncats/live/core'
 
 def saveLikeNcatsClient(query, json_file=None):
     #-- Make dictionary

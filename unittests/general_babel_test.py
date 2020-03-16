@@ -37,7 +37,7 @@ query0 = Query(evidence={'_mut_TMEM245': 'True'},
                meta_targets=[('Survival_Time', '>=', 300)])
 
 #-- Run the query.
-query = reasoner.analyze_query(query0, check_mutex=False, interpolation='correlation')
+query = reasoner.analyze_query(query0, check_mutex=False, target_strategy='chain', interpolation='correlation')
 
 #-- Return the report
 query.getReport()

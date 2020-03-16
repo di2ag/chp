@@ -7,8 +7,8 @@ import io
 import contextlib
 
 class Query:
-    def __init__(self, evidence=dict(),
-                 targets=list(),
+    def __init__(self, evidence=None,
+                 targets=None,
                  marginal_evidence=None,
                  type='updating',
                  name='query0',

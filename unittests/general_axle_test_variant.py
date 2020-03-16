@@ -1,4 +1,5 @@
 import sys
+import os
 
 from pybkb import bayesianKnowledgeBase as BKB
 from pybkb.core.python_base.reasoning import checkMutex
@@ -32,14 +33,16 @@ reasoner.set_src_metadata(patient_data_file)
 #print(reasoner.metadata_ranges)
 
 #-- Make a query (evidence is for genetic info, and meta_ is for demographic info)
-query0 = Query(evidence={"var_5'FLANK=": "True",
+query0 = Query(name='sample_independ',
+               evidence={"var_5'FLANK=": "True",
                          "var_3'UTR=": "True"},
-               targets=list(),
-               meta_evidence=None,
-               meta_targets=[('Survival_Time', '>=', 365)])
+               targets=None,
+               meta_evidence=[('Age_of_Diagnosis', '>=', 20000)],
+               meta_targets=[('Survival_Time', '>=', 943)])
 
 #-- Run the query.
 query = reasoner.analyze_query(query0, check_mutex=False, target_strategy='explicit', interpolation='independence')
 
 #-- Return the report
-#query.getReport()
+query.save(os.getcwd())
+query.getReport()

@@ -43,8 +43,8 @@ query = reasoner.analyze_query(query0, check_mutex=False, target_strategy='expli
 query.getReport()
 '''
 #-- Make a query (evidence is for genetic info, and meta_ is for demographic info)
-query0 = Query(evidence=dict(),
-               targets=list(),
+query0 = Query(evidence=None,
+               targets=None,
                meta_evidence=[('Age_of_Diagnosis', '>=',20000)],
                meta_targets=[('Survival_Time', '>=', 300)])
 

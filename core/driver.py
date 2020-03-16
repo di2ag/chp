@@ -8,7 +8,7 @@ import pickle
 from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 
 sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-#sys.path.append('/home/ncats/src/bkb-pathway-provider/core')
+#sys.path.append('/home/ncats/live/core')
 
 from reasoner import Reasoner
 from query import Query

@@ -11,7 +11,7 @@ import time
 import zlib
 
 sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-#sys.path.append('/home/ncats/src/bkb-pathway-provider/core')
+#sys.path.append('/home/ncats/live/core')
 #sys.path.append('/home/ghyde/bkb-pathway-provider/core')
 
 from query import Query
@@ -441,6 +441,10 @@ class Reasoner:
         query.patient_data = self.metadata
         query.target_strategy = target_strategy
         query.interpolation = interpolation
+        if query.evidence is None:
+            query.evidence = dict()
+        if query.targets is None:
+            query.targets = list()
 
         if self.gene_var_direct is not None and self.max_new_ev is not None:
                     query.gene_var_direct = self.gene_var_direct
@@ -974,7 +978,7 @@ def _addTargetToLastTopologVariables(target, bkb, src_population, src_population
         transformed_meta[bkb.getComponentName(target_comp_idx)] = 'True'
     return bkb, transformed_meta
 
-def _addDemographicOption(option, bkb, src_population, src_population_data, option_dependencies=list(), include_src_tags=False):
+def _addDemographicOption(option, bkb, src_population, src_population_data, option_dependencies=None, include_src_tags=False):
     prop, op_str, val = option
     op = _process_operator(op_str)
     matched_srcs = set()
@@ -1002,7 +1006,7 @@ def _addDemographicOption(option, bkb, src_population, src_population_data, opti
     options_dict = {bkb.getComponentName(comp_idx): bkb.getComponentINodeName(comp_idx, inode_true_idx)}
 
     #-- If no chain rule dependencies, just add prior s-nodes
-    if len(option_dependencies) == 0:
+    if option_dependencies is None or len(option_dependencies) == 0:
         if include_src_tags:
             bkb, src_tag_true, _ = _processSrcTags(bkb, comp_idx, inode_true_idx, matched_srcs, src_population, set())
             bkb, src_tag_false, _ = _processSrcTags(bkb, comp_idx, inode_false_idx, matched_srcs, src_population, set())
