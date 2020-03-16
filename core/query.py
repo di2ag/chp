@@ -40,13 +40,15 @@ class Query:
                 pickle.dump(file=pickle_file, obj=self)
 
             #-- Save out each piece in seperate files
-            with open(os.path.join(directory, '{}.evid'.format(self.name)), 'w') as f_:
-                for comp_name, state_name in self.evidence.items():
-                    f_.write('{},{}\n'.format(comp_name, state_name))
+            if self.evidence is not None:
+                with open(os.path.join(directory, '{}.evid'.format(self.name)), 'w') as f_:
+                    for comp_name, state_name in self.evidence.items():
+                        f_.write('{},{}\n'.format(comp_name, state_name))
 
-            with open(os.path.join(directory, '{}.targ'.format(self.name)), 'w') as f_:
-                for comp_name in self.targets:
-                    f_.write('{}\n'.format(comp_name))
+            if self.targets is not None:
+                with open(os.path.join(directory, '{}.targ'.format(self.name)), 'w') as f_:
+                    for comp_name in self.targets:
+                        f_.write('{}\n'.format(comp_name))
 
             #-- Save out bkb
             if self.bkb is not None:
@@ -283,11 +285,13 @@ class Query:
             for evid in self.meta_evidence:
                 string += '\t{} {} {}\n'.format(evid[0], evid[1], evid[2])
         string += 'Evidence:\n'
-        for rvName, stateName in self.evidence.items():
-            string += '\t{} = {}\n'.format(rvName, stateName)
+        if self.evidence is not None:
+            for rvName, stateName in self.evidence.items():
+                string += '\t{} = {}\n'.format(rvName, stateName)
         string += 'Targets:\n'
-        for target in self.targets:
-            string += '\t{}\n'.format(target)
+        if self.targets is not None:
+            for target in self.targets:
+                string += '\t{}\n'.format(target)
         print(string)
         if self.result is not None:
             self.result.summary(include_srcs=False)
