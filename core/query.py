@@ -105,8 +105,6 @@ class Query:
         for q_ in self.independ_queries:
             contribs.append(q_.result.process_inode_contributions(include_srcs=False))
         target_intersect = set.intersection(*[set(contrib.keys()) for contrib in contribs])
-        #print(target_intersect)
-        #input()
         for target in target_intersect:
             target_dict = dict()
             for contrib in contribs:
@@ -117,7 +115,6 @@ class Query:
                     else:
                         target_dict[inode] = cont
             independent_contribs[target] = target_dict
-        #print(independent_contribs)
         dfs = dict()
         for target, contrib_dict in independent_contribs.items():
             data_dict = {'I-node': list(), 'Contribution': list()}
@@ -134,7 +131,7 @@ class Query:
         explain_dict = dict()
         if self.independ_result is not None:
             explain_dict['Assumptions'] = 'Query assumes independence between genetic evidence.'
-            explain_dict['Sensitivity'] = ['No sensitivity information for results with independence assumption.']
+            explain_dict['Sensitivity'] = ['No sensitivity information is a available in the contributions field.']
             mostSigPatsIndepend = dict()
             query_patients = dict()
             for q in self.independ_queries:
@@ -157,11 +154,10 @@ class Query:
                     pat_intersect[strat][target] = set.intersection(*pats)
             for strat, target_data in mostSigPatsIndepend.items():
                 for target, data in target_data.items():
-                    if data is not None and strat == 'MostSignificantPatients':
+                    if data is not None and strat == 'Most Significant Patients':
                         unsig_pats = set(data.keys()) - pat_intersect[strat][target]
                         for pat_id in unsig_pats: del mostSigPatsIndepend[target][pat_id]
-            #print(mostSigPatsIndepend)
-            explain_dict['Most Significant Patients'] = mostSigPatsIndepend
+            explain_dict['Patient Analysis'] = mostSigPatsIndepend
             explain_dict['Interpolation Strategy'] = 'Used gene and variant independence as interpolation strategy.'
             return explain_dict
         else:
@@ -186,7 +182,7 @@ class Query:
             contrib_explain = 'The most sensitive variables for {} are {}'.format(target_str,
                                                                                     ', '.join(most_sig_inodes))
             explain_dict['Sensitivity'].append(contrib_explain)
-        explain_dict['Most Significant Patients'] = self.getSourcePatientAnalysis()
+        explain_dict['Patient Analysis'] = self.getSourcePatientAnalysis()
         if self.interpolation is None or self.interpolation == 'standard':
             explain_dict['Interpolation Strategy'] = 'No interpolation stradegy was used.'
         elif self.interpolation == 'independence':
@@ -222,9 +218,9 @@ class Query:
 
     def getSourcePatientAnalysis(self):
         inode_dict = self.result.process_inode_contributions()
-        data = {'AllInvolvedPatients': dict(), 'MostSignificantPatients': dict()}
+        data = {'All Involved Patients': dict(), 'Most Significant Patients': dict()}
         for target, contrib_dict in inode_dict.items():
-            target_str = str(target)
+            target_str = '{} = {}'.format(target[0], target[1])
             src_hashs = list()
             for inode, contrib in contrib_dict.items():
                 comp_name, state_name = inode
@@ -244,21 +240,21 @@ class Query:
             #-- Most Significant Patients
             src_hashs_intersection = set.intersection(*src_hashs)
             if len(src_hashs_union) == 0:
-                data['AllInvolvedPatients'][target_str] = None
+                data['All Involved Patients'][target_str] = None
             else:
-                data['AllInvolvedPatients'][target_str] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash]
+                data['All Involved Patients'][target_str] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash]
                                                       for src_hash in src_hashs_union}
             if len(src_hashs_intersection) == 0:
-                data['MostSignificantPatients'][target_str] = None
+                data['Most Significant Patients'][target_str] = None
             else:
-                data['MostSignificantPatients'][target_str] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash]
+                data['Most Significant Patients'][target_str] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash]
                                                       for src_hash in src_hashs_intersection}
         return data
 
     def jsonExplanations(self):
         explain = self.getExplanations()
         jsonSigPatients = dict()
-        for target, pat_data_dict in explain['Most Significant Patients'].items():
+        for target, pat_data_dict in explain['Patient Analysis'].items():
             if pat_data_dict is not None:
                 target_str = '{} = {}'.format(target[0], target[1])
                 jsonSigPatients[target_str] = dict()
@@ -268,7 +264,7 @@ class Query:
                         if type(data) == tuple:
                             data = list(data)
                         jsonSigPatients[target_str][patient_idx][info_name] = data
-        explain['Most Significant Patients'] = jsonSigPatients
+        explain['Patient Analysis'] = jsonSigPatients
         return explain
 
     def printExplanations(self):
@@ -277,8 +273,8 @@ class Query:
         string += 'Sensitivity:\n'
         for sense in explain['Sensitivity']:
             string += '\t{}.\n'.format(sense)
-        string += 'Most Significant Patient Information:\n'
-        for strat, target_patient_data in explain['Most Significant Patients'].items():
+        string += 'Patient Analysis:\n'
+        for strat, target_patient_data in explain['Patient Analysis'].items():
             string += '{}:\n'.format(strat)
             for target, pat_data_dict in target_patient_data.items():
                 if pat_data_dict is not None:
