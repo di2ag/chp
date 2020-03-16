@@ -44,5 +44,5 @@ query0 = Query(name='sample_independ',
 query = reasoner.analyze_query(query0, check_mutex=False, target_strategy='explicit', interpolation='independence')
 
 #-- Return the report
-query.save(os.getcwd())
 query.getReport()
+query.save(os.getcwd())

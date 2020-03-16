@@ -5,6 +5,9 @@ import json
 import csv
 import io
 import contextlib
+import pandas as pd
+
+from pybkb.core.python_base.reasoning_result import UpdatingResult
 
 class Query:
     def __init__(self, evidence=None,
@@ -72,7 +75,8 @@ class Query:
             json_dict.update(result_dict)
         elif self.independ_result is not None:
             result_dict = {'result': {'Updates': self.independ_result,
-                                      'Contributions': None,
+                                      'Contributions': {' '.join(target): df.to_dict()
+                                                        for target, df in self.getIndependentContributions().items()},
                                       'Explanations': self.jsonExplanations(),
                                       'Report': self.getReportString()}}
 
@@ -97,14 +101,68 @@ class Query:
         else:
             raise ValueError('Unrecognized file format: {}'.format(file_format))
 
+    def getIndependentContributions(self):
+        independent_contribs = dict()
+        contribs = list()
+        for q_ in self.independ_queries:
+            contribs.append(q_.result.process_inode_contributions(include_srcs=False))
+        target_intersect = set.intersection(*[set(contrib.keys()) for contrib in contribs])
+        #print(target_intersect)
+        #input()
+        for target in target_intersect:
+            target_dict = dict()
+            for contrib in contribs:
+                for inode, cont in contrib[target].items():
+                    if inode in independent_contribs:
+                        target_dict[inode] += cont
+                        target_dict[inode] /= 2
+                    else:
+                        target_dict[inode] = cont
+            independent_contribs[target] = target_dict
+        #print(independent_contribs)
+        dfs = dict()
+        for target, contrib_dict in independent_contribs.items():
+            data_dict = {'I-node': list(), 'Contribution': list()}
+            for inode, contrib in contrib_dict.items():
+                data_dict['I-node'].append('{} = {}'.format(*inode))
+                data_dict['Contribution'].append(contrib)
+            df = pd.DataFrame(data=data_dict)
+            df.sort_values(by=['Contribution'], inplace=True, ascending=False)
+            df.set_index(['I-node'], inplace=True)
+            dfs[target] = df
+        return dfs
+
     def getExplanations(self):
         explain_dict = dict()
         if self.independ_result is not None:
             explain_dict['Assumptions'] = 'Query assumes independence between genetic evidence.'
-            explain_dict['Sensitivity'] = ['No sensitivity information for results with independence assumption yet, try correlation.']
+            explain_dict['Sensitivity'] = ['No sensitivity information for results with independence assumption.']
             mostSigPatsIndepend = dict()
+            query_patients = dict()
             for q in self.independ_queries:
+                pat_dict = q.getSourcePatientAnalysis()
+                for strat, target_data in pat_dict.items():
+                    for target, data in target_data.items():
+                        if strat not in query_patients:
+                            query_patients[strat] = dict()
+                        if data is not None:
+                            if target in query_patients:
+                                query_patients[strat][target].append(set([pat_id for pat_id in data]))
+                            else:
+                                query_patients[strat][target] = [set([pat_id for pat_id in data])]
                 mostSigPatsIndepend.update(q.getSourcePatientAnalysis())
+            pat_intersect = dict()
+            for strat, target_pats in query_patients.items():
+                if strat not in pat_intersect:
+                    pat_intersect[strat] = dict()
+                for target, pats in target_pats.items():
+                    pat_intersect[strat][target] = set.intersection(*pats)
+            for strat, target_data in mostSigPatsIndepend.items():
+                for target, data in target_data.items():
+                    if data is not None and strat == 'MostSignificantPatients':
+                        unsig_pats = set(data.keys()) - pat_intersect[strat][target]
+                        for pat_id in unsig_pats: del mostSigPatsIndepend[target][pat_id]
+            #print(mostSigPatsIndepend)
             explain_dict['Most Significant Patients'] = mostSigPatsIndepend
             explain_dict['Interpolation Strategy'] = 'Used gene and variant independence as interpolation strategy.'
             return explain_dict
@@ -166,23 +224,37 @@ class Query:
 
     def getSourcePatientAnalysis(self):
         inode_dict = self.result.process_inode_contributions()
-        data = dict()
+        data = {'AllInvolvedPatients': dict(), 'MostSignificantPatients': dict()}
         for target, contrib_dict in inode_dict.items():
-            src_hashs = set()
+            target_str = str(target)
+            src_hashs = list()
             for inode, contrib in contrib_dict.items():
                 comp_name, state_name = inode
                 if 'Source' in comp_name:
                     src_split1 = state_name.split('_')[-1]
                     src_split2 = src_split1.split(',')
+                    sources = set()
                     for src_hash_str in src_split2:
                         try:
-                            src_hashs.add(int(src_hash_str))
+                            sources.add(int(src_hash_str))
                         except ValueError:
                             continue
-            if len(src_hashs) == 0:
-                data[target] = None
+                    if len(sources) > 0:
+                        src_hashs.append(sources)
+            #-- All involved Patients
+            src_hashs_union = set.union(*src_hashs)
+            #-- Most Significant Patients
+            src_hashs_intersection = set.intersection(*src_hashs)
+            if len(src_hashs_union) == 0:
+                data['AllInvolvedPatients'][target_str] = None
             else:
-                data[target] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash] for src_hash in src_hashs}
+                data['AllInvolvedPatients'][target_str] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash]
+                                                      for src_hash in src_hashs_union}
+            if len(src_hashs_intersection) == 0:
+                data['MostSignificantPatients'][target_str] = None
+            else:
+                data['MostSignificantPatients'][target_str] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash]
+                                                      for src_hash in src_hashs_intersection}
         return data
 
     def jsonExplanations(self):
@@ -208,21 +280,23 @@ class Query:
         for sense in explain['Sensitivity']:
             string += '\t{}.\n'.format(sense)
         string += 'Most Significant Patient Information:\n'
-        for target, pat_data_dict in explain['Most Significant Patients'].items():
-            if pat_data_dict is not None:
-                string += '{}\n'.format(target)
-                for patient_id, data_dict in pat_data_dict.items():
-                    string += '\t{}:\n'.format(patient_id)
-                    for info_name, data in data_dict.items():
-                        if type(data) == list or type(data) == tuple:
-                            data_str = ','.join([str(val) for val in data])
-                            if len(data_str) > 100:
-                                data_str = data_str[:100] + '...'
-                                string += '\t\t{} = {}\n'.format(info_name, data_str)
-                        elif type(data) == dict:
-                            continue
-                        else:
-                            string += '\t\t{} = {}\n'.format(info_name, data)
+        for strat, target_patient_data in explain['Most Significant Patients'].items():
+            string += '{}:\n'.format(strat)
+            for target, pat_data_dict in target_patient_data.items():
+                if pat_data_dict is not None:
+                    string += '{}\n'.format(target)
+                    for patient_id, data_dict in pat_data_dict.items():
+                        string += '\t{}:\n'.format(patient_id)
+                        for info_name, data in data_dict.items():
+                            if type(data) == list or type(data) == tuple:
+                                data_str = ','.join([str(val) for val in data])
+                                if len(data_str) > 100:
+                                    data_str = data_str[:100] + '...'
+                                    string += '\t\t{} = {}\n'.format(info_name, data_str)
+                            elif type(data) == dict:
+                                continue
+                            else:
+                                string += '\t\t{} = {}\n'.format(info_name, data)
         string += 'Interpolation Strategy Details:\n'
         if type(explain['Interpolation Strategy']) == dict:
             for label, info in explain['Interpolation Strategy'].items():
@@ -305,6 +379,10 @@ class Query:
                 print('\t{}'.format(update))
                 for state, prob in state_dict.items():
                     print('\t\t{} = {}'.format(state, prob))
+            print('Independent Contributions:')
+            for target, df in self.getIndependentContributions().items():
+                print(target)
+                print(df)
             print('------ Explanations ------')
             print(self.printExplanations())
             print('--------Individual Query Reports -------')
