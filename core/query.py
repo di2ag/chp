@@ -7,8 +7,6 @@ import io
 import contextlib
 import pandas as pd
 
-from pybkb.core.python_base.reasoning_result import UpdatingResult
-
 class Query:
     def __init__(self, evidence=None,
                  targets=None,
