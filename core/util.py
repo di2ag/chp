@@ -1,10 +1,73 @@
 import csv
 import numpy as np
 import random
+import pandas as pd
+import tqdm
+from operator import ge, le, eq
 
-from pybkb import bayesianKnowledgeBase as BKB
-from pybkb import BKB_S_node, BKB_component, BKB_I_node
+from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.core.common.bayesianKnowledgeBase import BKB_S_node, BKB_component, BKB_I_node
 
+
+def convert_patient_dict_to_dataframe(patient_dict,
+                                      include_genes=False,
+                                      include_gene_variants=False,
+                                      include_drugs=False,
+                                      other_info=['Age_of_Diagnosis', 'Gender', 'Cancer_Type', 'PathN', 'PathT', 'PathM', 'Survival_Time'],
+                                      encode_strings=False):
+    genes = set()
+    gene_variants = set()
+    drugs = set()
+    for patient, data_dict in patient_dict.items():
+        genes.update(set(data_dict['Patient_Genes']))
+        gene_variants.update(set(data_dict['Patient_Gene_Variants']))
+        drugs.update(set(data_dict['Drug_Name(s)']))
+
+    def helper_fn(collection, name):
+        _data = dict()
+        for item in tqdm.tqdm(collection, desc='Building out columns for {}'.format(name), leave=False):
+            info = list()
+            for _, data_dict in patient_dict.items():
+                if item in data_dict[name]:
+                    info.append(1)
+                else:
+                    info.append(0)
+            _data[item] = info
+        return _data
+
+    data = dict()
+    if include_genes:
+        data.update(helper_fn(genes, 'Patient_Genes'))
+    if include_gene_variants:
+        data.update(helper_fn(gene_variants, 'Patient_Gene_Variants'))
+    if include_drugs:
+        data.update(helper_fn(drugs, 'Drug_Name(s)'))
+
+    encodings = dict()
+    for col in tqdm.tqdm(other_info, desc='Building out other info', leave=False):
+        info = list()
+        for _, data_dict in patient_dict.items():
+            val = data_dict[col]
+            if encode_strings and type(val) == str:
+                if val not in encodings:
+                    encodings[val] = len(encodings)
+                info.append(encodings[val])
+            else:
+                info.append(data_dict[col])
+        data[col] = info
+
+    df = pd.DataFrame(data=data)
+    return df
+
+def process_operator(op):
+    if op == '>=':
+        return ge
+    elif op == '<=':
+        return le
+    elif op == '==':
+        return eq
+    else:
+        raise ValueError('Unknown Operator')
 
 class NcatsProcessor:
     def __init__(self):

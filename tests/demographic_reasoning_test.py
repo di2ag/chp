@@ -5,7 +5,7 @@ import itertools
 from operator import ge, le, eq
 random.seed(116)
 
-from pybkb import bayesianKnowledgeBase as BKB
+from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
 from pybkb.core.python_base.fusion import fuse
 from pybkb.core.python_base.fusion_collapse import collapse_sources
@@ -87,7 +87,7 @@ demo_ev = [('Age', '>=', 50),
 
 demo_tar = [('Survival', '>=', 2)]
 
-reasoner = Reasoner(fused_bkb, patient_data_hash)
+reasoner = Reasoner(fused_bkb, patient_data=patient_data_hash)
 random_genes = {'mut_{}'.format(gene): 'True' for gene in GENES[:5]}
 query0 = Query(evidence=random_genes,
                targets=list(),

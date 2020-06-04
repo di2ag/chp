@@ -64,7 +64,8 @@ class Reasoner:
                 raise ValueError('You must pass either a fused or already collapsed bkb.')
             self.collapsed_bkb = self.getCollapsedBKB(self.fused_bkb)
         #self.collapsed_bkb.save('collapsed.bkb')
-
+        #self.collapsed_bkb.makeGraph()
+        
         #-- Preprocess src hash values
         src_component_indices = self.fused_bkb.getSrcComponents()
         src_hashs = dict()
@@ -251,13 +252,20 @@ class Reasoner:
             demo_fused_bkb.save('demo_fused_t1.bkb')
             #-- Clean demo fusion graph, i.e. delete weird inodes
             S_nodes_by_head = demo_fused_bkb.constructSNodesByHead()
+            snodes_to_remove = []
             src_comp_indices = demo_fused_bkb.getSrcComponents()
             for src_comp in src_comp_indices:
                 for src_state in demo_fused_bkb.getAllComponentINodeIndices(src_comp):
-                    if len(S_nodes_by_head[src_comp][src_state]) > 0:
+                    if len(S_nodes_by_head[(src_comp, src_state)]) > 0:
                         #print('Here')
-                        for snode in S_nodes_by_head[src_comp][src_state][1:]:
-                            demo_fused_bkb.removeSNode(snode)
+                        for snode in S_nodes_by_head[(src_comp, src_state)]:
+                            if snode.getNumberTail() > 0:
+                                snodes_to_remove.append(snode)
+            for snode in snodes_to_remove:
+                try:
+                    demo_fused_bkb.removeSNode(snode)
+                except KeyError:
+                    continue
             #print(checkMutex(demo_fused_bkb))
             #demo_fused_bkb.makeGraph()
             #input()
@@ -725,15 +733,16 @@ def _addDemographicOptionsExplicitly(meta_variables, bkb, src_hashs, src_hashs_i
     #-- Construct demographic combo dictionary
     demo_combos = _getDemographicCombos(meta_variables)
 
+    snodes_to_remove = []
     for non_src_comp in tqdm.tqdm(non_src_comp_indices, desc='Linking Sources', leave=False):
         for non_src_state in bkb.getAllComponentINodeIndices(non_src_comp):
             #print(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(*(non_src_comp, non_src_state)))
             try:
-                snodes = S_nodes_by_head[non_src_comp][non_src_state]
+                snodes = S_nodes_by_head[(non_src_comp, non_src_state)]
             except KeyError:
                 print('Warning: {} = {} has no incoming S nodes.'.format(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(non_src_comp, non_src_state)))
                 continue
-            for snode in snodes:
+            for snode in frozenset(snodes):
                 non_src_tail = list()
                 for tail_idx in range(snode.getNumberTail()):
                     tail_comp, tail_state = snode.getTail(tail_idx)
@@ -749,7 +758,7 @@ def _addDemographicOptionsExplicitly(meta_variables, bkb, src_hashs, src_hashs_i
                         break
                 if found_illegal:
                     continue
-                prior_snode = S_nodes_by_head[src_[0]][src_[1]][0]
+                prior_snode = find_prior_snode(S_nodes_by_head[(src_[0], src_[1])])
                 prior_prob = prior_snode.probability
                 bkb, processed_meta_variable_priors = _linkSrcToDemographicCombinations(demo_combos,
                                                                                         bkb,
@@ -764,16 +773,28 @@ def _addDemographicOptionsExplicitly(meta_variables, bkb, src_hashs, src_hashs_i
                                                                                         processed_meta_variable_priors)
                 #-- delete the prior snode
                 try:
-                    bkb.removeSNode(prior_snode)
+                    snodes_to_remove.append(prior_snode)
+                    #bkb.removeSNode(prior_snode)
                 except:
                     pass
                 if not found_illegal:
                     #-- Delete other S node
                     try:
-                        bkb.removeSNode(snode)
+                        snodes_to_remove.append(snode)
+                        #bkb.removeSNode(snode)
                     except:
                         pass
+    for _snode in snodes_to_remove:
+        try:
+            bkb.removeSNode(_snode)
+        except KeyError:
+            continue
     return bkb
+
+def find_prior_snode(snodes):
+    for snode in snodes:
+        if snode.getNumberTail() == 0:
+            return snode
 
 def _processOptionDependency(option, option_dependencies, bkb, matched_srcs, src_population, src_population_data, include_src_tags):
     #-- Get consistent option combinations
@@ -1098,11 +1119,12 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
     for non_src_comp in tqdm.tqdm(non_src_comp_indices, desc='Linking Sources', leave=False):
         for non_src_state in bkb.getAllComponentINodeIndices(non_src_comp):
             try:
-                snodes = S_nodes_by_head[non_src_comp][non_src_state]
+                snodes = S_nodes_by_head[(non_src_comp, non_src_state)]
             except KeyError:
                 print('Warning: {} = {} has no incoming S nodes.'.format(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(non_src_comp, non_src_state)))
                 continue
-            for snode in snodes:
+            snodes_to_remove = []
+            for snode in frozenset(snodes):
                 prob = snode.probability
                 src_tails = list()
                 non_src_tails = list()
@@ -1125,19 +1147,26 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
                             break
                     if found_illegal:
                         continue
-                    prior_src_snode = S_nodes_by_head[src_tail_comp][src_tail_state][0]
+                    prior_src_snode = find_prior_snode(S_nodes_by_head[(src_tail_comp, src_tail_state)])
                     #prob = prior_src_snode.probability
                     bkb, processed_srcs = _linkSource(src_tail_comp, src_tail_state, non_src_comp, non_src_state, non_src_tails, prob,
                                       comp_idx, inode_true_idx, inode_false_idx, bkb, matched_srcs, src_hashes, src_hashs_inverse, processed_srcs)
                     #-- delete the prior snode
                     try:
-                        bkb.removeSNode(prior_src_snode)
+                        snodes_to_remove.append(prior_src_snode)
+                        #bkb.removeSNode(prior_src_snode)
                     except:
                         pass
                 if len(src_tails) > 0 and not had_illegal:
                     #-- Delete other S node
                     try:
-                        bkb.removeSNode(snode)
+                        snodes_to_remove.append(snode)
+                        #bkb.removeSNode(snode)
                     except:
                         pass
+            for _snode in snodes_to_remove:
+                try:
+                    bkb.removeSNode(_snode)
+                except KeyError:
+                    continue
     return bkb
