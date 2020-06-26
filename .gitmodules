@@ -1,0 +1,3 @@
+[submodule "submodules/PyBKB"]
+	path = submodules/PyBKB
+	url = /home/public/git/modules/PyBKB.git
