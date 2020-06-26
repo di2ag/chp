@@ -5,7 +5,7 @@ from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split
 import numpy as np
 
-from util import convert_patient_dict_to_dataframe, process_operator
+from chp.core.util import convert_patient_dict_to_dataframe, process_operator
 
 
 def prepareData(patient_dict, target,

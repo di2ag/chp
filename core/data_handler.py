@@ -10,9 +10,10 @@ import copy
 
 from pybkb.core.cpp_base.fusion import fuse as cpp_fuse
 from pybkb.core.python_base.fusion import fuse as py_fuse
-from patientBKFProcessor_Axle import PatientProcessor
-from pathwayBKFProcessor import PathwayProcessor
-from reactomePathwayProcessor import ReactomePathwayProcessor
+
+from chp.core.patientBKFProcessor_Axle import PatientProcessor
+from chp.core.pathwayBKFProcessor import PathwayProcessor
+from chp.core.reactomePathwayProcessor import ReactomePathwayProcessor
 
 class DataDriver:
     def __init__(self, config_file):

@@ -5,10 +5,10 @@ from pybkb.core.python_base.reasoning import checkMutex
 
 #!!!!!!!!!! Change to your local bkb-pathway-core directory.
 #sys.path.append('/home/ghyde/bkb-pathway-provider/core')
-sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
 
-from reasoner import Reasoner
-from query import Query
+from chp.core.reasoner import Reasoner
+from chp.core.query import Query
 
 #-- Initalize a BKB
 fused_bkb = BKB()

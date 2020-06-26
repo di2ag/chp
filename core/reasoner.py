@@ -10,11 +10,11 @@ from concurrent.futures import ProcessPoolExecutor, wait
 import time
 import zlib
 
-sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
 #sys.path.append('/home/ncats/live/core')
 #sys.path.append('/home/ghyde/bkb-pathway-provider/core')
 
-from query import Query
+from chp.core.query import Query
 
 from pybkb.core.cpp_base.reasoning import revision as cpp_revision
 from pybkb.core.cpp_base.reasoning import updating as cpp_updating

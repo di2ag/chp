@@ -18,11 +18,11 @@ from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, B
 from pybkb.core.python_base.fusion import fuse
 
 #sys.path.append('/home/ghyde/bkb-pathway-provider/core')
-sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
 
-from reasoner import Reasoner
-from query import Query
-from util import process_operator
+from chp.core.reasoner import Reasoner
+from chp.core.query import Query
+from chp.core.util import process_operator
 
 #-- Point to Folder with Patient BKFs
 #DEFAULT_BKF_FOLDER = '/home/public/data/ncats/BabelBKBs/smallProblem'

@@ -5,11 +5,11 @@ import sys
 import pickle
 import subprocess
 
-sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
+#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
 #sys.path.append('/home/ncats/live/core')
 
 #from reasoner import Reasoner
-from query import Query
+from chp.core.query import Query
 
 
 PASSED_JSON_FILE = '/home/cyakaboski/passed_message.json'
