@@ -32,6 +32,7 @@ else:
                                                  'operator': '>=',
                                                  'value': '365'})
     reasoner_std['probability_targets'] = [('Survival', '>=', '365')]
+    reasoner_std['reasoner_id'] = 'explorer'
     for i, node in enumerate(reasoner_std['query_graph']['nodes']):
         if node['id'][0] != 't':
             reasoner_std['query_graph']['edges'].append({'id': 'et{}'.format(i),
