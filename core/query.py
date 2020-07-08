@@ -260,10 +260,11 @@ class Query:
                 jsonSigPatients[target_str] = dict()
                 for patient_idx, data_dict in pat_data_dict.items():
                     jsonSigPatients[target_str][patient_idx] = dict()
-                    for info_name, data in data_dict.items():
-                        if type(data) == tuple:
-                            data = list(data)
-                        jsonSigPatients[target_str][patient_idx][info_name] = data
+                    if not data_dict is None:
+                        for info_name, data in data_dict.items():
+                            if type(data) == tuple:
+                                data = list(data)
+                            jsonSigPatients[target_str][patient_idx][info_name] = data
         explain['Patient Analysis'] = jsonSigPatients
         return explain
 
