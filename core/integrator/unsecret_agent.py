@@ -21,31 +21,14 @@ class UnsecretHandler:
         self.probability_targets = self.query['probability_targets']
 
         self.fused_bkb = BKB()
-        #self.fused_bkb.load('/home/ghyde/bkb-pathway-provider/core/testOldStuffSmall/fusion.bkb')
-        #self.patient_data_file = '/home/ghyde/bkb-pathway-provider/core/testOldStuffSmall/patient_data.pk'
-        self.fused_bkb.load('/home/public/data/ncats/BabelBKBs/collapsedAll/fusion.bkb')
-        self.patient_data_file = '/home/public/data/ncats/BabelBKBs/collapsedAll/patient_data.pk'
+        self.fused_bkb.load('/home/public/data/ncats/BabelBKBs_7-7-2020/All/fusion.bkb')
+        self.patient_data_file = '/home/public/data/ncats/BabelBKBs_7-7-2020/All/patient_data.pk'
         self.reasoner = Reasoner(self.fused_bkb, None)
         self.reasoner.set_src_metadata(self.patient_data_file)
         self.reasoner.cpp_reasoning = False
 
         self.target_strategy = 'chain'
         self.interpolation = 'standard'
-
-#        #-- Collect Node Bindings
-#        self.node_bindings_map = {}
-#        for binding in self.results['node_bindings']:
-#            for qnode_id, knode_id in binding.items():
-#                if knode_id not in self.node_bindings_map:
-#                    self.node_bindings_map[knode_id] = set([qnode_id])
-#                else:
-#                    self.node_bindings_map[knode_id].add(qnode_id)
-#
-#        #-- Hash edges and nodes by ID
-#        self.kedges = {edge['id']: edge for edge in self.kg['edges']}
-#        self.qedges = {edge['id']: edge for edge in self.qg['edges']}
-#        self.knodes = {node['id']: node for node in self.kg['nodes']}
-#        self.qnodes = {node['id']: node for node in self.qg['nodes']}
 
     def checkQuery(self):
         return True
