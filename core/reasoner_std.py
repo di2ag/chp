@@ -5,6 +5,7 @@ import numpy as np
 
 #-- Integrators
 from chp.core.integrator.explorer_agent import ExplorerHandler
+from chp.core.integrator.unsecret_agent import UnsecretHandler
 
 class ReasonerStdHandler:
     def __init__(self, source_ara, json_query=None, dict_query=None):
@@ -22,6 +23,8 @@ class ReasonerStdHandler:
     def getHandler(self):
         if self.integrator == 'explorer':
             handler = ExplorerHandler(self.query)
+        elif self.integrator == 'unsecret':
+            handler = UnsecretHandler(self.query)
         else:
             raise NotImplementedError('Not integrated with {}.'.format(self.integrator))
         return handler
