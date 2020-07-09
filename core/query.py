@@ -6,6 +6,7 @@ import csv
 import io
 import contextlib
 import pandas as pd
+import random
 
 class Query:
     def __init__(self, evidence=None,
@@ -32,6 +33,18 @@ class Query:
         self.target_strategy = None
         self.gene_var_direct = None
         self.max_new_ev = None
+
+    def make_bogus_updates(self):
+        bogus_updates = {}
+        for target in self.meta_targets:
+            for state in ['True', 'False']:
+                comp_name = ' '.join(target)
+                prob = random.random()
+                if comp_name not in bogus_updates:
+                    bogus_updates[comp_name] = {state: prob}
+                else:
+                    bogus_updates[comp_name][state] = 1 - prob
+        return bogus_updates
 
     def save(self, directory, only_json=False):
         if not only_json:
