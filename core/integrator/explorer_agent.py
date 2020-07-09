@@ -5,8 +5,15 @@ import numpy as np
 import random
 import copy
 import uuid
+import os
 
 from chp.core.query import Query
+from chp.core.reasoner import Reasoner
+from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
+from pybkb.core.python_base.fusion import fuse
+
+ABSOLUTE_PATH_TO_BKB = '/home/public/data/ncats/BabelBKBs_7-7-2020/All'
 
 class ExplorerHandler:
     def __init__(self, query):
@@ -30,6 +37,17 @@ class ExplorerHandler:
         self.qedges = {edge['id']: edge for edge in self.qg['edges']}
         self.knodes = {node['id']: node for node in self.kg['nodes']}
         self.qnodes = {node['id']: node for node in self.qg['nodes']}
+
+        #-- Instiatate Reasoner
+        self.fused_bkb = BKB()
+        self.fused_bkb.load('/home/public/data/ncats/BabelBKBs_7-7-2020/All/fusion.bkb')
+        self.patient_data_file = '/home/public/data/ncats/BabelBKBs_7-7-2020/All/patient_data.pk'
+        self.reasoner = Reasoner(self.fused_bkb, None)
+        self.reasoner.set_src_metadata(self.patient_data_file)
+        self.reasoner.cpp_reasoning = False
+
+        self.target_strategy = 'explicit'
+        self.interpolation = 'standard'
 
     def checkQuery(self):
         return True
@@ -155,79 +173,107 @@ class ExplorerHandler:
 
     def runQueries(self, bogus=True):
         queries = copy.deepcopy(self.chp_queries)
+
+        updated_queries = []
         if bogus:
+            self.bogus_updates = True
             for query in queries:
-                update = {}
-                for target in query.meta_targets:
-                    update['{} = True'.format(' '.join(target))] = random.random()
-                    update['{} = False'.format(' '.join(target))] = random.random()
-                query.result = update
-        self.updated_queries = queries
+                updated_queries.append(query.make_bogus_updates())
+        else:
+            self.bogus_updates = False
+            for query in queries:
+                updated_queries.append(self.reasoner.analyze_query(copy.deepcopy(query),
+                                            save_dir=None,
+                                            target_strategy=self.target_strategy,
+                                            interpolation=self.interpolation))
+        self.updated_queries = updated_queries
         return queries
 
     def constructDecoratedKG(self):
         options, reverse_options = self.getOptions(reverse=True)
         target_edges, unique_targets = self.extractUpdateTargetEdges(options=options)
 
-        #-- Assume only 1 target.
-        update_target_qnode = list(unique_targets)[0]
+        #-- Going to place nodes in the KG for the probability targets but not in the query graph.
 
         inserted_updates = set()
-        results = {'edge_bindings': [], 'node_bindings': []}
+        results = {'edge_bindings': [], 'node_bindings': [], 'probability_target_edges': []}
         for answer, query in zip(self.answers, self.updated_queries):
             #-- Construct update target nodes
             node_bindings = {}
             edge_bindings = {}
-            for update, prob in query.result.items():
-                update_id = str(uuid.uuid4())
-                self.kg['nodes'].append({'id': update_id,
-                                                      'name': update,
-                                                      'type': 'probability',
-                                                      'node_attributes': [{'type': 'float',
-                                                                           'name': 'probability',
-                                                                           'value': str(prob)}]
-                                                     })
-                if update_target_qnode not in node_bindings:
-                    node_bindings[update_target_qnode] = [update_id]
-                else:
-                    node_bindings[update_target_qnode].append(update_id)
-                processed_knode_ids = set()
-                for kedge in answer:
-                    qedge = reverse_options[kedge]
-                    target_knode_id = self.kedges[kedge]['target_id']
-                    source_knode_id = self.kedges[kedge]['source_id']
-                    target_qnode_id = self.qedges[qedge]['target_id']
-                    source_qnode_id = self.qedges[qedge]['source_id']
-                    for knode_id, qnode_id in zip([target_knode_id, source_knode_id], [target_qnode_id, source_qnode_id]):
-                        if knode_id in processed_knode_ids:
-                            continue
-                        processed_knode_ids.add(knode_id)
-                        new_kg_edge_id = str(uuid.uuid4())
-                        self.kg['edges'].append({'id': new_kg_edge_id,
-                                                              'type': 'affects',
-                                                              'relation': 'correlates_with',
-                                                              'source_id': source_knode_id,
-                                                              'target_id': target_knode_id})
-                        #-- Find associated edge in QG for new edge in KG.
-                        found_qg_edge = None
-                        for _qedge in self.qg['edges']:
-                            if _qedge['source_id'] == qnode_id and _qedge['target_id'] == update_target_qnode:
-                                found_qg_edge = _qedge
-                                break
-                        #-- Make node and edge bindings
-                        if qnode_id not in node_bindings:
-                            node_bindings[qnode_id] = [knode_id]
-                        else:
-                            node_bindings[qnode_id].append(knode_id)
-                        if found_qg_edge['id'] not in edge_bindings:
-                            edge_bindings[found_qg_edge['id']] = [new_kg_edge_id]
-                        else:
-                            edge_bindings[found_qg_edge['id']].append(new_kg_edge_id)
-                    #- Add other edge bindings
-                    edge_bindings[reverse_options[kedge]] = [kedge]
+            probability_target_edges = []
+            if self.bogus_updates:
+                processed_updates = query
+            else:
+                processed_updates = query.result.process_updates(normalize=True)
+            for comp_name, state_prob_dict in processed_updates.items():
+                for state_name, prob in state_prob_dict.items():
+                    comp_state_id = str(uuid.uuid4())
+                    self.kg['nodes'].append({'id': comp_state_id,
+                                                          'name': '{} = {}'.format(comp_name, state_name),
+                                                          'type': 'probability',
+                                                          'node_attributes': [{'type': 'float',
+                                                                               'name': 'probability',
+                                                                               'value': str(prob)}]
+                                                         })
+                    '''
+                    if update_target_qnode not in node_bindings:
+                        node_bindings[update_target_qnode] = [update_id]
+                    else:
+                        node_bindings[update_target_qnode].append(update_id)
+                    '''
+                    processed_knode_ids = set()
+                    for kedge in answer:
+                        qedge = reverse_options[kedge]
+                        target_knode_id = self.kedges[kedge]['target_id']
+                        source_knode_id = self.kedges[kedge]['source_id']
+                        target_qnode_id = self.qedges[qedge]['target_id']
+                        source_qnode_id = self.qedges[qedge]['source_id']
+                        #-- create standard edge binding
+                        edge_bindings[qedge] = [kedge]
+
+                        for knode_id, qnode_id in zip([target_knode_id, source_knode_id], [target_qnode_id, source_qnode_id]):
+                            if knode_id in processed_knode_ids:
+                                continue
+                            processed_knode_ids.add(knode_id)
+                            new_kg_edge_id = str(uuid.uuid4())
+
+                            #-- Make node bindings
+                            if qnode_id not in node_bindings:
+                                node_bindings[qnode_id] = [knode_id]
+                            else:
+                                node_bindings[qnode_id].append(knode_id)
+                            #-- make edge from each node in the kg to the update comp_state_node
+                            self.kg['edges'].append({'id': new_kg_edge_id,
+                                                     'type': 'affects',
+                                                     'relation': 'correlates_with',
+                                                     'source_id': knode_id,
+                                                     'target_id': comp_state_id})
+                            probability_target_edges.append(new_kg_edge_id)
+                            ''''
+                            #-- Find associated edge in QG for new edge in KG.
+                            found_qg_edge = None
+                            for _qedge in self.qg['edges']:
+                                if _qedge['source_id'] == qnode_id and _qedge['target_id'] == update_target_qnode:
+                                    found_qg_edge = _qedge
+                                    break
+                            #-- Make node and edge bindings
+                            if qnode_id not in node_bindings:
+                                node_bindings[qnode_id] = [knode_id]
+                            else:
+                                node_bindings[qnode_id].append(knode_id)
+                            if found_qg_edge['id'] not in edge_bindings:
+                                edge_bindings[found_qg_edge['id']] = [new_kg_edge_id]
+                            else:
+                                edge_bindings[found_qg_edge['id']].append(new_kg_edge_id)
+                            '''
+                        #- Add other edge bindings
+                        #edge_bindings[reverse_options[kedge]] = [kedge]
+
             #-- Add to new results
             results['edge_bindings'].append(edge_bindings)
             results['node_bindings'].append(node_bindings)
+            results['probability_target_edges'].append(probability_target_edges)
         reasoner_std = {'query_graph': self.qg,
                         'knowledge_graph': self.kg,
                         'results': results}
