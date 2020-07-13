@@ -18,7 +18,7 @@ setup(
     install_requires=REQUIRED_PACKAGES,
     python_requires='>=3.8',
     dependency_links=[
-        'git+https://github.com/di2ag/PyBKB.git#egg=pybkb'
+        'git+https://github.com/di2ag/PyBKB.git@master#egg=pybkb-1.0.0'
     ]
 )
 
