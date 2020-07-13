@@ -1,3 +1,13 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import csv
 import numpy as np
 import random
@@ -5,8 +15,8 @@ import pandas as pd
 import tqdm
 from operator import ge, le, eq
 
-from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
-from pybkb.core.common.bayesianKnowledgeBase import BKB_S_node, BKB_component, BKB_I_node
+from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.common.bayesianKnowledgeBase import BKB_S_node, BKB_component, BKB_I_node
 
 
 def convert_patient_dict_to_dataframe(patient_dict,

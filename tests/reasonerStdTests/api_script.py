@@ -2,6 +2,7 @@ import requests
 import os
 import pickle
 import json
+import time
 
 query_path = '/home/cyakaboski/src/python/projects/bkb-pathway-provider/tests/reasonerStdTests/sample_query.pk'
 
@@ -11,4 +12,6 @@ if os.path.exists(query_path):
 
 
 payload = {'query': reasoner_std}
-r = requests.post('http://127.0.0.1:8000/submitQuery/', json=payload)
+start_time = time.time()
+r = requests.post('http://129.170.69.138/submitQuery/', json=payload)
+print('response time = {}'.format(time.time() - start_time))

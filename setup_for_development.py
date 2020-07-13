@@ -30,12 +30,12 @@ if os.path.exists(LINK_PATH):
     os.system("rm {}".format(LINK_PATH))
 
 if args.dir is None:
-    os.system("ln -s {} {}".format(WORKING_DIR, LINK_PATH))
+    os.system("ln -s {} {}".format(os.path.join(WORKING_DIR, 'chp'), LINK_PATH))
 else:
-    os.system("ln -s {} {}".format(os.path.join(WORKING_DIR, 'submodules/bkb-pathway-provider'), LINK_PATH))
+    os.system("ln -s {} {}".format(os.path.join(WORKING_DIR, 'submodules/bkb-pathway-provider/chp'), LINK_PATH))
 
 print('Now running PyBKB setup...')
 #-- Run setup for PyBKB
-os.system("cd submodules/PyBKB; python3 setup_for_development.py --env {} --no_copy".format(args.env))
+os.system("cd submodules/PyBKB; python3 setup_for_development.py --env {} --no_copy".format(os.path.join(WORKING_DIR, args.env)))
 
 print('Completed setup.')

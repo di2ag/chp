@@ -1,3 +1,13 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import os
 import sys
 import pickle

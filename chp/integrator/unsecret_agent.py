@@ -1,3 +1,13 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import json
 import itertools
 import tqdm
@@ -6,11 +16,14 @@ import random
 import copy
 import uuid
 
-from chp.core.query import Query
-from chp.core.reasoner import Reasoner
-from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
-from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
-from pybkb.core.python_base.fusion import fuse
+from chp.query import Query
+from chp.reasoner import Reasoner
+
+from chp_data.bkb_handler import BkbDataHandler
+
+from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
+from pybkb.python_base.fusion import fuse
 
 class UnsecretHandler:
     def __init__(self, query):
@@ -20,12 +33,9 @@ class UnsecretHandler:
         self.results = self.query['results']
         self.probability_targets = self.query['probability_targets']
 
-        self.fused_bkb = BKB()
-        self.fused_bkb.load('/home/public/data/ncats/BabelBKBs_7-7-2020/All/fusion.bkb')
-        self.patient_data_file = '/home/public/data/ncats/BabelBKBs_7-7-2020/All/patient_data.pk'
-        self.reasoner = Reasoner(self.fused_bkb, None)
-        self.reasoner.set_src_metadata(self.patient_data_file)
-        self.reasoner.cpp_reasoning = False
+        #-- Instiatate Reasoner
+        self.bkb_data_handler = BkbDataHandler()
+        self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler)
 
         self.target_strategy = 'chain'
         self.interpolation = 'standard'

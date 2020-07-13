@@ -1,3 +1,12 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
 import pandas as pd
 import os
 import pickle
@@ -8,12 +17,12 @@ import ast
 import random
 import copy
 
-from pybkb.core.cpp_base.fusion import fuse as cpp_fuse
-from pybkb.core.python_base.fusion import fuse as py_fuse
+from pybkb.cpp_base.fusion import fuse as cpp_fuse
+from pybkb.python_base.fusion import fuse as py_fuse
 
-from chp.core.patientBKFProcessor_Axle import PatientProcessor
-from chp.core.pathwayBKFProcessor import PathwayProcessor
-from chp.core.reactomePathwayProcessor import ReactomePathwayProcessor
+from chp.patientBKFProcessor_Axle import PatientProcessor
+from chp.pathwayBKFProcessor import PathwayProcessor
+from chp.reactomePathwayProcessor import ReactomePathwayProcessor
 
 class DataDriver:
     def __init__(self, config_file):

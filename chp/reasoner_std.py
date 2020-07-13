@@ -1,11 +1,21 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import json
 import itertools
 import tqdm
 import numpy as np
 
 #-- Integrators
-from chp.core.integrator.explorer_agent import ExplorerHandler
-from chp.core.integrator.unsecret_agent import UnsecretHandler
+from chp.integrator.explorer_agent import ExplorerHandler
+from chp.integrator.unsecret_agent import UnsecretHandler
 
 class ReasonerStdHandler:
     def __init__(self, source_ara, json_query=None, dict_query=None):

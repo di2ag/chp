@@ -1,3 +1,13 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import os
 import random
 import sys
@@ -13,16 +23,13 @@ import argparse
 import ast
 import logging
 
-from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
-from pybkb.core.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
-from pybkb.core.python_base.fusion import fuse
+from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
+from pybkb.python_base.fusion import fuse
 
-#sys.path.append('/home/ghyde/bkb-pathway-provider/core')
-#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-
-from chp.core.reasoner import Reasoner
-from chp.core.query import Query
-from chp.core.util import process_operator
+from chp.reasoner import Reasoner
+from chp.query import Query
+from chp.util import process_operator
 
 #-- Point to Folder with Patient BKFs
 #DEFAULT_BKF_FOLDER = '/home/public/data/ncats/BabelBKBs/smallProblem'

@@ -3,12 +3,10 @@ import sys
 from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 from pybkb.python_base.reasoning import checkMutex
 
-#!!!!!!!!!! Change to your local bkb-pathway-core directory.
-#sys.path.append('/home/ghyde/bkb-pathway-provider/core')
-#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-
 from chp.reasoner import Reasoner
 from chp.query import Query
+
+from chp_data.bkb_handler import BkbDataHandler
 
 #-- Initalize a BKB
 fused_bkb = BKB()
@@ -20,19 +18,11 @@ fused_bkb.load('/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/fusion.b
 patient_data_file = '/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/patient_data.pk'
 withheld_patients_file = '/home/public/data/ncats/AxleBKBS/660Pats6HoldoutSTAGING/withheldPatients.csv'
 '''
-#-- Load in the fused bkb from our datafiles
-fused_bkb.load('/home/public/data/ncats/BabelBKBs/smallProblem/fusion.bkb')
 
-#-- Here are the associated patient data files
-patient_data_file = '/home/public/data/ncats/BabelBKBs/smallProblem/patient_data.pk'
-withheld_patients_file = '/home/public/data/ncats/BabelBKBs/smallProblem/withheldPatients.csv'
+bkb_data_handler = BkbDataHandler(bkb_version='special', dataset_version='babel-small-problem')
+
 #-- Instiante reasoner
-reasoner = Reasoner(fused_bkb=fused_bkb)
-
-
-#-- Set the patient data file 
-reasoner.set_src_metadata(patient_data_file)
-#reasoner.collapsed_bkb.makeGraph()
+reasoner = Reasoner(bkb_data_handler=bkb_data_handler)
 
 #-- If you want to see what genetic or demographic evidence is avaliable, uncomment the line below
 #print(reasoner.metadata_ranges)

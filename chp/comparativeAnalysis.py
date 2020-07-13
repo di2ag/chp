@@ -1,3 +1,13 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import pickle
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -5,7 +15,7 @@ from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split
 import numpy as np
 
-from chp.core.util import convert_patient_dict_to_dataframe, process_operator
+from chp.util import convert_patient_dict_to_dataframe, process_operator
 
 
 def prepareData(patient_dict, target,

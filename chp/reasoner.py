@@ -1,3 +1,13 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import os
 import sys
 import math
@@ -10,31 +20,30 @@ from concurrent.futures import ProcessPoolExecutor, wait
 import time
 import zlib
 
-#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-#sys.path.append('/home/ncats/live/core')
-#sys.path.append('/home/ghyde/bkb-pathway-provider/core')
+from chp.query import Query
 
-from chp.core.query import Query
-
-from pybkb.core.cpp_base.reasoning import revision as cpp_revision
-from pybkb.core.cpp_base.reasoning import updating as cpp_updating
-from pybkb.core.python_base.reasoning import updating as py_updating
-from pybkb.core.python_base.reasoning import checkMutex
-from pybkb.core.python_base.fusion import fuse
-from pybkb.core.python_base.fusion_collapse import collapse_sources
-from pybkb.core.common.bayesianKnowledgeBase import BKB_S_node
-from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.python_base.reasoning import updating as py_updating
+from pybkb.python_base.reasoning import checkMutex
+from pybkb.python_base.fusion import fuse
+from pybkb.python_base.fusion_collapse import collapse_sources
+from pybkb.common.bayesianKnowledgeBase import BKB_S_node
+from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 
 CACHED_BKB_DIR = '/home/public/data/ncats/cachedCollapsedBkb'
 ILLEGAL_SOURCE_STRINGS = ['PatientX', 'noGeneEvidence', 'geneEvidence']
 
 class Reasoner:
-    def __init__(self, fused_bkb=None, collapsed_bkb=None,  patient_data=None, cpp_reasoning=False, gene_var_direct=None, max_new_ev=None):
-        self.fused_bkb = fused_bkb
-        self.metadata = patient_data
-        self.cpp_reasoning = cpp_reasoning
-        self.metadata = patient_data
-        self.collapsed_bkb = collapsed_bkb
+    def __init__(self, bkb_data_handler=None, fused_bkb=None, collapsed_bkb=None,  patient_data=None, gene_var_direct=None, max_new_ev=None):
+        if bkb_data_handler is not None:
+            self.fused_bkb = BKB()
+            self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
+            self.collapsed_bkb = bkb_data_handler.collapsed_bkb_path
+            self.cached_bkb_dir = bkb_data_handler.cached_bkb_dir
+            self.set_src_metadata(bkb_data_handler.patient_data_pk_path)
+        else:
+            self.fused_bkb = fused_bkb
+            self.collapsed_bkb = collapsed_bkb
+            self.cached_bkb_dir = CACHED_BKB_DIR
         if patient_data is not None:
             try:
                 self.setup()
@@ -46,7 +55,7 @@ class Reasoner:
     def getCollapsedBKB(self, fused_bkb):
         #-- First check to see if this bkb has already been collapsed and saved.
         collapsed_bkb_hash_name = zlib.adler32(fused_bkb.to_str().encode('utf-8'))
-        collapsed_bkb_path = os.path.join(CACHED_BKB_DIR, '{}.bkb'.format(collapsed_bkb_hash_name))
+        collapsed_bkb_path = os.path.join(self.cached_bkb_dir, '{}.bkb'.format(collapsed_bkb_hash_name))
         if os.path.exists(collapsed_bkb_path):
             print('Loaded collapsed BKB from memory.')
             collapsed_bkb = BKB()
@@ -155,30 +164,14 @@ class Reasoner:
         #print(query.targets)
         #input()
         start_time = time.time()
-        if self.cpp_reasoning:
-            if query.type == 'revision':
-                res = cpp_revision(query.bkb,
-                               query.evidence,
-                               marginal_evidence=query.marginal_evidence,
-                               targets=query.targets,
-                               file_prefix=query.name)
-            elif query.type == 'updating':
-                res = cpp_updating(query.bkb,
-                               query.evidence,
-                               marginal_evidence=query.marginal_evidence,
-                               targets=query.targets,
-                               file_prefix=query.name)
-            else:
-                raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
+        if query.type == 'revision':
+            raise NotImplementedError('Python Revision is not currently implemented.')
+        elif query.type == 'updating':
+            res = py_updating(query.bkb,
+                           query.evidence,
+                           query.targets)
         else:
-            if query.type == 'revision':
-                raise NotImplementedError('Python Revision is not currently implemented.')
-            elif query.type == 'updating':
-                res = py_updating(query.bkb,
-                               query.evidence,
-                               query.targets)
-            else:
-                raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
+            raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
 
         compute_time = time.time() - start_time
         query.result = res
@@ -468,7 +461,7 @@ class Reasoner:
                                                str(query.meta_targets),
                                                target_strategy,
                                                interpolation]).encode('utf-8'))
-        query_bkb_path = os.path.join(CACHED_BKB_DIR, '{}.bkb'.format(query_bkb_hash))
+        query_bkb_path = os.path.join(self.cached_bkb_dir, '{}.bkb'.format(query_bkb_hash))
 
         #-- Duplicate Gene Evidence
         genetic_evidence = copy.deepcopy(query.evidence)

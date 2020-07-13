@@ -1,3 +1,13 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import json
 import argparse
 import os
@@ -5,12 +15,7 @@ import sys
 import pickle
 import subprocess
 
-#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-#sys.path.append('/home/ncats/live/core')
-
-#from reasoner import Reasoner
-from chp.core.query import Query
-
+from chp.query import Query
 
 PASSED_JSON_FILE = '/home/cyakaboski/passed_message.json'
 NODE = 'c-dell-m630-0-11'

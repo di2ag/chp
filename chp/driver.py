@@ -1,3 +1,13 @@
+'''
+Source code developed by DI2AG.
+Thayer School of Engineering at Dartmouth College
+Authors:    Dr. Eugene Santos, Jr
+            Mr. Chase Yakaboski,
+            Mr. Gregory Hyde,
+            Dr. Keum Joo Kim
+'''
+
+
 import os
 import sys
 import argparse
@@ -5,13 +15,10 @@ import csv
 import time
 import pickle
 
-from pybkb.core.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 
-#sys.path.append('/home/cyakaboski/src/python/projects/bkb-pathway-provider/core')
-#sys.path.append('/home/ncats/live/core')
-
-from chp.core.reasoner import Reasoner
-from chp.core.query import Query
+from chp.reasoner import Reasoner
+from chp.query import Query
 
 #-- Reasoner Controls
 INTERPOLATION = 'independence'
