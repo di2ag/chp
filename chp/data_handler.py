@@ -11,7 +11,7 @@ import copy
 #from pybkb.pybkb.cpp_base.fusion import fuse as cpp_fuse
 from pybkb.pybkb.python_base.fusion import fuse as py_fuse
 
-from patientBKFProcessor_v3 import PatientProcessor
+from patientBKFProcessor import PatientProcessor
 from pathwayBKFProcessor import PathwayProcessor
 from reactomePathwayProcessor import ReactomePathwayProcessor
 
