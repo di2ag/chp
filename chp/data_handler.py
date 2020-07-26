@@ -1,12 +1,3 @@
-'''
-Source code developed by DI2AG.
-Thayer School of Engineering at Dartmouth College
-Authors:    Dr. Eugene Santos, Jr
-            Mr. Chase Yakaboski,
-            Mr. Gregory Hyde,
-            Dr. Keum Joo Kim
-'''
-
 import pandas as pd
 import os
 import pickle
@@ -17,12 +8,12 @@ import ast
 import random
 import copy
 
-from pybkb.cpp_base.fusion import fuse as cpp_fuse
-from pybkb.python_base.fusion import fuse as py_fuse
+#from pybkb.pybkb.cpp_base.fusion import fuse as cpp_fuse
+from pybkb.pybkb.python_base.fusion import fuse as py_fuse
 
-from chp.patientBKFProcessor_Axle import PatientProcessor
-from chp.pathwayBKFProcessor import PathwayProcessor
-from chp.reactomePathwayProcessor import ReactomePathwayProcessor
+from patientBKFProcessor_v3 import PatientProcessor
+from pathwayBKFProcessor import PathwayProcessor
+from reactomePathwayProcessor import ReactomePathwayProcessor
 
 class DataDriver:
     def __init__(self, config_file):
@@ -63,7 +54,7 @@ class DataDriver:
             while True:
                 try:
                     numValidPats = int(input('How many total patients? [1-{}]:'.format(len(self.dataHandler.patientProcessor.patients))))
-                    numValid = int(input('How many for validation? [1-{}]:'.format(numValidPats)))
+                    numValid = int(input('How many for validation? [0-{}]:'.format(numValidPats)))
                     if numValidPats < 1 or numValidPats > len(self.dataHandler.patientProcessor.patients) or numValid >= numValidPats:
                         print('invalid selection(s)')
                     else:
@@ -117,10 +108,22 @@ class DataDriver:
                 print('Response not recognized.')
 
         while True:
+            print('Do you want to use Babel?')
+            choice = input('Your choice ([y],n): ') or 'y'
+            if choice == 'y':
+                with_babel = True
+                break
+            if choice == 'n':
+                with_babel = False
+                break
+            else:
+                print('Response not recognized.')
+
+        while True:
             print('Ready to fuse.')
             choice = input('Do you want to continue? ([y],n): ') or 'y'
             if choice == 'y':
-                self.dataHandler.fuse(patients, numValidPats, numValid, with_pathways)
+                self.dataHandler.fuse(patients, numValidPats, numValid, with_pathways, with_babel)
                 break
             if choice == 'n':
                 while True:
@@ -163,7 +166,7 @@ class DataHandler:
         self.patient_holdout  = patient_holdout
         self.working_dir = working_dir
         self.cpp_fuse_option = cpp_fuse_option
-        self.falsesInPatients = True
+        self.falsesInPatients = False
 
     def readTcgaData(self):
         self.patientProcessor = PatientProcessor()
@@ -209,6 +212,16 @@ class DataHandler:
             else:
                 print('Response not recognized')
 
+        while True:
+            coor = input('Collect data coorelations?([y],n): ') or 'y'
+            if coor == 'y':
+                self.patientProcessor.getPatientDataCorrelations(self.working_dir)
+                break
+            if coor == 'n':
+                break
+            else:
+                print('Response not recognized')
+
     def readPathwayData(self):
         self.pathwayProcessor = PathwayProcessor()
         if self.pathway_file is not None:
@@ -229,7 +242,7 @@ class DataHandler:
         self.readTcgaData()
         self.readPathwayData()
 
-    def fuse(self, patients, numValidPats, numValid, with_pathways=True):
+    def fuse(self, patients, numValidPats, numValid, with_pathways=True, babel=True):
         if numValidPats != None:
             validationHoldout = []
             noDupPats = list()
@@ -241,7 +254,10 @@ class DataHandler:
             self.holdoutPatients = validationHoldout
 
         self.patientProcessor.setAsideHoldouts(patients, self.holdoutPatients)
-        self.patientProcessor.processPatientBKF(patientFalses=self.falsesInPatients)
+        if babel:
+            self.patientProcessor.processPatientBKF(patientFalses=self.falsesInPatients)
+        else:
+            self.patientProcessor.processAxlePatientBKF()
 
         patient_indices = list()
         patient_bkfs = list()
@@ -253,24 +269,25 @@ class DataHandler:
 
         patient_bkf_files, patient_source_names, holdout_source_names, dump_loc = self.patientProcessor.SubsetBKFsToFile(self.working_dir, patient_indices)
 
-        try:
-            patient_bkfs.append(self.patientProcessor.patientXBKF)
-            patient_bkf_files.append(self.working_dir + 'PatientX.bkf')
-            patient_source_names.append('PatientX')
-            self.patientProcessor.patientXBKF.save(self.working_dir + 'PatientX.bkf')
-            lenPatientsBefore = len(patient_bkfs)
-        except:
-            print("Must not be using PatientX")
+        if babel:
+            try:
+                patient_bkfs.append(self.patientProcessor.patientXBKF)
+                patient_bkf_files.append(self.working_dir + 'PatientX.bkf')
+                patient_source_names.append('PatientX')
+                self.patientProcessor.patientXBKF.save(self.working_dir + 'PatientX.bkf')
+                lenPatientsBefore = len(patient_bkfs)
+            except:
+                print("Must not be using PatientX")
 
 
-        try:
-            geneReliabilityIdx = len(patient_bkfs)
-            for idx, genebkf in enumerate(self.patientProcessor.geneFrags):
-                patient_bkfs.append(genebkf)
-                patient_bkf_files.append(self.working_dir + genebkf._name +'.bkf')
-                patient_source_names.append(self.patientProcessor.geneFragmentsSources[idx])
-        except:
-            print("must not be using gene frags")
+            try:
+                geneReliabilityIdx = len(patient_bkfs)
+                for idx, genebkf in enumerate(self.patientProcessor.geneFrags):
+                    patient_bkfs.append(genebkf)
+                    patient_bkf_files.append(self.working_dir + genebkf._name +'.bkf')
+                    patient_source_names.append(self.patientProcessor.geneFragmentsSources[idx])
+            except:
+                print("must not be using gene frags")
 
         if with_pathways:
             pathway_bkf_files, pathway_source_names = self.pathwayProcessor.BKFsToFile(self.working_dir)
@@ -288,9 +305,10 @@ class DataHandler:
         source_names = patient_source_names + pathway_source_names + reactome_source_names
 
         newReliabilities = [1 for _ in range(len(bkf_files))]
-        if self.falsesInPatients == False:
-            for idx, geneReli in enumerate(self.patientProcessor.geneReliabilities):
-                newReliabilities[lenPatientsBefore + idx] = geneReli
+        if babel:
+            if self.falsesInPatients == False:
+                for idx, geneReli in enumerate(self.patientProcessor.geneReliabilities):
+                    newReliabilities[lenPatientsBefore + idx] = geneReli
 
         if self.cpp_fuse_option:
             cpp_fuse(bkf_files,
@@ -314,7 +332,6 @@ class DataHandler:
 
         print('Patient data located at: {}'.format(dump_loc))
         return True
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
