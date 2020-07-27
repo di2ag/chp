@@ -1,0 +1,62 @@
+COMPONENTS: 6
+20 Survival_Time >= 300
+	STATES: 2
+		4 True
+		5 False
+31 _Source_[Survival_Time >= 300]_
+	STATES: 2
+		18 [1]_noGeneEvidence
+		16 [2]_geneEvidence
+39 Collection[Survival_Time >= 300 = True]
+	STATES: 1
+		68 [1,2,3]_-1161780421986398629,6106702334982451608,1121018522916220199
+50 _Source_[Collection[Survival_Time >= 300 = True]]_
+	STATES: 1
+		18 [1]_noGeneEvidence
+40 Collection[Survival_Time >= 300 = False]
+	STATES: 1
+		3 []_
+51 _Source_[Collection[Survival_Time >= 300 = False]]_
+	STATES: 1
+		18 [1]_noGeneEvidence
+20 Survival_Time >= 300
+	4 True
+		SUPPORTS: 2
+			1.0 TAIL: 2
+				39 Collection[Survival_Time >= 300 = True] 68 [1,2,3]_-1161780421986398629,6106702334982451608,1121018522916220199
+				31 _Source_[Survival_Time >= 300]_ 18 [1]_noGeneEvidence
+			1 TAIL: 1
+				31 _Source_[Survival_Time >= 300]_ 16 [2]_geneEvidence
+	5 False
+		SUPPORTS: 2
+			0.0 TAIL: 2
+				40 Collection[Survival_Time >= 300 = False] 3 []_
+				31 _Source_[Survival_Time >= 300]_ 18 [1]_noGeneEvidence
+			1 TAIL: 1
+				31 _Source_[Survival_Time >= 300]_ 16 [2]_geneEvidence
+31 _Source_[Survival_Time >= 300]_
+	18 [1]_noGeneEvidence
+		SUPPORTS: 1
+			0.5 TAIL: 0
+	16 [2]_geneEvidence
+		SUPPORTS: 1
+			0.5 TAIL: 0
+39 Collection[Survival_Time >= 300 = True]
+	68 [1,2,3]_-1161780421986398629,6106702334982451608,1121018522916220199
+		SUPPORTS: 1
+			1 TAIL: 1
+				50 _Source_[Collection[Survival_Time >= 300 = True]]_ 18 [1]_noGeneEvidence
+50 _Source_[Collection[Survival_Time >= 300 = True]]_
+	18 [1]_noGeneEvidence
+		SUPPORTS: 1
+			1.0 TAIL: 0
+40 Collection[Survival_Time >= 300 = False]
+	3 []_
+		SUPPORTS: 1
+			1 TAIL: 1
+				51 _Source_[Collection[Survival_Time >= 300 = False]]_ 18 [1]_noGeneEvidence
+51 _Source_[Collection[Survival_Time >= 300 = False]]_
+	18 [1]_noGeneEvidence
+		SUPPORTS: 1
+			1.0 TAIL: 0
+FREE_SUPPORTS:
