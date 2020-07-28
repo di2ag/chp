@@ -16,6 +16,7 @@ import numpy as np
 #-- Integrators
 from chp.integrator.explorer_agent import ExplorerHandler
 from chp.integrator.unsecret_agent import UnsecretHandler
+from chp.integrator.ranking_agent import RankingHandler
 
 class ReasonerStdHandler:
     def __init__(self, source_ara, json_query=None, dict_query=None):
@@ -35,6 +36,8 @@ class ReasonerStdHandler:
             handler = ExplorerHandler(self.query)
         elif self.integrator == 'unsecret':
             handler = UnsecretHandler(self.query)
+        elif self.integrator == 'ranking':
+            handler = RankingHandler(self.query)
         else:
             raise NotImplementedError('Not integrated with {}.'.format(self.integrator))
         return handler
