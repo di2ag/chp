@@ -32,6 +32,8 @@ from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 CACHED_BKB_DIR = '/home/public/data/ncats/cachedCollapsedBkb'
 ILLEGAL_SOURCE_STRINGS = ['PatientX', 'noGeneEvidence', 'geneEvidence']
 
+DEBUG = True
+
 class Reasoner:
     def __init__(self, bkb_data_handler=None, fused_bkb=None, collapsed_bkb=None,  patient_data=None, gene_var_direct=None, max_new_ev=None,
                  hosts_filename=None, num_processes_per_host=0):
@@ -60,11 +62,16 @@ class Reasoner:
         collapsed_bkb_hash_name = zlib.adler32(fused_bkb.to_str().encode('utf-8'))
         collapsed_bkb_path = os.path.join(self.cached_bkb_dir, '{}.bkb'.format(collapsed_bkb_hash_name))
         if os.path.exists(collapsed_bkb_path):
-            print('Loaded collapsed BKB from memory.')
+            if DEBUG: print('Loaded collapsed BKB from memory.')
             collapsed_bkb = BKB()
             collapsed_bkb.load(collapsed_bkb_path)
         else:
+            if DEBUG:
+                print('Collapsing BKB...')
+                start_time = time.time()
             collapsed_bkb = collapse_sources(fused_bkb)
+            if DEBUG:
+                print('Collapsed BKB in {}'.format(time.time() - start_time))
             #-- Save collapsed bkb using fused_bkb hash as file name.
             collapsed_bkb.save(collapsed_bkb_path)
         return collapsed_bkb
@@ -170,6 +177,8 @@ class Reasoner:
         if query.type == 'revision':
             raise NotImplementedError('Python Revision is not currently implemented.')
         elif query.type == 'updating':
+            if DEBUG:
+                print('Starting Reasoning...')
             res = py_updating(query.bkb,
                               query.evidence,
                               query.targets,
@@ -179,6 +188,8 @@ class Reasoner:
             raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
 
         compute_time = time.time() - start_time
+        if DEBUG:
+            print('Finished reasoning in {}'.format(compute_time))
         query.result = res
         query.compute_time = compute_time
 
@@ -512,8 +523,12 @@ class Reasoner:
         if query.meta_targets is not None:
             transformed_meta_targets = ['{} {} {}'.format(target[0], target[1], target[2]) for target in query.meta_targets]
 
+        if DEBUG:
+            print('Linking BKB...')
+            start_time = time.time()
         transformed_meta, bkb = self.process_metaVariables(bkb, query.meta_evidence, query.meta_targets, target_strategy, num_gene_evidence=num_gene_evidence)
-
+        if DEBUG:
+            print('Linked BKB in {}'.format(time.time() - start_time))
         #-- Collect Evidence
         transformed_meta_evidence = dict()
         if query.meta_evidence is not None:
