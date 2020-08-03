@@ -33,7 +33,8 @@ CACHED_BKB_DIR = '/home/public/data/ncats/cachedCollapsedBkb'
 ILLEGAL_SOURCE_STRINGS = ['PatientX', 'noGeneEvidence', 'geneEvidence']
 
 class Reasoner:
-    def __init__(self, bkb_data_handler=None, fused_bkb=None, collapsed_bkb=None,  patient_data=None, gene_var_direct=None, max_new_ev=None):
+    def __init__(self, bkb_data_handler=None, fused_bkb=None, collapsed_bkb=None,  patient_data=None, gene_var_direct=None, max_new_ev=None,
+                 hosts_filename=None, num_processes_per_host=0):
         if bkb_data_handler is not None:
             self.fused_bkb = BKB()
             self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
@@ -51,6 +52,8 @@ class Reasoner:
                 raise ValueError('Likely patient data is not in the right format.')
         self.gene_var_direct = gene_var_direct
         self.max_new_ev = max_new_ev
+        self.hosts_filename = hosts_filename
+        self.num_processes_per_host = num_processes_per_host
 
     def getCollapsedBKB(self, fused_bkb):
         #-- First check to see if this bkb has already been collapsed and saved.
@@ -168,8 +171,10 @@ class Reasoner:
             raise NotImplementedError('Python Revision is not currently implemented.')
         elif query.type == 'updating':
             res = py_updating(query.bkb,
-                           query.evidence,
-                           query.targets)
+                              query.evidence,
+                              query.targets,
+                              hosts_filename=self.hosts_filename,
+                              num_processes_per_host=self.num_processes_per_host)
         else:
             raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
 
