@@ -19,9 +19,11 @@ from chp.integrator.unsecret_agent import UnsecretHandler
 from chp.integrator.ranking_agent import RankingHandler
 
 class ReasonerStdHandler:
-    def __init__(self, source_ara, json_query=None, dict_query=None):
+    def __init__(self, source_ara, json_query=None, dict_query=None, hosts_filename=None, num_processes_per_host=0):
         self.integrator = source_ara
         self.json_query = json_query
+        self.hosts_filename = hosts_filename
+        self.num_processes_per_host = num_processes_per_host
         if dict_query is None:
             self.query = json.loads(json_query)
         else:
@@ -33,11 +35,11 @@ class ReasonerStdHandler:
 
     def getHandler(self):
         if self.integrator == 'explorer':
-            handler = ExplorerHandler(self.query)
+            handler = ExplorerHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         elif self.integrator == 'unsecret':
-            handler = UnsecretHandler(self.query)
+            handler = UnsecretHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         elif self.integrator == 'ranking':
-            handler = RankingHandler(self.query)
+            handler = RankingHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         else:
             raise NotImplementedError('Not integrated with {}.'.format(self.integrator))
         return handler

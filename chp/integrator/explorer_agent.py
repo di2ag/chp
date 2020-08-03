@@ -27,7 +27,7 @@ from pybkb.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_
 from pybkb.python_base.fusion import fuse
 
 class ExplorerHandler:
-    def __init__(self, query):
+    def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
         self.query = query
         self.qg = self.query['query_graph']
         self.kg = self.query['knowledge_graph']
@@ -51,7 +51,9 @@ class ExplorerHandler:
 
         #-- Instiatate Reasoner
         self.bkb_data_handler = BkbDataHandler()
-        self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler)
+        self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
+                                 hosts_filename=hosts_filename,
+                                 num_processes_per_host=num_processes_per_host)
 
         self.target_strategy = 'explicit'
         self.interpolation = 'standard'
