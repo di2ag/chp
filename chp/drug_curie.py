@@ -21,7 +21,7 @@ def curie_match(drug):
     if len(hits) > 0:
         curie = 'ChEMBL:' + hits[0]['chembl']['molecule_chembl_id']
     else:
-        curie = 'HELP'
+        curie = 'NOT FOUND'
     return [drug,curie]
 
 
