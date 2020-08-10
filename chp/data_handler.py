@@ -9,7 +9,7 @@ import random
 import copy
 
 #from pybkb.pybkb.cpp_base.fusion import fuse as cpp_fuse
-from pybkb.pybkb.python_base.fusion import fuse as py_fuse
+from pybkb.python_base.fusion import fuse as py_fuse
 
 from patientBKFProcessor import PatientProcessor
 from pathwayBKFProcessor import PathwayProcessor
@@ -38,6 +38,8 @@ class DataDriver:
                                        reactome_p2p_file=self.config['reactome_p2p_file'],
                                        patient_holdout=self.config['patient_holdout'],
                                        working_dir=self.config['working_dir'],
+                                       gene_curies=self.config['gene_curies'],
+                                       drug_curies=self.config['drug_curies'],
                                        cpp_fuse_option=ast.literal_eval(self.config['cpp_fuse_option']))
 
         self.dataHandler.readData()
@@ -152,6 +154,8 @@ class DataHandler:
                  reactome_g2r_file=None,
                  patient_holdout=None,
                  working_dir='/tmp',
+                 gene_curies=None,
+                 drug_curies=None,
                  cpp_fuse_option=False):
 
         self.tumor_rna_expression_file = tumor_rna_expression_file
@@ -165,6 +169,8 @@ class DataHandler:
         self.reactome_g2r_file = reactome_g2r_file
         self.patient_holdout  = patient_holdout
         self.working_dir = working_dir
+        self.gene_curies = gene_curies
+        self.drug_curies = drug_curies
         self.cpp_fuse_option = cpp_fuse_option
         self.falsesInPatients = False
 
@@ -178,7 +184,8 @@ class DataHandler:
 
         if self.tumor_rna_expression_file is not None and self.mutation_data_file is not None:
             self.patientProcessor.processPatientGeneData(self.mutation_data_file,
-                                                         self.tumor_rna_expression_file)
+                                                         self.tumor_rna_expression_file,
+                                                         self.gene_curies)
         while True:
             clinic = input('Collect clinical? ([y],n): ') or 'y'
             if clinic == 'y':
@@ -194,7 +201,7 @@ class DataHandler:
             rad = input('Collect radiation? ([y],n): ') or 'y'
             if rad == 'y':
                 if self.radiation_data_file is not None:
-                    self.patientProcessor.processRadiationData(self.radiation_data_file, radNameOnly=True)
+                    self.patientProcessor.processRadiationData(self.radiation_data_file)
                 break
             if rad == 'n':
                 break
@@ -205,7 +212,7 @@ class DataHandler:
             drug = input('Collect Drug? ([y],n): ') or 'y'
             if drug == 'y':
                 if self.drug_data_file is not None:
-                    self.patientProcessor.processDrugData(self.drug_data_file, drugNameOnly=True)
+                    self.patientProcessor.processDrugData(self.drug_data_file, self.drug_curies)
                 break
             if drug == 'n':
                 break

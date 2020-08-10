@@ -6,8 +6,8 @@ import operator
 import functools
 import math
 import random
-from pybkb.pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
-from pybkb.pybkb.common.bayesianKnowledgeBase import BKB_S_node, BKB_component, BKB_I_node
+from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.common.bayesianKnowledgeBase import BKB_S_node, BKB_component, BKB_I_node
 import matplotlib.pyplot as plt
 import pickle
 import pandas as pd
@@ -25,14 +25,12 @@ class PatientProcessor:
         self.holdouts = list()
         self.clinicalCollected = False
         self.radiationCollected = False
-        self.radNameOnly = True
         self.drugCollected = False
-        self.drugNameOnly = True
         self.sort = True
 
     class Patient:
         # will need to account for mutatedReads
-        def __init__(self, patientID, cancerType, mutatedGenes, mutatedGeneVariants, variants):
+        def __init__(self, patientID, cancerType, mutatedGenes, mutatedGeneVariants, variants, geneCuries):
             # patient gene data
             self.patientID = patientID
             self.cancerType = cancerType
@@ -40,6 +38,7 @@ class PatientProcessor:
             self.mutatedGeneVariants = mutatedGeneVariants
             self.variants = variants
             self.mutatedGeneReads = list()
+            self.geneCuries = geneCuries
 
             # clinical data
             self.ageDiagnos = None
@@ -58,6 +57,7 @@ class PatientProcessor:
 
             # add drug info later
             self.drugName = list()
+            self.drugCuries = list()
             self.processType = list()
             self.processActivity = list()
             self.biologicalObject = list()
@@ -66,18 +66,25 @@ class PatientProcessor:
             self.daysToDrugEnd = list()
 
     # processes patient gene data
-    def processPatientGeneData(self, patientMutGenes, patientMutReads):
+    def processPatientGeneData(self, patientMutGenesDir, patientMutReadsDir, geneCuriesDir):
         # reading initial patient data
-        with open(patientMutGenes, 'r') as csv_file:
+        with open(patientMutGenesDir, 'r') as csv_file:
             reader = csv.reader(csv_file)
-            patientGeneDict = dict()
             # row[0] = cancer type row[1] = patientID, row[6] = mutated gene
             next(reader)
             rows = [(row[0],row[1],row[6],row[7],row[10],row[13],row[16]) for row in reader]
 
+        curieDict = dict()
+        with open(geneCuriesDir, 'r') as csv_file:
+            reader = csv.reader(csv_file)
+            next(reader)
+            for row in reader:
+                curieDict[row[0]] = row[1]
+
         # create all patients
         mutatedPatGenes = list()
         mutatedPatGeneVariants = list()
+        geneCuries = list()
         variants = list()
         cancerType = rows[0][0]
         patID = rows[0][1]
@@ -85,7 +92,7 @@ class PatientProcessor:
         for row in tqdm.tqdm(rows, desc='Reading patient files'):
             variantClassifications = list()
             if patID != row[1]:
-                p = self.Patient(patID,cancerType,mutatedPatGenes,mutatedPatGeneVariants,variants)
+                p = self.Patient(patID,cancerType,mutatedPatGenes,mutatedPatGeneVariants,variants,geneCuries)
                 self.patients.append(p)
                 patID = row[1]
                 cancerType = row[0]
@@ -100,15 +107,16 @@ class PatientProcessor:
                 variantClassifications.append(row[5])
             if 'DNP' not in row[6]:
                 variantClassifications.append(row[6])
-            if all(x == variantClassifications[0] for x in variantClassifications):
+            if all(x == variantClassifications[0] for x in variantClassifications) and row[2] in curieDict.keys():
                     mutatedPatGenes.append(row[2])
+                    geneCuries.append(curieDict[row[2]])
                     variants.append(variantClassifications[0])
                     mutatedPatGeneVariants.append(row[2]+"-"+variantClassifications[0])
 
         csv_file.close()
         '''
         # reading gene reads
-        with open(patientMutReads, 'r') as csv_file:
+        with open(patientMutReadsDir, 'r') as csv_file:
             reader = csv.reader(csv_file)
             geneReadsDict = dict()
             # row[0] = CancerType row[1] = patientID, row[6] = gene, row[7] = reads
@@ -188,48 +196,36 @@ class PatientProcessor:
             pbar = tqdm.tqdm(total=os.path.getsize(radiationData), desc='Reading radiation data')
             next(reader)
             for row in reader:
-                if radNameOnly:
-                    cancerType = row[0]
-                    patID = row[1]
-                    if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
-                        continue
-                    therapyName = row[2]
-                    if cancerType + patID in patientRadiationDict:
-                        patientRadiationDict[cancerType + patID].append(therapyName)
+                cancerType = row[0]
+                patID = row[1]
+                if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
+                    continue
+                therapyName = row[2]
+                if 'UNKNOWN' in row[3] or 'Discrepancy' in row[3] or 'DNP' in row[3]:
+                    continue
+                therapySite = row[3]
+                if 'UNKNOWN' in row[4] or 'Discrepancy' in row[4] or 'DNP' in row[4]:
+                    continue
+                dose = None
+                try:
+                    if row[5] == 'Gy':
+                        dose = int(float(row[4])) * 100 #conversion rate between cGy and Gy. Gy = 100 cGy 
+                    elif row[5] == 'cGy':
+                        dose = int(float(row[4]))
                     else:
-                        patientRadiationDict[cancerType + patID] = [therapyName]
-                    pbar.update(len(''.join(row).encode('utf-8')))
+                        continue
+                except:
+                    continue
+                if 'UNKNOWN' in row[6] or 'Discrepancy' in row[6] or 'DNP' in row[6]:
+                    continue
+                daysToStart = int(float(row[6]))
+                if 'UNKNOWN' in row[7] or 'Discrepancy' in row[7] or 'DNP' in row[7]:
+                    continue
+                daysToEnd = int(float(row[7]))
+                if cancerType + patID in patientRadiationDict:
+                    patientRadiationDict[cancerType + patID].append((therapyName, therapySite, dose, daysToStart, daysToEnd))
                 else:
-                    cancerType = row[0]
-                    patID = row[1]
-                    if 'UNKNOWN' in row[2] or 'Discrepancy' in row[2] or 'DNP' in row[2]:
-                        continue
-                    therapyName = row[2]
-                    if 'UNKNOWN' in row[3] or 'Discrepancy' in row[3] or 'DNP' in row[3]:
-                        continue
-                    therapySite = row[3]
-                    if 'UNKNOWN' in row[4] or 'Discrepancy' in row[4] or 'DNP' in row[4]:
-                        continue
-                    dose = None
-                    try:
-                        if row[5] == 'Gy':
-                            dose = int(float(row[4])) * 100 #conversion rate between cGy and Gy. Gy = 100 cGy 
-                        elif row[5] == 'cGy':
-                            dose = int(float(row[4]))
-                        else:
-                            continue
-                    except:
-                        continue
-                    if 'UNKNOWN' in row[6] or 'Discrepancy' in row[6] or 'DNP' in row[6]:
-                        continue
-                    daysToStart = int(float(row[6]))
-                    if 'UNKNOWN' in row[7] or 'Discrepancy' in row[7] or 'DNP' in row[7]:
-                        continue
-                    daysToEnd = int(float(row[7]))
-                    if cancerType + patID in patientRadiationDict:
-                        patientRadiationDict[cancerType + patID].append((therapyName, therapySite, dose, daysToStart, daysToEnd))
-                    else:
-                        patientRadiationDict[cancerType + patID] = [(therapyName, therapySite, dose, daysToStart, daysToEnd)]
+                    patientRadiationDict[cancerType + patID] = [(therapyName, therapySite, dose, daysToStart, daysToEnd)]
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
         for p in self.patients[:]:
@@ -249,14 +245,13 @@ class PatientProcessor:
                 self.patients.remove(p) 
         self.radiationCollected = True
 
-    def processDrugData(self, drugData, drugNameOnly=True):
+    def processDrugData(self, drugDataDir, drugCurieDir):
         assert len(self.patients) > 0, "Patient and gene data have not been read in yet. Call processPatientGeneData(patientMutGenesFile, patientMutReadsFile) first, before secondary processing functions are called."
-        self.drugNameOnly = drugNameOnly
-        with open(drugData, 'r') as csv_file:
+        with open(drugDataDir, 'r') as csv_file:
             reader = csv.reader(csv_file)
             patientDrugDict = dict()
             # row[0] = cancerType, row[1] = patientID, row[2] = Drug name, row[3] = dose, row[4] = doseUnit, row[5] = days to start, row[6] = days to end
-            pbar = tqdm.tqdm(total=os.path.getsize(drugData), desc='Reading drug data')
+            pbar = tqdm.tqdm(total=os.path.getsize(drugDataDir), desc='Reading drug data')
             next(reader)
             for row in reader:
                 cancerType = row[0]
@@ -275,14 +270,24 @@ class PatientProcessor:
                     patientDrugDict[cancerType + patID] = [(drugName, processType, processActivity, biologicalObject)]
                 pbar.update(len(''.join(row).encode('utf-8')))
             pbar.close()
+
+        curieDict = dict()
+        with open(drugCurieDir, 'r') as csv_file:
+            reader = csv.reader(csv_file)
+            next(reader)
+            for row in reader:
+                curieDict[row[0]] = row[1]
+
         for p in self.patients[:]:
             if p.cancerType + p.patientID in patientDrugDict:
                 drugData = patientDrugDict[p.cancerType+p.patientID]
                 for dData in drugData:
-                    p.drugName.append(dData[0])
-                    p.processType.append(dData[1])
-                    p.processActivity.append(dData[2])
-                    p.biologicalObject.append(dData[3])
+                    if dData[0] in curieDict.keys():
+                        p.drugName.append(dData[0])
+                        p.processType.append(dData[1])
+                        p.processActivity.append(dData[2])
+                        p.biologicalObject.append(dData[3])
+                        p.drugCuries.append(curieDict[dData[0]])
             else:
                 print("No Drug - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
@@ -342,31 +347,6 @@ class PatientProcessor:
             else:
                 probs[A][B] = count_AB / counts_B[B]
         return probs
-
-        '''
-        #-- Calculate gene conditional probabilities
-        probs = {gene: dict() for gene in pop_genes}
-        total_combos = math.factorial(len(pop_genes)) / (math.factorial(interaction-1) * math.factorial(len(pop_genes) - (interaction-1)))
-        for A in tqdm.tqdm(pop_genes, desc='Calculating Interaction Probabilities', leave=False):
-            for B in tqdm.tqdm(itertools.combinations(set(pop_genes) - {A}, interaction - 1), total=total_combos):
-                AB_set = set(list(B) + [A])
-                #-- Calculating P(A|B) = P(A,B) / P(B)
-                count_AB = 0
-                count_B = 0
-                for _, data_dict in patient_data.items():
-                    if len(AB_set - set(data_dict['Patient_Genes'])) == 0:
-                        count_AB += 1
-                    if len(set(B) - set(data_dict['Patient_Genes'])) == 0:
-                        count_B += 1
-                prob_AB = float(count_AB / len(patient_data))
-                prob_B = float(count_B / len(patient_data))
-                try:
-                    prob_A_B = prob_AB / prob_B
-                    probs[A][B] = prob_A_B
-                except ZeroDivisionError:
-                    continue
-        return probs
-        '''
 
     def getGeneTFProbs(self, allGenes):
         FT_Dict = dict()
@@ -515,6 +495,19 @@ class PatientProcessor:
             for gene in pat.mutatedGenes:
                 if gene not in all_gene_mutations:
                     all_gene_mutations.append(gene)
+
+        all_drugs = list()
+        for pat in self.patients:
+            for d in pat.drugName:
+                if d not in all_drugs:
+                    all_drugs.append(d)
+
+        f = open('drugs.txt', 'w')
+        drug_str = ''
+        for d in all_drugs:
+            drug_str += d +','
+        f.write(drug_str[:-1])
+        f.close()
 
         # get gene causeality dictionary
         geneCauses = self.getGeneTFProbs(all_gene_mutations)
@@ -674,6 +667,8 @@ class PatientProcessor:
         patientDict["Cancer_Type"] = pat.cancerType
         #patient mutated Genes
         patientDict["Patient_Genes"] = tuple(pat.mutatedGenes)
+        #patient mutated Gene curies
+        patientDict["Patient_Gene_Curies"] = tuple(pat.geneCuries)
         #patient mutated Gene Variants
         patientDict["Patient_Gene_Variants"] = tuple(pat.mutatedGeneVariants)
         #patient variants
@@ -695,22 +690,21 @@ class PatientProcessor:
             patientDict["Survival_Time"] = pat.survivalTime
         #patients can have no radiation data associated with them --------------------v
         if self.radiationCollected and len(pat.therapyName) > 0:
-            if self.radNameOnly:
-                patientDict["Therapy_Name(s)"] = tuple(pat.therapyName)
-            else:
-                # patient therapy name(s)
-                patientDict["Therapy_Name(s)"] = tuple(pat.therapyName)
-                # patient therapy site(s)
-                patientDict["Therapy_Site(s)"] = tuple(pat.therapySite)
-                # patient radiation dose(s)
-                patientDict["Radiation_Dose(s)"] = tuple(pat.radiationDose)
-                # patient days to therapy start
-                patientDict["Days_To_Therapy_Start(s)"] = tuple(pat.daysToTherapyStart)
-                # patient days to therapy end
-                patientDict["Days_To_Therapy_End(s)"] = tuple(pat.daysToTherapyEnd)
+            # patient therapy name(s)
+            patientDict["Therapy_Name(s)"] = tuple(pat.therapyName)
+            # patient therapy site(s)
+            patientDict["Therapy_Site(s)"] = tuple(pat.therapySite)
+            # patient radiation dose(s)
+            patientDict["Radiation_Dose(s)"] = tuple(pat.radiationDose)
+            # patient days to therapy start
+            patientDict["Days_To_Therapy_Start(s)"] = tuple(pat.daysToTherapyStart)
+            # patient days to therapy end
+            patientDict["Days_To_Therapy_End(s)"] = tuple(pat.daysToTherapyEnd)
         if self.drugCollected and len(pat.drugName) > 0:
             # patient drug name(s)
             patientDict["Drug_Name(s)"] = tuple(pat.drugName)
+            # patient drug curies
+            patientDict["Drug_Curie(s)"] = tuple(pat.drugCuries)
             # patient drug dose(s)
             patientDict["Biological_Object(s)"] = tuple(pat.biologicalObject)
             # patient days to drug start
