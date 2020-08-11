@@ -128,12 +128,21 @@ class RankingHandler:
             comp_name = query.bkb.getComponentName(comp_idx)
             state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
             #print(comp_name, state_name, prob)
-            if prob == -1:
-                prob = 0
             self.target_info.append([comp_name, state_name, prob])
-        prob_sum = self.target_info[0][2] + self.target_info[1][2]
-        self.target_info[0][2] /= prob_sum
-        self.target_info[1][2] /= prob_sum
+        if self.target_info[0][2] != -1 and self.target_info[1][2] != -1:
+            prob_sum = self.target_info[0][2] + self.target_info[1][2]
+            self.target_info[0][2] /= prob_sum
+            self.target_info[1][2] /= prob_sum
+        elif self.target_info[0][2] == -1 and self.target_info[1][2] != -1:
+            self.target_info[0][2] = 0
+            prob_sum = self.target_info[0][2] + self.target_info[1][2]
+            self.target_info[0][2] /= prob_sum
+            self.target_info[1][2] /= prob_sum
+        elif self.target_info[0][2] != -1 and self.target_info[1][2] == -1:
+            self.target_info[1][2] == 0
+            prob_sum = self.target_info[0][2] + self.target_info[1][2]
+            self.target_info[0][2] /= prob_sum
+            self.target_info[1][2] /= prob_sum
 
         #report = query.jsonExplanations()
         #self.patient_report = report['Patient Analysis']
