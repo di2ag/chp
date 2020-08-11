@@ -15,6 +15,8 @@ import numpy as np
 import random
 import copy
 import uuid
+import csv
+import sys
 
 from chp.query import Query
 from chp.reasoner import Reasoner
@@ -38,6 +40,12 @@ class UnsecretHandler:
         self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
                                 hosts_filename=hosts_filename,
                                 num_processes_per_host=num_processes_per_host)
+        self.gene_curie_dict = dict()
+        with open(self.bkb_data_handler.gene_curie_path, 'r') as gene_file:
+            reader = csv.reader(gene_file)
+            next(reader)
+            for row in reader:
+                self.gene_curie_dict[row[1]] = row[0]
 
         self.target_strategy = 'chain'
         self.interpolation = 'standard'
@@ -55,7 +63,13 @@ class UnsecretHandler:
         evidence = dict()
         for node in self.qg['nodes']:
             if node['type'] == 'Gene':
-                evidence["mut_" + node['name']] = 'True'
+                gene_curie = node['curie']
+                try:
+                    gene = self.gene_curie_dict[gene_curie]
+                except:
+                    sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
+                evidence["mut_" + gene] = 'True'
+
         query = Query(evidence=evidence,
                       targets=[],
                       meta_evidence=None,
@@ -77,12 +91,21 @@ class UnsecretHandler:
             comp_name = query.bkb.getComponentName(comp_idx)
             state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
             #print(comp_name, state_name, prob)
-            if prob == -1:
-                prob = 0
             self.target_info.append([comp_name, state_name, prob])
-        prob_sum = self.target_info[0][2] + self.target_info[1][2]
-        self.target_info[0][2] /= prob_sum
-        self.target_info[1][2] /= prob_sum
+        if self.target_info[0][2] != -1 and self.target_info[1][2] != -1:
+            prob_sum = self.target_info[0][2] + self.target_info[1][2]
+            self.target_info[0][2] /= prob_sum
+            self.target_info[1][2] /= prob_sum
+        elif self.target_info[0][2] == -1 and self.target_info[1][2] != -1:
+            self.target_info[0][2] = 0
+            prob_sum = self.target_info[0][2] + self.target_info[1][2]
+            self.target_info[0][2] /= prob_sum
+            self.target_info[1][2] /= prob_sum
+        elif self.target_info[0][2] != -1 and self.target_info[1][2] == -1:
+            self.target_info[1][2] == 0
+            prob_sum = self.target_info[0][2] + self.target_info[1][2]
+            self.target_info[0][2] /= prob_sum
+            self.target_info[1][2] /= prob_sum
 
         report = query.jsonExplanations()
         self.patient_report = report['Patient Analysis']
