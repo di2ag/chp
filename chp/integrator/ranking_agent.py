@@ -15,6 +15,9 @@ import numpy as np
 import random
 import copy
 import uuid
+import pickle
+import csv
+import sys
 
 from chp.query import Query
 from chp.reasoner import Reasoner
@@ -39,6 +42,19 @@ class RankingHandler:
         self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
                                 hosts_filename=hosts_filename,
                                 num_processes_per_host=num_processes_per_host)
+        self.gene_curie_dict = dict()
+        with open(self.bkb_data_handler.gene_curie_path, 'r') as gene_file:
+            reader = csv.reader(gene_file)
+            next(reader)
+            for row in reader:
+                self.gene_curie_dict[row[1]] = row[0]
+        self.drug_curie_dict = dict()
+        with open(self.bkb_data_handler.drug_curie_path, 'r') as drug_file:
+            reader = csv.reader(drug_file)
+            next(reader)
+            for row in reader:
+                self.drug_curie_dict[row[1]] = row[0]
+
 
         self.target_strategy = 'chain'
         self.interpolation = 'standard'
@@ -59,9 +75,19 @@ class RankingHandler:
         meta_evidence = list()
         for node in self.qg['nodes']:
             if node['type'] == 'Gene':
-                evidence["mut_" + node['name']] = 'True'
+                gene_curie = node['curie']
+                try:
+                    gene = self.gene_curie_dict[gene_curie]
+                except:
+                    sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
+                evidence["mut_" + gene] = 'True'
             if node['type'] == 'Drug':
-                meta_evidence.append(('Drug_Name(s)', '==', node['name']))
+                drug_curie = node['curie']
+                try:
+                    drug = self.drug_curie_dict[drug_curie]
+                except:
+                    sys.exit('Invalid CHEMBL Identifier. Must be in form CHEMBL:<ID>')
+                meta_evidence.append(('Drug_Name(s)', '==', drug))
 
         # get target
         targets = list()
