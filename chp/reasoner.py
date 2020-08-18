@@ -19,6 +19,7 @@ import copy
 from concurrent.futures import ProcessPoolExecutor, wait
 import time
 import zlib
+import logging
 
 from chp.query import Query
 
@@ -30,7 +31,7 @@ from pybkb.common.bayesianKnowledgeBase import BKB_S_node
 from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 
 CACHED_BKB_DIR = '/home/public/data/ncats/cachedCollapsedBkb'
-ILLEGAL_SOURCE_STRINGS = ['PatientX', 'noGeneEvidence', 'geneEvidence']
+ILLEGAL_SOURCE_STRINGS = ['PatientX', 'noGeneEvidence', 'geneEvidence', 'interpolator']
 
 DEBUG = True
 
@@ -39,7 +40,12 @@ class Reasoner:
                  hosts_filename=None, num_processes_per_host=0):
         if bkb_data_handler is not None:
             self.fused_bkb = BKB()
-            self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
+            #-- try to load pickle file
+            try:
+                self.fused_bkb = self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
+            except:
+                logging.warning('Could not load fused bkb from pickle at:\n\t{}.\n\tReverting to normal load procedure. Consider saving fused bkb as a pickle.'.format(bkb_data_handler.fusion_bkb_path))
+                self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
             self.collapsed_bkb = bkb_data_handler.collapsed_bkb_path
             self.cached_bkb_dir = bkb_data_handler.cached_bkb_dir
             self.set_src_metadata(bkb_data_handler.patient_data_pk_path)
@@ -48,6 +54,7 @@ class Reasoner:
             self.collapsed_bkb = collapsed_bkb
             self.cached_bkb_dir = CACHED_BKB_DIR
         if patient_data is not None:
+            self.metadata = patient_data
             try:
                 self.setup()
             except:
@@ -62,18 +69,24 @@ class Reasoner:
         collapsed_bkb_hash_name = zlib.adler32(fused_bkb.to_str().encode('utf-8'))
         collapsed_bkb_path = os.path.join(self.cached_bkb_dir, '{}.bkb'.format(collapsed_bkb_hash_name))
         if os.path.exists(collapsed_bkb_path):
-            if DEBUG: print('Loaded collapsed BKB from memory.')
+            logging.debug('Loading collapsed BKB from cache.')
+            start_time = time.time()
             collapsed_bkb = BKB()
-            collapsed_bkb.load(collapsed_bkb_path)
+            #-- Try to load from pickle
+            try:
+                collapsed_bkb = collapsed_bkb.load(collapsed_bkb_path, use_pickle=True)
+            except:
+                logging.warning('Could not load collapsed bkb from pickle at:\n\t{}.\n\tReverting to normal load procedure. Consider deleting cache.'.format(collapsed_bkb_path))
+                collapsed_bkb.load(collapsed_bkb_path)
+            logging.debug('Loaded collapsed BKB from cache in {} secs.'.format(time.time() - start_time))
         else:
-            if DEBUG:
-                print('Collapsing BKB...')
-                start_time = time.time()
+            logging.debug('Collapsing BKB.')
+            start_time = time.time()
             collapsed_bkb = collapse_sources(fused_bkb)
-            if DEBUG:
-                print('Collapsed BKB in {}'.format(time.time() - start_time))
+            logging.debug('Collapsed BKB in {}'.format(time.time() - start_time))
             #-- Save collapsed bkb using fused_bkb hash as file name.
-            collapsed_bkb.save(collapsed_bkb_path)
+            collapsed_bkb.save(collapsed_bkb_path, use_pickle=True)
+            logging.debug('Saved collapsed BKB at: {}'.format(collapsed_bkb_path))
         return collapsed_bkb
 
     def setup(self):
@@ -177,8 +190,7 @@ class Reasoner:
         if query.type == 'revision':
             raise NotImplementedError('Python Revision is not currently implemented.')
         elif query.type == 'updating':
-            if DEBUG:
-                print('Starting Reasoning...')
+            logging.debug('Starting Reasoning.')
             res = py_updating(query.bkb,
                               query.evidence,
                               query.targets,
@@ -188,8 +200,7 @@ class Reasoner:
             raise ValueError('Unreconginzed reasoning type: {}.'.format(query.type))
 
         compute_time = time.time() - start_time
-        if DEBUG:
-            print('Finished reasoning in {}'.format(compute_time))
+        logging.debug('Finished reasoning in {} secs.'.format(compute_time))
         query.result = res
         query.compute_time = compute_time
 
@@ -332,7 +343,7 @@ class Reasoner:
 
             #-- Update with gene helper
             transformed_meta.update(helper_evidence)
-            print(transformed_meta)
+            logging.debug('Transformed Meta Evidence {}'.format(transformed_meta))
             return transformed_meta, bkb
         else:
             raise ValueError('Target Strategy must be chain or topological.')
@@ -403,7 +414,7 @@ class Reasoner:
                 for q_ in queries:
                     futures.append(executor.submit(self.solve_query, q_, copy.deepcopy(target_strategy)))
                 finished_queries = [q_.result() for q_ in futures]
-            print('Multiprocessing time: {}'.format(time.time() - start_time))
+            logging.info('Multiprocessing time: {}'.format(time.time() - start_time))
 
         #-- Collect queries and calculate independent probs
         res = dict()
@@ -472,7 +483,7 @@ class Reasoner:
         num_gene_evidence = len(query.evidence)
 
         #-- Make a bkb query hash.
-        query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.to_str(),
+        query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.serialize().decode('cp437'),
                                                str(query.meta_evidence),
                                                str(query.meta_targets),
                                                target_strategy,
@@ -485,9 +496,15 @@ class Reasoner:
         if preprocessed_bkb is not None:
             query.bkb = preprocessed_bkb
         elif os.path.exists(query_bkb_path):
-            print('Loaded query BKB from memory.')
+            logging.info('Loading query BKB from cache.')
+            start_time = time.time()
             query.bkb = BKB()
-            query.bkb.load(query_bkb_path)
+            try:
+                query.bkb = query.bkb.load(query_bkb_path, use_pickle=True)
+            except:
+                logging.warning('Could not load query bkb from pickle at:\n\t{}.\n\tReverting to normal load procedure. Consider deleting cache.'.format(query_bkb_path))
+                query.bkb.load(query_bkb_path)
+            logging.info('Loaded query BKB from cache in {} sec.'.format(time.time() - start_time))
 
         #-- If we have a preprocessed passed or from memory BKB
         if query.bkb is not None:
@@ -509,7 +526,7 @@ class Reasoner:
             query.targets.extend(transformed_meta_targets)
 
             if check_mutex:
-                print('No Mutex Issues:', checkMutex(query.bkb))
+                logging.info('No Mutex Issues: {}'.format(checkMutex(query.bkb)))
             if save_dir is not None:
                 query.save(save_dir)
 
@@ -523,12 +540,11 @@ class Reasoner:
         if query.meta_targets is not None:
             transformed_meta_targets = ['{} {} {}'.format(target[0], target[1], target[2]) for target in query.meta_targets]
 
-        if DEBUG:
-            print('Linking BKB...')
-            start_time = time.time()
+        logging.info('Linking BKB.')
+        start_time = time.time()
         transformed_meta, bkb = self.process_metaVariables(bkb, query.meta_evidence, query.meta_targets, target_strategy, num_gene_evidence=num_gene_evidence)
-        if DEBUG:
-            print('Linked BKB in {}'.format(time.time() - start_time))
+        logging.info('Linked BKB in {}'.format(time.time() - start_time))
+
         #-- Collect Evidence
         transformed_meta_evidence = dict()
         if query.meta_evidence is not None:
@@ -557,8 +573,8 @@ class Reasoner:
 
         query.bkb = bkb
         if check_mutex:
-            print('No Mutex Issues:', checkMutex(bkb))
-        bkb.save(query_bkb_path)
+            logging.info('No Mutex Issues: {}'.format(checkMutex(bkb)))
+        bkb.save(query_bkb_path, use_pickle=True)
         #bkb.save('collapsed_and_link.bkb')
         #input('Saved')
         if save_dir is not None:
@@ -753,7 +769,7 @@ def _addDemographicOptionsExplicitly(meta_variables, bkb, src_hashs, src_hashs_i
             try:
                 snodes = S_nodes_by_head[(non_src_comp, non_src_state)]
             except KeyError:
-                print('Warning: {} = {} has no incoming S nodes.'.format(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(non_src_comp, non_src_state)))
+                logging.warning('{} = {} has no incoming S nodes.'.format(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(non_src_comp, non_src_state)))
                 continue
             for snode in frozenset(snodes):
                 non_src_tail = list()
@@ -1134,7 +1150,7 @@ def _addSrcConnections(comp_idx, inode_true_idx, inode_false_idx, bkb, matched_s
             try:
                 snodes = S_nodes_by_head[(non_src_comp, non_src_state)]
             except KeyError:
-                print('Warning: {} = {} has no incoming S nodes.'.format(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(non_src_comp, non_src_state)))
+                logging.warning('Warning: {} = {} has no incoming S nodes.'.format(bkb.getComponentName(non_src_comp), bkb.getComponentINodeName(non_src_comp, non_src_state)))
                 continue
             snodes_to_remove = []
             for snode in frozenset(snodes):

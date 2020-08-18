@@ -4,3 +4,6 @@
 [submodule "submodules/biothings_explorer"]
 	path = submodules/biothings_explorer
 	url = https://github.com/biothings/biothings_explorer.git 
+[submodule "submodules/ChpData"]
+	path = submodules/ChpData
+	url = /home/public/git/projects/ChpData.git
