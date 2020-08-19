@@ -42,7 +42,7 @@ class Reasoner:
             self.fused_bkb = BKB()
             #-- try to load pickle file
             try:
-                self.fused_bkb = self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
+                self.fused_bkb = self.fused_bkb.load(bkb_data_handler.fusion_bkb_path, use_pickle=True)
             except:
                 logging.warning('Could not load fused bkb from pickle at:\n\t{}.\n\tReverting to normal load procedure. Consider saving fused bkb as a pickle.'.format(bkb_data_handler.fusion_bkb_path))
                 self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
