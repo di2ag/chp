@@ -1,6 +1,3 @@
-[submodule "submodules/PyBKB"]
-	path = submodules/PyBKB
-	url = /home/public/git/modules/PyBKB.git
 [submodule "submodules/biothings_explorer"]
 	path = submodules/biothings_explorer
 	url = https://github.com/biothings/biothings_explorer.git 
