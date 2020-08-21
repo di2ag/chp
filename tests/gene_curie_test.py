@@ -2,16 +2,22 @@ import unittest
 from chp.gene_curie import curie_match, spinoff_requests, get_gene_list
 
 
+# Tests chp.gene_curie.py to make sure we get solid request returns. Also
+# tests that the program is thread safe meaning all all gene requests are returned
+# with their respective curie IDs rather than another gene's curie ID
+
 class testGeneCurie(unittest.TestCase):
     #self.gene_file = '/home/public/data/ncats/data_drop_03-04-2020/wxs.csv'
     #self.gene_list = get_gene_list(self.gene_file)
 
+    # test a good gene request and ensure the ensembl ID matches a known ensemble ID
     def test_curie_request(self):
         raf_curie = 'ENSG00000132155'
         gene = 'RAF1'
         curie_info = curie_match(gene)
         self.assertEqual(curie_info[1], raf_curie)
 
+    # validating that a bunk gene request returns 'not found'
     def test_bunk_curie_request(self):
         bunk_gene = 'Bunk'
         curie_info = curie_match(bunk_gene)
