@@ -41,7 +41,7 @@ def curie_match(patient_gene):
         if entrezIDPass:
             return passReturn
 
-    return [gene, 'not_found', 'NA']
+    return [gene, 'not found', 'NA']
 
 ##########################################################
 # symbol_pass
