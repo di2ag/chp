@@ -7,47 +7,41 @@ Thayer School of Engineering at Dartmouth College
             Dr. Keum Joo Kim
 '''
 
-
-import json
-import itertools
-import tqdm
-import numpy as np
-import random
 import copy
-import uuid
-import pickle
 import csv
 import sys
+import uuid
 
 from chp.query import Query
 from chp.reasoner import Reasoner
 
 from chp_data.bkb_handler import BkbDataHandler
 
-from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
-from pybkb.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
-from pybkb.python_base.fusion import fuse
+#from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+#from pybkb.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
+#from pybkb.python_base.fusion import fuse
 
 class RankingHandler:
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
+        # query graph components
         self.query = query
         self.qg = self.query['query_graph']
         self.kg = self.query['knowledge_graph']
         self.results = self.query['results']
 
-
-        #change
-        #-- Instiatate Reasoner
+        # Instiatate Reasoner
         self.bkb_data_handler = BkbDataHandler()
         self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
                                 hosts_filename=hosts_filename,
                                 num_processes_per_host=num_processes_per_host)
+        # prepare curie gene dict
         self.gene_curie_dict = dict()
         with open(self.bkb_data_handler.gene_curie_path, 'r') as gene_file:
             reader = csv.reader(gene_file)
             next(reader)
             for row in reader:
                 self.gene_curie_dict[row[1]] = row[0]
+        # prepare curie drug dict
         self.drug_curie_dict = dict()
         with open(self.bkb_data_handler.drug_curie_path, 'r') as drug_file:
             reader = csv.reader(drug_file)
@@ -55,20 +49,34 @@ class RankingHandler:
             for row in reader:
                 self.drug_curie_dict[row[1]] = row[0]
 
-
+        # default query specification
         self.target_strategy = 'chain'
         self.interpolation = 'standard'
+
+    ##########################################################
+    # checkQuery
+    # Input:
+    # Output: boolean True/False
+    #--------------------------------------------------------
+    # Description: NOT IMPLEMENTED. Checks the query graph
+    # to ensure it meets our specifications
 
     def checkQuery(self):
         return True
 
+    ##########################################################
+    # buildQueries
+    # Input:
+    # Output: list of queries
+    #--------------------------------------------------------
+    # Description: Parses over sent query graph to form a BKB
+    # query. The BKB query is returned. Only allows 1 gene curie
+    # or 1 drug curie. Raises error if both or non. There is an
+    # optional edge property 'onset_qualifier'. In the event this
+    # is not provided we default to 970 days. This needs to be
+    # documented in openAPI documentation?
+
     def buildQueries(self):
-        """ Assumes Query Graph of structure: Disease -> |Intermediate Nodes, i.e. Genes, Drugs, etc.| -> UpdateTargetNode
-            - Update Target Node is designated by a 't' label in the QG, i.e. t1, t2, etc.
-            - The beginning disease node tells us which datasets to use.
-            - The intermediate nodes dictate the evidence to use during updating.
-        """
-        queries = []
 
         # get evidence
         evidence = dict()
@@ -91,14 +99,19 @@ class RankingHandler:
 
         # get target
         targets = list()
-        for node in self.qg['nodes']:
-            if node['type'] == 'Death':
-                operator = node['operator']
-                val = node['value']
-                targets.append(('Survival_Time', operator, int(val)))
-
+        for edge in self.qg['edges']:
+            if edge['type'] == 'causes':
+                if 'onset_qualifier' in list(edge.keys()):
+                    days = edge['onset_qualifier']
+                # default value - needs to be documented in openAPI?
+                else:
+                    days = 970
+                targets.append(('Survival_Time', '>=', days))
         if len(list(evidence.keys())) + len(meta_evidence) > 1:
             sys.exit('More than 1 piece of evidence')
+
+        if len(list(evidence.keys())) + len(meta_evidence) == 0:
+            sys.exit('No evidence provided')
 
         if len(list(evidence.keys())) > 0:
             query = Query(evidence=evidence,
@@ -106,17 +119,30 @@ class RankingHandler:
                           meta_evidence=None,
                           meta_targets=targets,
                           type='updating')
-        else:
+        elif len(meta_evidence) > 0:
             query = Query(evidence=None,
                           targets=[],
                           meta_evidence=meta_evidence,
                           meta_targets=targets,
                           type='updating')
-        queries.append(query)
-        self.chp_query = query
-        return queries
+        else:
+            sys.exit('Problem in constructing BKB query')
 
-    def runQueries(self, bogus=True):
+        self.chp_query = query
+        return query
+
+    ##########################################################
+    # runQueries
+    # Input:
+    # Output:
+    #--------------------------------------------------------
+    # Description: Runs built BKB query to calculate probability
+    # of survival. Outputs are checked for -1s. If BOTH are -1
+    # they are left alone (should interpret as no inference and
+    # should document in openAPI). Otherwise probabilities are
+    # normalized
+
+    def runQueries(self):
         query = self.reasoner.analyze_query(copy.deepcopy(self.chp_query),
                                             save_dir=None,
                                             target_strategy=self.target_strategy,
@@ -144,37 +170,32 @@ class RankingHandler:
             self.target_info[0][2] /= prob_sum
             self.target_info[1][2] /= prob_sum
 
-        #report = query.jsonExplanations()
-        #self.patient_report = report['Patient Analysis']
+    ##########################################################
+    # constructDecoratedKG
+    # Input:
+    # Output: endpoint query response
+    #--------------------------------------------------------
+    # Description: knowledge graph is a copy of query graph where
+    # we add a edge property, 'has_confidence_level' annotated with
+    # our determined value. The whole query response is formed and
+    # returned.
 
     def constructDecoratedKG(self):
         self.kg = copy.deepcopy(self.qg)
         results = {'edge_bindings':[], 'node_bindings':[]}
-        Q_graph_node_target = None
-        K_graph_new_node_target = None
         # update target node info and form new KGraph id
-        for node in self.kg['nodes']:
-            if node['curie'] == 'UBERON:0000071':
-                node['has_confidence_level'] = self.target_info[0][2]
+        for edge in self.kg['edges']:
+            if edge['type'] == 'causes':
+                edge['has_confidence_level'] = self.target_info[0][2]
+                qg_id = edge['id']
+                kg_id = str(uuid.uuid4())
+                edge['id'] = kg_id
                 #they may want descriptions later
                 #node['Description'] = self.patient_report
-                Q_graph_node_target = node['id']
-                K_graph_new_node_target = str(uuid.uuid4())
-                node['id'] = K_graph_new_node_target
 
-        Q_graph_edge_target = None
-        K_graph_new_edge_target = None
-        # update KGraph edge connection to target with new KGraph id
-        for edge in self.kg['edges']:
-            if edge['target_id'] == Q_graph_node_target:
-                edge['target_id'] == K_graph_new_node_target
-                Q_graph_edge_target = edge['id']
-                K_graph_new_edge_target = str(uuid.uuid4())
-                edge['id'] = K_graph_new_edge_target
+        results['edge_bindings'].append({'qg_id':qg_id, 'kg_id':kg_id})
 
-        results['node_bindings'].append({'qg_id':Q_graph_node_target, 'kg_id':K_graph_new_node_target})
-        results['edge_bindings'].append({'qg_id':Q_graph_edge_target, 'kg_id':K_graph_new_edge_target})
-
+        # query response
         reasoner_std = {'query_graph': self.qg,
                         'knowledge_graph': self.kg,
                         'results': results}
