@@ -14,7 +14,7 @@ import tqdm
 import numpy as np
 
 #-- Integrators
-from chp.integrator.explorer_agent import ExplorerHandler
+from chp.integrator.exploring_agent import ExploringHandler
 from chp.integrator.unsecret_agent import UnsecretHandler
 from chp.integrator.ranking_agent import RankingHandler
 
@@ -34,8 +34,8 @@ class ReasonerStdHandler:
         return True
 
     def getHandler(self):
-        if self.integrator == 'explorer':
-            handler = ExplorerHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
+        if self.integrator == 'exploring':
+            handler = ExploringHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         elif self.integrator == 'unsecret':
             handler = UnsecretHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         elif self.integrator == 'ranking':

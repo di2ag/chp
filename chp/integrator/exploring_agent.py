@@ -17,11 +17,7 @@ from chp.reasoner import Reasoner
 
 from chp_data.bkb_handler import BkbDataHandler
 
-#from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
-#from pybkb.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
-#from pybkb.python_base.fusion import fuse
-
-class RankingHandler:
+class ExploringHandler:
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
         # query graph components
         self.query = query
@@ -77,53 +73,108 @@ class RankingHandler:
     ##########################################################
     # buildQueries
     # Input:
-    # Output: list of queries
+    # Output: built query
     #--------------------------------------------------------
     # Description: Parses over sent query graph to form a BKB
-    # query. The BKB query is returned. Only allows 1 gene curie
-    # or 1 drug curie. Raises error if both or non. There is an
-    # optional edge property 'onset_qualifier'. In the event this
-    # is not provided we default to 970 days. This needs to be
-    # documented in openAPI documentation?
+    # query. The BKB query is returned.
 
     def buildQueries(self):
+
+        # ensure we are using all nodes/edges
+        total_nodes = 0
+        total_edges = 0
+
+        # get phenotype node
+        targets = list()
+        acceptable_target_curies = ['EFO:0000714']
+        for node in self.qg['nodes']:
+            if node['type'] == 'PhenotypicFeature' and node['curie'] in acceptable_target_curies:
+                target_id = node['id']
+                total_nodes += 1
+        if total_nodes == 0:
+            acceptable_target_curies_print = ','.join(acceptable_target_curies)
+            sys.exit('Survival Node not found. Node type muse be \'PhenotypicFeature\' and curie must be in: ' + acceptable_target_curies_print)
+        elif total_nodes > 1:
+            sys.exit('Too many target nodes')
+
+        # get disease node info and ensure only 1 disease:
+        acceptable_disease_curies = ['MONDO:0007254']
+        for node in self.qg['nodes']:
+            if node['type'] == 'disease' and node['curie'] in acceptable_disease_curies:
+                disease_id = node['id']
+                for edge in self.qg['edges']:
+                    if edge['type'] == 'disease_to_phenotype_association' and edge['source_id'] == disease_id and edge['target_id'] == target_id and 'value' in list(edge.keys()):
+                        days = edge['value']
+                        if isinstance(days, str):
+                            days = int(days)
+                        total_edges += 1
+                if total_edges == 0:
+                    sys.exit('Disease and target edge not found. Edge type must be \'disease_to_phenotype_association\'')
+                elif total_edges > 1:
+                    sys.exit('Disease has too many outgoing edges')
+                total_nodes += 1
+        if total_nodes  == 1:
+            acceptable_disease_curies_print = ','.join(acceptable_disease_curies)
+            sys.exit('Disease node not found. Node type must be \'disease\' and curie must be in: ' + acceptable_disease_curies_print)
+        elif total_nodes > 2:
+            sys.exit('Too many disease nodes')
+        # set BKB target
+        targets.append(('Survival_Time', '>=', days))
 
         # get evidence
         evidence = dict()
         meta_evidence = list()
         for node in self.qg['nodes']:
+            # genes
             if node['type'] == 'Gene':
+                # check for appropriate gene node structure
+                gene_id = node['id']
+                for edge in self.qg['edges']:
+                    if edge['type'] == 'gene_to_disease_association' and edge['source_id'] == gene_id and edge['target_id'] == disease_id:
+                        total_edges += 1
+                if total_edges == total_nodes - 1:
+                    sys.exit('Gene and disease edge not found. Edge type must be \'gene_to_disease_association\'')
+                elif total_edges > total_nodes:
+                    sys.exit('Gene has too many outgoing edges')
+                # check for appropriate gene node curie
                 gene_curie = node['curie']
                 try:
                     gene = self.gene_curie_dict[gene_curie]
                 except:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
                 evidence["mut_" + gene] = 'True'
+                total_nodes += 1
+            # drugs
             if node['type'] == 'Drug':
+                # check for appropriate drug node structure
+                drug_id = node['id']
+                for edge in self.qg['edges']:
+                    if edge['type'] == 'chemical_to_disease_or_phenotypic_feature_association' and edge['source_id'] == drug_id and edge['target_id'] == disease_id:
+                        total_edges += 1
+                if total_edges == total_nodes - 1:
+                    sys.exit('Drug and disease edge not found. Edge type must be \'chemical_to_disease_or_phenotypic_feature_association\'')
+                elif total_edges > total_nodes:
+                    sys.exit('Drug has too many outgoing edges')
+                # check for appropriate drug node curie
                 drug_curie = node['curie']
                 try:
                     drug = self.drug_curie_dict[drug_curie]
                 except:
                     sys.exit('Invalid CHEMBL Identifier. Must be in form CHEMBL:<ID>')
                 meta_evidence.append(('Drug_Name(s)', '==', drug))
+                total_nodes += 1
 
-        # get target
-        targets = list()
-        for edge in self.qg['edges']:
-            if edge['type'] == 'causes':
-                if 'onset_qualifier' in list(edge.keys()):
-                    days = edge['onset_qualifier']
-                # default value - needs to be documented in openAPI?
-                else:
-                    days = 970
-                targets.append(('Survival_Time', '>=', days))
-        if len(list(evidence.keys())) + len(meta_evidence) > 1:
-            sys.exit('More than 1 piece of evidence')
+        if total_nodes != len(self.qg['nodes']) or total_edges != len(self.qg['edges']):
+            sys.exit('There are extra components in the provided QG structure')
 
-        if len(list(evidence.keys())) + len(meta_evidence) == 0:
-            sys.exit('No evidence provided')
-
-        if len(list(evidence.keys())) > 0:
+        # produce BKB query
+        if len(meta_evidence) > 0 and len(list(evidence.keys())) > 0:
+            query = Query(evidence=evidence,
+                          targets=[],
+                          meta_evidence=meta_evidence,
+                          meta_targets=targets,
+                          type='updating')
+        elif len(list(evidence.keys())) > 0:
             query = Query(evidence=evidence,
                           targets=[],
                           meta_evidence=None,
@@ -136,7 +187,11 @@ class RankingHandler:
                           meta_targets=targets,
                           type='updating')
         else:
-            sys.exit('Problem in constructing BKB query')
+            query = Query(evidence=None,
+                          targets=[],
+                          meta_evidence=None,
+                          meta_targets=targets,
+                          type='updating')
 
         self.chp_query = query
         return query
@@ -193,10 +248,10 @@ class RankingHandler:
     def constructDecoratedKG(self):
         self.kg = copy.deepcopy(self.qg)
         results = {'edge_bindings':[], 'node_bindings':[]}
-        # update target node info and form new KGraph id
+        # update target node info and form edge pair combos for results graph
         edge_pairs = list()
         for edge in self.kg['edges']:
-            if edge['type'] == 'causes':
+            if edge['type'] == 'disease_to_phenotype_association':
                 edge['has_confidence_level'] = self.target_info[0][2]
                 #they may want descriptions later
                 #node['Description'] = self.patient_report
