@@ -175,7 +175,7 @@ class RankingHandler:
             self.target_info[0][2] /= prob_sum
             self.target_info[1][2] /= prob_sum
         elif self.target_info[0][2] != -1 and self.target_info[1][2] == -1:
-            self.target_info[1][2] == 0
+            self.target_info[1][2] = 0
             prob_sum = self.target_info[0][2] + self.target_info[1][2]
             self.target_info[0][2] /= prob_sum
             self.target_info[1][2] /= prob_sum
