@@ -76,7 +76,7 @@ class Query:
 
             #-- Save out bkb
             if self.bkb is not None:
-                self.bkb.save('{}.bkb'.format(self.name), pickle=True)
+                self.bkb.save('{}.bkb'.format(self.name), use_pickle=True)
 
         #-- Save out JSON query info
         json_dict = {'evidence': self.evidence,
