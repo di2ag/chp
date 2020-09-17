@@ -3,8 +3,8 @@ import tqdm
 import numpy as np
 import pickle
 import os
-from biothings_explorer.hint import Hint
-from biothings_explorer.user_query_dispatcher import FindConnection
+#from biothings_explorer.hint import Hint
+#from biothings_explorer.user_query_dispatcher import FindConnection
 
 from chp.core.query import Query
 from chp.core.reasoner_std import ReasonerStdHandler
