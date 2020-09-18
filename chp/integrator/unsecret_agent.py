@@ -176,9 +176,6 @@ class UnsecretHandler:
         if len(list(evidence.keys())) == 0:
             sys.exit('Needs at least 1 gene')
 
-
-        #meta_evidence.append(('Age_of_Diagnosis','>=',20000))
-
         # produce BKB query
         if len(meta_evidence) > 0 and len(list(evidence.keys())) > 0:
             query = Query(evidence=evidence,
@@ -312,7 +309,7 @@ class UnsecretHandler:
                 false_sensitive_drugs.append('Drug_Name(s) == {} = True'.format(k))
 
             # add age item
-            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Age_of_Diagnosis {} - {}'.format(true_age_mean-true_age_std+5000, true_age_mean+true_age_std+5000)] = max_true_contrib + 10*min_true_contrib
+            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Age_of_Diagnosis {} - {}'.format(true_age_mean-true_age_std, true_age_mean+true_age_std)] = max_true_contrib + 10*min_true_contrib
             self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Age_of_Diagnosis {} - {}'.format(false_age_mean-false_age_std, false_age_mean+false_age_std)] = max_false_contrib + 10*min_false_contrib
             # add stage
             # T
