@@ -4,16 +4,22 @@ import numpy as np
 import pickle
 import os
 import sys
-from biothings_explorer.hint import Hint
-from biothings_explorer.user_query_dispatcher import FindConnection
-from biothings_explorer.export.reasoner import ReasonerConverter
+import logging
+
+#from biothings_explorer.hint import Hint
+#from biothings_explorer.user_query_dispatcher import FindConnection
+#from biothings_explorer.export.reasoner import ReasonerConverter
 
 from chp.query import Query
 from chp.reasoner_std import ReasonerStdHandler
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
+
 query_path = '/home/ghyde/bkb-pathway-provider/tests/reasonerStdTests/sample_query1.pk'
 
 if os.path.exists(query_path):
+    print('loaded response')
     with open(query_path, 'rb') as f_:
         response = pickle.load(f_)
 else:
@@ -115,7 +121,23 @@ handler = ReasonerStdHandler(source_ara='unsecret',
 queries = handler.buildChpQueries()
 queries = handler.runChpQueries()
 reasoner_std_final = handler.constructDecoratedKG()
-#print(reasoner_std_final)
+
+chp_res = reasoner_std_final
+
+QG = chp_res['query_graph']
+KG = chp_res['knowledge_graph']
+res = chp_res['results']
+
+#sensitive patients
+KG_result_node = res['node_bindings'][0]['kg_id']
+for node in KG['nodes']:
+    if node['id'] == KG_result_node:
+        reports = node['Description']
+        p_survival = node['has_confidence_level']
+
+# probability of surival given QG specification
+print(reports['Contribution Analysis'])
+print("Probability of survival > 1000 days is:", p_survival)
 
 '''
 #-- Get all options to fill query graph edges

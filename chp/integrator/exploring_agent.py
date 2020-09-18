@@ -36,7 +36,7 @@ class ExploringHandler:
             self.results = self.query['results']
 
         # Instiatate Reasoner
-        self.bkb_data_handler = BkbDataHandler()
+        self.bkb_data_handler = BkbDataHandler(dataset_version='1.1')
         self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
                                 hosts_filename=hosts_filename,
                                 num_processes_per_host=num_processes_per_host)
@@ -56,7 +56,7 @@ class ExploringHandler:
                 self.drug_curie_dict[row[1]] = row[0]
 
         # default query specification
-        self.target_strategy = 'chain'
+        self.target_strategy = 'explicit'
         self.interpolation = 'standard'
 
     ##########################################################

@@ -17,6 +17,7 @@ import copy
 import uuid
 import csv
 import sys
+import logging
 
 from chp.query import Query
 from chp.reasoner import Reasoner
@@ -27,6 +28,11 @@ from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
 from pybkb.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
 from pybkb.python_base.fusion import fuse
 
+#-- Setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+DEBUG = True
+
 class UnsecretHandler:
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
         self.query = query
@@ -36,7 +42,7 @@ class UnsecretHandler:
         self.probability_targets = self.query['probability_targets']
 
         #-- Instiatate Reasoner
-        self.bkb_data_handler = BkbDataHandler()
+        self.bkb_data_handler = BkbDataHandler(dataset_version='1.1')
         self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
                                 hosts_filename=hosts_filename,
                                 num_processes_per_host=num_processes_per_host)
@@ -47,7 +53,7 @@ class UnsecretHandler:
             for row in reader:
                 self.gene_curie_dict[row[1]] = row[0]
 
-        self.target_strategy = 'chain'
+        self.target_strategy = 'explicit'
         self.interpolation = 'standard'
 
     def checkQuery(self):
@@ -68,7 +74,7 @@ class UnsecretHandler:
                     gene = self.gene_curie_dict[gene_curie]
                 except:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
-                evidence["mut_" + gene] = 'True'
+                evidence["_mut_" + gene] = 'True'
 
         query = Query(evidence=evidence,
                       targets=[],
@@ -79,7 +85,7 @@ class UnsecretHandler:
         self.chp_query = query
         return queries
 
-    def runQueries(self, bogus=True):
+    def runQueries(self):
         query = self.reasoner.analyze_query(copy.deepcopy(self.chp_query),
                                             save_dir=None,
                                             target_strategy=self.target_strategy,
@@ -108,8 +114,11 @@ class UnsecretHandler:
             self.target_info[0][2] /= prob_sum
             self.target_info[1][2] /= prob_sum
 
-        report = query.jsonExplanations()
-        self.patient_report = report['Patient Analysis']
+        report = query.jsonExplanations(contributions_include_srcs=False,
+                                        contributions_top_n_inodes=10,
+                                        contributions_ignore_prefixes=['_'])
+        self.report = {'Patient Analysis': report['Patient Analysis'],
+                       'Contribution Analysis': report['Contributions Analysis']}
 
     def constructDecoratedKG(self):
         self.kg = copy.deepcopy(self.qg)
@@ -120,7 +129,7 @@ class UnsecretHandler:
         for node in self.kg['nodes']:
             if 'curie' in node.keys() and node['curie'] == 'CHPDART:SURVIVAL':
                 node['has_confidence_level'] = self.target_info[0][2]
-                node['Description'] = self.patient_report
+                node['Description'] = self.report
                 Q_graph_node_target = node['id']
                 K_graph_new_node_target = str(uuid.uuid4())
                 node['id'] = K_graph_new_node_target

@@ -12,11 +12,16 @@ import json
 import itertools
 import tqdm
 import numpy as np
+import logging
 
 #-- Integrators
 from chp.integrator.exploring_agent import ExploringHandler
 from chp.integrator.unsecret_agent import UnsecretHandler
 from chp.integrator.ranking_agent import RankingHandler
+
+#-- Setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class ReasonerStdHandler:
     def __init__(self, source_ara, json_query=None, dict_query=None, hosts_filename=None, num_processes_per_host=0):

@@ -11,5 +11,5 @@ if os.path.exists(query_path):
 
 reasoner_std['reasoner_id'] = 'unsecret'
 payload = {'query': reasoner_std}
-r = requests.post('http://129.170.69.138/submitQuery/', json=payload)
+r = requests.post('http://127.0.0.1:8000/submitQuery/', json=payload)
 print(r.text)
