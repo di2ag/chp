@@ -108,13 +108,13 @@ class testUnsecretAgent(unittest.TestCase):
                                     "edge_bindings": []
                                   }
         # add in evidence gene
-        gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
+        gene1 = ('TP53', 'ENSEMBL:ENSG00000141510')
         reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
                                                       'type':'Gene',
                                                       'curie':'{}'.format(gene1[1])
                                                    })
         # add in second evidence gene
-        gene2 = ('BRCA1', 'ENSEMBL:ENSG00000012048')
+        gene2 = ('CDH1', 'ENSEMBL:ENSG00000039068')
         reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('1'),
                                                       'type':'Gene',
                                                       'curie':'{}'.format(gene2[1])
@@ -156,7 +156,7 @@ class testUnsecretAgent(unittest.TestCase):
         # link disease to target
         reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('3'),
                                                       'type':'disease_to_phenotype_association',
-                                                      'value':970,
+                                                      'value':1300,
                                                       'source_id':'n{}'.format('3'),
                                                       'target_id':'n{}'.format('4')
                                                    })
@@ -173,91 +173,95 @@ class testUnsecretAgent(unittest.TestCase):
 
     # 3. Test with no evidence
     def test_no_evidence(self):
-        # empty response
-        reasoner_std = { "query_graph": dict(),
-                         "knowledge_graph": dict(),
-                         "response": dict()
-                       }
-        # empty query graph
-        reasoner_std["query_graph"] = { "edges": [],
-                                        "nodes": []
-                                      }
-        # empty knowledge graph
-        reasoner_std["knowledge_graph"] = { "edges": [],
+        with self.assertRaises(SystemExit) as se:
+            # empty response
+            reasoner_std = { "query_graph": dict(),
+                             "knowledge_graph": dict(),
+                             "response": dict()
+                           }
+            # empty query graph
+            reasoner_std["query_graph"] = { "edges": [],
                                             "nodes": []
                                           }
-        # empty response graph
-        reasoner_std["results"] = { "node_bindings": [],
-                                    "edge_bindings": []
-                                  }
-        # add in disease node
-        disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
-                                                      'type':'disease',
-                                                      'curie':'{}'.format(disease[1])
-                                                   })
-        # add target survival node
-        phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes'].append({ 'id': 'n{}'.format('1'),
-                                                      'type': 'PhenotypicFeature',
-                                                      'curie': '{}'.format(phenotype[1]),
-                                                   })
-        # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
-                                                      'type':'disease_to_phenotype_association',
-                                                      'value':970,
-                                                      'source_id':'n{}'.format('0'),
-                                                      'target_id':'n{}'.format('1')
-                                                   })
-        handler = ReasonerStdHandler(source_ara='unsecret',
-                                     dict_query=reasoner_std)
-        queries = handler.buildChpQueries()
-        queries = handler.runChpQueries()
-        reasoner_std_final = handler.constructDecoratedKG()
-        KG = reasoner_std_final['knowledge_graph']
-        for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
-                p_survival = edge['has_confidence_level']
-        print("probability of survival:",p_survival)
+            # empty knowledge graph
+            reasoner_std["knowledge_graph"] = { "edges": [],
+                                                "nodes": []
+                                              }
+            # empty response graph
+            reasoner_std["results"] = { "node_bindings": [],
+                                        "edge_bindings": []
+                                      }
+            # add in disease node
+            disease = ('Breast_Cancer', 'MONDO:0007254')
+            reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
+                                                          'type':'disease',
+                                                          'curie':'{}'.format(disease[1])
+                                                       })
+            # add target survival node
+            phenotype = ('Survival_Time', 'EFO:0000714')
+            reasoner_std['query_graph']['nodes'].append({ 'id': 'n{}'.format('1'),
+                                                          'type': 'PhenotypicFeature',
+                                                          'curie': '{}'.format(phenotype[1]),
+                                                       })
+            # link disease to target
+            reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
+                                                          'type':'disease_to_phenotype_association',
+                                                          'value':970,
+                                                          'source_id':'n{}'.format('0'),
+                                                          'target_id':'n{}'.format('1')
+                                                       })
+            handler = ReasonerStdHandler(source_ara='unsecret',
+                                         dict_query=reasoner_std)
+            queries = handler.buildChpQueries()
+            queries = handler.runChpQueries()
+            reasoner_std_final = handler.constructDecoratedKG()
+            KG = reasoner_std_final['knowledge_graph']
+            for edge in KG['edges']:
+                if edge['type'] == 'disease_to_phenotype_association':
+                    p_survival = edge['has_confidence_level']
+            print("probability of survival:",p_survival)
+        self.assertEqual(se.exception.code, 'Needs at least 1 gene')
 
     # 4. Test with no evidence, but omitting KG and Results (should be handled by handler)
     def test_no_evidence_omitting_KG_and_results(self):
-        # empty response
-        reasoner_std = { "query_graph": dict(),
-                       }
-        # empty query graph
-        reasoner_std["query_graph"] = { "edges": [],
-                                        "nodes": []
-                                      }
-        # add in disease node
-        disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
-                                                      'type':'disease',
-                                                      'curie':'{}'.format(disease[1])
-                                                   })
-        # add target survival node
-        phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes'].append({ 'id': 'n{}'.format('1'),
-                                                      'type': 'PhenotypicFeature',
-                                                      'curie': '{}'.format(phenotype[1]),
-                                                   })
-        # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
-                                                      'type':'disease_to_phenotype_association',
-                                                      'value':970,
-                                                      'source_id':'n{}'.format('0'),
-                                                      'target_id':'n{}'.format('1')
-                                                   })
-        handler = ReasonerStdHandler(source_ara='unsecret',
-                                     dict_query=reasoner_std)
-        queries = handler.buildChpQueries()
-        queries = handler.runChpQueries()
-        reasoner_std_final = handler.constructDecoratedKG()
-        KG = reasoner_std_final['knowledge_graph']
-        for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
-                p_survival = edge['has_confidence_level']
-        print("probability of survival:",p_survival)
+        with self.assertRaises(SystemExit) as se:
+            # empty response
+            reasoner_std = { "query_graph": dict(),
+                           }
+            # empty query graph
+            reasoner_std["query_graph"] = { "edges": [],
+                                            "nodes": []
+                                          }
+            # add in disease node
+            disease = ('Breast_Cancer', 'MONDO:0007254')
+            reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
+                                                          'type':'disease',
+                                                          'curie':'{}'.format(disease[1])
+                                                       })
+            # add target survival node
+            phenotype = ('Survival_Time', 'EFO:0000714')
+            reasoner_std['query_graph']['nodes'].append({ 'id': 'n{}'.format('1'),
+                                                          'type': 'PhenotypicFeature',
+                                                          'curie': '{}'.format(phenotype[1]),
+                                                       })
+            # link disease to target
+            reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
+                                                          'type':'disease_to_phenotype_association',
+                                                          'value':970,
+                                                          'source_id':'n{}'.format('0'),
+                                                          'target_id':'n{}'.format('1')
+                                                       })
+            handler = ReasonerStdHandler(source_ara='unsecret',
+                                         dict_query=reasoner_std)
+            queries = handler.buildChpQueries()
+            queries = handler.runChpQueries()
+            reasoner_std_final = handler.constructDecoratedKG()
+            KG = reasoner_std_final['knowledge_graph']
+            for edge in KG['edges']:
+                if edge['type'] == 'disease_to_phenotype_association':
+                    p_survival = edge['has_confidence_level']
+            print("probability of survival:",p_survival)
+        self.assertEqual(se.exception.code, 'Needs at least 1 gene')
 
     # 5. Test with one gene
     def test_one_gene(self):
@@ -322,64 +326,67 @@ class testUnsecretAgent(unittest.TestCase):
 
     # 6. Test with one drug
     def test_one_drug(self):
-        # empty response
-        reasoner_std = { "query_graph": dict(),
-                         "knowledge_graph": dict(),
-                         "response": dict()
-                       }
-        # empty query graph
-        reasoner_std["query_graph"] = { "edges": [],
-                                        "nodes": []
-                                      }
-        # empty knowledge graph
-        reasoner_std["knowledge_graph"] = { "edges": [],
+        with self.assertRaises(SystemExit) as se:
+            # empty response
+            reasoner_std = { "query_graph": dict(),
+                             "knowledge_graph": dict(),
+                             "response": dict()
+                           }
+            # empty query graph
+            reasoner_std["query_graph"] = { "edges": [],
                                             "nodes": []
                                           }
-        # empty response graph
-        reasoner_std["results"] = { "node_bindings": [],
-                                    "edge_bindings": []
-                                  }
-        # add in evidence drug
-        drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
-        reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
-                                                      'type':'Drug',
-                                                      'curie':'{}'.format(drug[1])
-                                                   })    
-        # add in disease node
-        disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('1'),
-                                                      'type':'disease',
-                                                      'curie':'{}'.format(disease[1])
-                                                   })
-        # add target survival node
-        phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes'].append({ 'id': 'n{}'.format('2'),
-                                                      'type': 'PhenotypicFeature',
-                                                      'curie': '{}'.format(phenotype[1]),
-                                                   })
-        # link drug to disease
-        reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
-                                                      'type':'chemical_to_disease_or_phenotypic_feature_association',
-                                                      'source_id':'n{}'.format('0'),
-                                                      'target_id':'n{}'.format('1')
-                                                   })
-        # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('1'),
-                                                      'type':'disease_to_phenotype_association',
-                                                      'value':970,
-                                                      'source_id':'n{}'.format('1'),
-                                                      'target_id':'n{}'.format('2')
-                                                   })
-        handler = ReasonerStdHandler(source_ara='unsecret',
-                                     dict_query=reasoner_std)
-        queries = handler.buildChpQueries()
-        queries = handler.runChpQueries()
-        reasoner_std_final = handler.constructDecoratedKG()
-        KG = reasoner_std_final['knowledge_graph']
-        for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
-                p_survival = edge['has_confidence_level']
-        print("probability of survival:",p_survival)
+            # empty knowledge graph
+            reasoner_std["knowledge_graph"] = { "edges": [],
+                                                "nodes": []
+                                              }
+            # empty response graph
+            reasoner_std["results"] = { "node_bindings": [],
+                                        "edge_bindings": []
+                                      }
+            # add in evidence drug
+            drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
+            reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
+                                                          'type':'Drug',
+                                                          'curie':'{}'.format(drug[1])
+                                                       })    
+            # add in disease node
+            disease = ('Breast_Cancer', 'MONDO:0007254')
+            reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('1'),
+                                                          'type':'disease',
+                                                          'curie':'{}'.format(disease[1])
+                                                       })
+            # add target survival node
+            phenotype = ('Survival_Time', 'EFO:0000714')
+            reasoner_std['query_graph']['nodes'].append({ 'id': 'n{}'.format('2'),
+                                                          'type': 'PhenotypicFeature',
+                                                          'curie': '{}'.format(phenotype[1]),
+                                                       })
+            # link drug to disease
+            reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
+                                                          'type':'chemical_to_disease_or_phenotypic_feature_association',
+                                                          'source_id':'n{}'.format('0'),
+                                                          'target_id':'n{}'.format('1')
+                                                       })
+            # link disease to target
+            reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('1'),
+                                                          'type':'disease_to_phenotype_association',
+                                                          'value':970,
+                                                          'source_id':'n{}'.format('1'),
+                                                          'target_id':'n{}'.format('2')
+                                                       })
+            handler = ReasonerStdHandler(source_ara='unsecret',
+                                         dict_query=reasoner_std)
+            queries = handler.buildChpQueries()
+            queries = handler.runChpQueries()
+            reasoner_std_final = handler.constructDecoratedKG()
+            KG = reasoner_std_final['knowledge_graph']
+            for edge in KG['edges']:
+                if edge['type'] == 'disease_to_phenotype_association':
+                    p_survival = edge['has_confidence_level']
+            print("probability of survival:",p_survival)
+        self.assertEqual(se.exception.code, 'Needs at least 1 gene')
+
 
     # 7. Test with no target (should crash)
     def test_no_target(self):
