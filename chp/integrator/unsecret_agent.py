@@ -245,13 +245,11 @@ class UnsecretHandler:
             self.target_info[1][2] /= prob_sum
 
 
-        print('@@@@@@@@@@@@@@@@@',self.target_info[0][2], self.target_info[1][2])
         report = query.jsonExplanations(contributions_include_srcs=False,
                                         contributions_top_n_inodes=10,
                                         contributions_ignore_prefixes=['_'])
         self.report = {'Patient Analysis': report['Patient Analysis'],
                        'Contribution Analysis': report['Contributions Analysis']}
-        print(self.report['Contribution Analysis'])
 
     ##########################################################
     # constructDecoratedKG
