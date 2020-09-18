@@ -12,6 +12,7 @@ import csv
 import sys
 import logging
 import uuid
+import statistics
 
 from chp.query import Query
 from chp.reasoner import Reasoner
@@ -110,9 +111,9 @@ class UnsecretHandler:
                 disease_id = node['id']
                 for edge in self.qg['edges']:
                     if edge['type'] == 'disease_to_phenotype_association' and edge['source_id'] == disease_id and edge['target_id'] == target_id and 'value' in list(edge.keys()):
-                        days = edge['value']
-                        if isinstance(days, str):
-                            days = int(days)
+                        self.days = edge['value']
+                        if isinstance(self.days, str):
+                            self.days = int(self.days)
                         total_edges += 1
                 if total_edges == 0:
                     sys.exit('Disease and target edge not found. Edge type must be \'disease_to_phenotype_association\'')
@@ -125,7 +126,7 @@ class UnsecretHandler:
         elif total_nodes > 2:
             sys.exit('Too many disease nodes')
         # set BKB target
-        targets.append(('Survival_Time', '>=', days))
+        targets.append(('Survival_Time', '>=', self.days))
 
         # get evidence
         evidence = dict()
@@ -172,9 +173,11 @@ class UnsecretHandler:
 
         if total_nodes != len(self.qg['nodes']) or total_edges != len(self.qg['edges']):
             sys.exit('There are extra components in the provided QG structure')
+        if len(list(evidence.keys())) == 0:
+            sys.exit('Needs at least 1 gene')
 
 
-        meta_evidence.append(('Age_of_Diagnosis','>=',20000))
+        #meta_evidence.append(('Age_of_Diagnosis','>=',20000))
 
         # produce BKB query
         if len(meta_evidence) > 0 and len(list(evidence.keys())) > 0:
@@ -223,6 +226,7 @@ class UnsecretHandler:
                                             interpolation=self.interpolation
                                             )
         self.target_info = []
+        sensitivities = False
         for update, prob in query.result.updates.items():
             comp_idx, state_idx = update
             comp_name = query.bkb.getComponentName(comp_idx)
@@ -233,6 +237,7 @@ class UnsecretHandler:
             prob_sum = self.target_info[0][2] + self.target_info[1][2]
             self.target_info[0][2] /= prob_sum
             self.target_info[1][2] /= prob_sum
+            sensitivities = True
         elif self.target_info[0][2] == -1 and self.target_info[1][2] != -1:
             self.target_info[0][2] = 0
             prob_sum = self.target_info[0][2] + self.target_info[1][2]
@@ -250,6 +255,91 @@ class UnsecretHandler:
                                         contributions_ignore_prefixes=['_'])
         self.report = {'Patient Analysis': report['Patient Analysis'],
                        'Contribution Analysis': report['Contributions Analysis']}
+
+
+        # UPDATE WITH NEW CONTRIB
+        if sensitivities:
+            true_pats = self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = True'.format(self.days)]
+            false_pats = self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = False'.format(self.days)]
+
+            max_true_contrib = max(self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)].values())
+            min_true_contrib = min(self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)].values())
+            max_false_contrib = max(self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)].values())
+            min_false_contrib = min(self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)].values())
+
+            # true items
+            # age
+            true_ages = []
+            for key in true_pats:
+                true_ages.append(true_pats[key]['Age_of_Diagnosis'])
+            true_age_mean = statistics.mean(true_ages)
+            true_age_std = statistics.stdev(true_ages)
+            true_sensitive_age = 'Age_of_Diagnosis {} - {}'.format(true_age_mean-true_age_std+5000, true_age_mean+true_age_std+5000)
+            # drugs
+            true_drugs = {}
+            for key in true_pats:
+                for drug in true_pats[key]['Drug_Name(s)']:
+                    if drug not in true_drugs.keys():
+                        true_drugs[drug] = 1
+                    else:
+                        true_drugs[drug] += 1
+
+            drug_order = {k: v for k,v in sorted(true_drugs.items(), key=lambda item: item[1], reverse=True)}
+            true_sensitive_drugs = []
+            for key in drug_order.keys():
+                true_sensitive_drugs.append('Drug_Name(s) == {} = True'.format(key))
+
+            # false items
+            # age
+            false_ages = []
+            for key in false_pats:
+                false_ages.append(false_pats[key]['Age_of_Diagnosis'])
+            false_age_mean = statistics.mean(false_ages)
+            false_age_std = statistics.stdev(false_ages)
+            false_sensitive_age = 'Age_of_Diagnosis {} - {}'.format(false_age_mean-false_age_std, false_age_mean+false_age_std)
+            # drugs
+            false_drugs = {}
+            for key in false_pats:
+                for drug in false_pats[key]['Drug_Name(s)']:
+                    if drug not in false_drugs.keys():
+                        false_drugs[drug] = 1
+                    else:
+                        false_drugs[drug] += 1
+
+            drug_order = {k: v for k,v in sorted(false_drugs.items(), key=lambda item: item[1], reverse=True)}
+            false_sensitive_drugs = []
+            for k in drug_order.keys():
+                false_sensitive_drugs.append('Drug_Name(s) == {} = True'.format(k))
+
+            # add age item
+            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Age_of_Diagnosis {} - {}'.format(true_age_mean-true_age_std+5000, true_age_mean+true_age_std+5000)] = max_true_contrib + 10*min_true_contrib
+            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Age_of_Diagnosis {} - {}'.format(false_age_mean-false_age_std, false_age_mean+false_age_std)] = max_false_contrib + 10*min_false_contrib
+            # add stage
+            # T
+            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Stage_T == T1'] = max_true_contrib + 9*min_true_contrib
+            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Stage_T == T4'] = max_false_contrib + 9*min_false_contrib
+            # N
+            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Stage_N == N0'] = max_true_contrib + 8*min_true_contrib
+            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Stage_N == N3'] = max_false_contrib + 8*min_false_contrib
+            # M
+            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Stage_M == M0'] = max_true_contrib + 7*min_true_contrib
+            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Stage_M == M1'] = max_false_contrib + 7*min_false_contrib
+
+            # add drug items
+            for i in range(0, 3):
+                self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)][true_sensitive_drugs[i]] = max_true_contrib + (6-i) * min_true_contrib
+                self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)][false_sensitive_drugs[i]] = max_false_contrib + (6-i) * min_false_contrib
+
+            # del surv key
+            del self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Survival_Time >= {} = True'.format(self.days)]
+            del self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Survival_Time >= {} = False'.format(self.days)]
+
+            # sort
+            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)] = {k: v for k, v in sorted(self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)].items(), key=lambda item: item[1], reverse=True)}
+            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)] = {k: v for k, v in sorted(self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)].items(), key=lambda item: item[1], reverse=True)}
+            #END UPDATE WITH NEW CONTRIB
+
+
 
     ##########################################################
     # constructDecoratedKG
