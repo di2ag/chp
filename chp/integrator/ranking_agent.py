@@ -164,20 +164,29 @@ class RankingHandler:
             state_name = query.bkb.getComponentINodeName(comp_idx, state_idx)
             #print(comp_name, state_name, prob)
             self.target_info.append([comp_name, state_name, prob])
-        if self.target_info[0][2] != -1 and self.target_info[1][2] != -1:
-            prob_sum = self.target_info[0][2] + self.target_info[1][2]
-            self.target_info[0][2] /= prob_sum
-            self.target_info[1][2] /= prob_sum
-        elif self.target_info[0][2] == -1 and self.target_info[1][2] != -1:
-            self.target_info[0][2] = 0
-            prob_sum = self.target_info[0][2] + self.target_info[1][2]
-            self.target_info[0][2] /= prob_sum
-            self.target_info[1][2] /= prob_sum
-        elif self.target_info[0][2] != -1 and self.target_info[1][2] == -1:
-            self.target_info[1][2] = 0
-            prob_sum = self.target_info[0][2] + self.target_info[1][2]
-            self.target_info[0][2] /= prob_sum
-            self.target_info[1][2] /= prob_sum
+
+        if self.target_info[0][1] == 'True':
+            self.truth_assignment = self.target_info[0][2]
+            self.false_assignment = self.target_info[1][2]
+        else:
+            self.truth_assignment = self.target_info[1][2]
+            self.false_assignment = self.target_info[0][2]
+
+        if self.truth_assignment != -1 and self.false_assignment != -1:
+            prob_sum = self.truth_assignment + self.false_assignment
+            self.truth_assignment /= prob_sum
+            self.false_assignment /= prob_sum
+            sensitivities = True
+        elif self.truth_assignment == -1 and self.false_assignment != -1:
+            self.truth_assignment = 0
+            prob_sum = self.truth_assignment + self.false_assignment
+            self.truth_assignment /= prob_sum
+            self.false_assignment /= prob_sum
+        elif self.truth_assignment != -1 and self.false_assignment == -1:
+            self.false_assignment = 0
+            prob_sum = self.truth_assignment + self.false_assignment
+            self.truth_assignment /= prob_sum
+            self.false_assignment /= prob_sum
 
     ##########################################################
     # constructDecoratedKG
@@ -196,7 +205,7 @@ class RankingHandler:
         edge_pairs = list()
         for edge in self.kg['edges']:
             if edge['type'] == 'causes':
-                edge['has_confidence_level'] = self.target_info[0][2]
+                edge['has_confidence_level'] = self.truth_assignment
                 #they may want descriptions later
                 #node['Description'] = self.patient_report
             qg_id = edge['id']
