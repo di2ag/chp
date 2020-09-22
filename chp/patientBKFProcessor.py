@@ -648,7 +648,7 @@ class PatientProcessor:
         return no_links
 
     # make all patient BKFs fn.
-    def makePatientBKFs(self, all_gene_mutations):
+    def makePatientBKFs(self, all_gene_mutations, with_drugs=False):
         for pat in tqdm.tqdm(self.requested_patients, desc='Forming patient BKFs', leave=False):
             bkf = BKB(name = pat.patientID)
             for aGene in all_gene_mutations:
@@ -660,10 +660,16 @@ class PatientProcessor:
                     _mutGeneComp_idx = bkf.addComponent('_mut_{}'.format(aGene))
                     _iNodeGeneMut_idx = bkf.addComponentState(_mutGeneComp_idx, 'True')
 
-                    mutVarComp_idx = bkf.addComponent('mut-var_{}'.format(aGene))
-                    iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, pat.variants[pat.mutatedGenes.index(aGene)])
+                    #-- Exchange mut-var with mut-drug. (Used for Relay 1).
+                    if with_drugs is True:
+                        mutDrugComp_idx = bkf.addComponent('mut-drug_{}'.format(aGene))
+                        iNodeMutDrug_idx = bkf.addComponentState(mutDrugComp_idx, pat.drugName[0])
+                        bkf.addSNode(BKB_S_node(mutDrugComp_idx, iNodeMutDrug_idx, 1.0, [(_mutGeneComp_idx, _iNodeGeneMut_idx)]))
 
-                    bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(_mutGeneComp_idx, _iNodeGeneMut_idx)]))
+                    else:
+                        mutVarComp_idx = bkf.addComponent('mut-var_{}'.format(aGene))
+                        iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, pat.variants[pat.mutatedGenes.index(aGene)])
+                        bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(_mutGeneComp_idx, _iNodeGeneMut_idx)]))
 
                 else:
                     iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'False')
