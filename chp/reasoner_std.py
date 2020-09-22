@@ -18,6 +18,7 @@ import logging
 from chp.integrator.exploring_agent import ExploringHandler
 from chp.integrator.unsecret_agent import UnsecretHandler
 from chp.integrator.ranking_agent import RankingHandler
+from chp.integrator.relay9_22 import Relay9_22
 
 #-- Setup logging
 logger = logging.getLogger(__name__)
@@ -45,6 +46,8 @@ class ReasonerStdHandler:
             handler = UnsecretHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         elif self.integrator == 'ranking':
             handler = RankingHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
+        elif self.integrator == 'relay9_22':
+            handler = Relay9_22(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         else:
             raise NotImplementedError('Not integrated with {}.'.format(self.integrator))
         return handler
