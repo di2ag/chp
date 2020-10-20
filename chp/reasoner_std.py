@@ -15,6 +15,7 @@ import numpy as np
 import logging
 
 #-- Integrators
+from chp.integrator.default_handler import DefaultHandler
 from chp.integrator.exploring_agent import ExploringHandler
 from chp.integrator.unsecret_agent import UnsecretHandler
 from chp.integrator.ranking_agent import RankingHandler
@@ -25,7 +26,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 class ReasonerStdHandler:
-    def __init__(self, source_ara, json_query=None, dict_query=None, hosts_filename=None, num_processes_per_host=0):
+    def __init__(self, json_query=None, source_ara=None, dict_query=None, hosts_filename=None, num_processes_per_host=0):
+
         self.integrator = source_ara
         self.json_query = json_query
         self.hosts_filename = hosts_filename
@@ -40,7 +42,9 @@ class ReasonerStdHandler:
         return True
 
     def getHandler(self):
-        if self.integrator == 'exploring':
+        if self.integrator == 'default':
+            handler = DefaultHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
+        elif self.integrator == 'exploring':
             handler = ExploringHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         elif self.integrator == 'unsecret':
             handler = UnsecretHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
