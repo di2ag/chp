@@ -41,12 +41,12 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('X', 'ENSEMBL:ENSG00000007174')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'Gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
         # add in evidence drug
         drug = ('Y', 'CHEMBL:CHEMBL554')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'Drug',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'drug',
                                                        'curie':'{}'.format(drug[1])
                                                      }
         # add in disease node
@@ -56,7 +56,7 @@ class testExploringAgent(unittest.TestCase):
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n3'] = { 'category': 'PhenotypicFeature',
+        reasoner_std['query_graph']['nodes']['n3'] = { 'category': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
@@ -111,17 +111,17 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'Gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
 
         gene2 = ('BRCA1', 'ENSEMBL:ENSG00000012048')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'Gene',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'gene',
                                                        'curie':'{}'.format(gene2[1])
                                                      }
         # add in evidence drug
         drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category':'Drug',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category':'drug',
                                                        'curie':'{}'.format(drug[1])
                                                      }
         # add in disease node
@@ -131,7 +131,7 @@ class testExploringAgent(unittest.TestCase):
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n4'] = { 'category': 'PhenotypicFeature',
+        reasoner_std['query_graph']['nodes']['n4'] = { 'category': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
@@ -195,7 +195,7 @@ class testExploringAgent(unittest.TestCase):
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category': 'PhenotypicFeature',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link disease to target
@@ -245,7 +245,7 @@ class testExploringAgent(unittest.TestCase):
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category': 'PhenotypicFeature',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link disease to target
@@ -291,7 +291,7 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'Gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
         # add in disease node
@@ -301,7 +301,7 @@ class testExploringAgent(unittest.TestCase):
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'PhenotypicFeature',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
@@ -353,7 +353,7 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence drug
         drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'Drug',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'drug',
                                                        'curie':'{}'.format(drug[1])
                                                      }
          # add in disease node
@@ -363,7 +363,7 @@ class testExploringAgent(unittest.TestCase):
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'PhenotypicFeature',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
@@ -442,7 +442,7 @@ class testExploringAgent(unittest.TestCase):
                                       }]
             # add target survival node
             phenotype = ('Survival_Time', 'EFO:0000714')
-            reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'PhenotypicFeature',
+            reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
                                                            'curie': '{}'.format(phenotype[1]),
                                                          }
             handler = ReasonerStdHandler(source_ara='default',
@@ -472,7 +472,7 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'Gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
         # add in disease node
@@ -482,7 +482,7 @@ class testExploringAgent(unittest.TestCase):
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'PhenotypicFeature',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
@@ -529,7 +529,7 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'Gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
         # add in disease node
@@ -539,7 +539,7 @@ class testExploringAgent(unittest.TestCase):
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'PhenotypicFeature',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
@@ -567,7 +567,6 @@ class testExploringAgent(unittest.TestCase):
             if edge['predicate'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
                 report = edge['Description']
-                print(report)
         print("probability of survival:",p_survival)
 
 if __name__ == '__main__':

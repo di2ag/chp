@@ -89,7 +89,7 @@ class DefaultHandler:
         acceptable_target_curies = ['EFO:0000714']
         for node_key in self.qg['nodes'].keys():
             node = self.qg['nodes'][node_key]
-            if node['category'] == 'PhenotypicFeature' and node['curie'] in acceptable_target_curies:
+            if node['category'] == 'phenotypicfeature' and node['curie'] in acceptable_target_curies:
                 target_id = node_key
                 total_nodes += 1
         if total_nodes == 0:
@@ -133,7 +133,7 @@ class DefaultHandler:
         for node_key in self.qg['nodes'].keys():
             # genes
             node = self.qg['nodes'][node_key]
-            if node['category'] == 'Gene':
+            if node['category'] == 'gene':
                 # check for appropriate gene node structure
                 gene_id = node_key
                 for edge_key in self.qg['edges'].keys():
@@ -153,7 +153,7 @@ class DefaultHandler:
                 evidence["mut_" + gene] = 'True'
                 total_nodes += 1
             # drugs
-            if node['category'] == 'Drug':
+            if node['category'] == 'drug':
                 # check for appropriate drug node structure
                 drug_id = node_key
                 for edge_key in self.qg['edges'].keys():
@@ -280,9 +280,9 @@ class DefaultHandler:
             knowledge_nodes += 1
             self.kg['nodes'][kg_id] = self.kg['nodes'].pop(node_key)
             node_pairs[node_key] = kg_id
-            if self.kg['nodes'][kg_id]['category'] == 'Gene':
+            if self.kg['nodes'][kg_id]['category'] == 'gene':
                 self.kg['nodes'][kg_id]['name'] = self.gene_curie_dict[self.kg['nodes'][kg_id].pop('curie')]
-            elif self.kg['nodes'][kg_id]['category'] == 'Drug':
+            elif self.kg['nodes'][kg_id]['category'] == 'drug':
                 self.kg['nodes'][kg_id]['name'] = self.drug_curie_dict[self.kg['nodes'][kg_id].pop('curie')]
             else:
                 self.kg['nodes'][kg_id].pop('curie')
