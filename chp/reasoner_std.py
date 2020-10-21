@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 class ReasonerStdHandler:
-    def __init__(self, json_query=None, source_ara=None, dict_query=None, hosts_filename=None, num_processes_per_host=0):
+    def __init__(self,source_ara, json_query=None, dict_query=None, hosts_filename=None, num_processes_per_host=0):
 
         self.integrator = source_ara
         self.json_query = json_query
