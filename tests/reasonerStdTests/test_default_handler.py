@@ -561,8 +561,6 @@ class testExploringAgent(unittest.TestCase):
         queries = handler.buildChpQueries()
         queries = handler.runChpQueries()
         reasoner_std_final = handler.constructDecoratedKG()
-        json_formatted_str = json.dumps(reasoner_std_final, indent=2)
-        print(json_formatted_str)
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
