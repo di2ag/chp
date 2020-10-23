@@ -97,7 +97,7 @@ class RankingHandler:
                     gene = self.gene_curie_dict[gene_curie]
                 except:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
-                evidence["mut_" + gene] = 'True'
+                evidence["_mut_" + gene] = 'True'
             if node['type'] == 'Drug':
                 drug_curie = node['curie']
                 try:

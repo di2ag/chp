@@ -41,37 +41,37 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('X', 'ENSEMBL:ENSG00000007174')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'type':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
         # add in evidence drug
         drug = ('Y', 'CHEMBL:CHEMBL554')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'drug',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'type':'drug',
                                                        'curie':'{}'.format(drug[1])
                                                      }
         # add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category':'disease',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'type':'disease',
                                                        'curie':'{}'.format(disease[1])
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n3'] = { 'category': 'phenotypicfeature',
+        reasoner_std['query_graph']['nodes']['n3'] = { 'type': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
-        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':'gene_to_disease_association',
-                                                       'subject': 'n0',
-                                                       'object': 'n2'
+        reasoner_std['query_graph']['edges']['e0'] = { 'type':'gene_to_disease_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n2'
                                                      }
-        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':'chemical_to_disease_or_phenotypic_feature_association',
-                                                       'subject': 'n1',
-                                                       'object': 'n2'
+        reasoner_std['query_graph']['edges']['e1'] = { 'type':'chemical_to_disease_or_phenotypic_feature_association',
+                                                       'source_id': 'n1',
+                                                       'target_id': 'n2'
                                                      }
         # link disease to target
-        reasoner_std['query_graph']['edges']['e2'] = { 'predicate':'disease_to_phenotype_association',
-                                                       'subject': 'n2',
-                                                       'object': 'n3',
+        reasoner_std['query_graph']['edges']['e2'] = { 'type':'disease_to_phenotype_association',
+                                                       'source_id': 'n2',
+                                                       'target_id': 'n3',
                                                        'properties': { 'qualifier':'>=',
                                                                        'days':970
                                                                      }
@@ -84,7 +84,7 @@ class testExploringAgent(unittest.TestCase):
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
-            if edge['predicate'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -111,46 +111,46 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'type':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
 
         gene2 = ('BRCA1', 'ENSEMBL:ENSG00000012048')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'gene',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'type':'gene',
                                                        'curie':'{}'.format(gene2[1])
                                                      }
         # add in evidence drug
         drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category':'drug',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'type':'drug',
                                                        'curie':'{}'.format(drug[1])
                                                      }
         # add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n3'] = { 'category':'disease',
+        reasoner_std['query_graph']['nodes']['n3'] = { 'type':'disease',
                                                        'curie':'{}'.format(disease[1])
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n4'] = { 'category': 'phenotypicfeature',
+        reasoner_std['query_graph']['nodes']['n4'] = { 'type': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
-        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':'gene_to_disease_association',
-                                                       'subject': 'n0',
-                                                       'object': 'n3'
+        reasoner_std['query_graph']['edges']['e0'] = { 'type':'gene_to_disease_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n3'
                                                      }
-        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':'gene_to_disease_association',
-                                                       'subject': 'n1',
-                                                       'object': 'n3'
+        reasoner_std['query_graph']['edges']['e1'] = { 'type':'gene_to_disease_association',
+                                                       'source_id': 'n1',
+                                                       'target_id': 'n3'
                                                      }
-        reasoner_std['query_graph']['edges']['e2'] = { 'predicate':'chemical_to_disease_or_phenotypic_feature_association',
-                                                       'subject': 'n2',
-                                                       'object': 'n3'
+        reasoner_std['query_graph']['edges']['e2'] = { 'type':'chemical_to_disease_or_phenotypic_feature_association',
+                                                       'source_id': 'n2',
+                                                       'target_id': 'n3'
                                                      }
         # link disease to target
-        reasoner_std['query_graph']['edges']['e3'] = { 'predicate':'disease_to_phenotype_association',
-                                                       'subject': 'n3',
-                                                       'object': 'n4',
+        reasoner_std['query_graph']['edges']['e3'] = { 'type':'disease_to_phenotype_association',
+                                                       'source_id': 'n3',
+                                                       'target_id': 'n4',
                                                        'properties': { 'qualifier':'>=',
                                                                        'days':970
                                                                      }
@@ -164,7 +164,7 @@ class testExploringAgent(unittest.TestCase):
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
-            if edge['predicate'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -190,18 +190,18 @@ class testExploringAgent(unittest.TestCase):
 
         # add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'disease',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'type':'disease',
                                                        'curie':'{}'.format(disease[1])
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category': 'phenotypicfeature',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'type': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link disease to target
-        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':'disease_to_phenotype_association',
-                                                       'subject': 'n0',
-                                                       'object': 'n1',
+        reasoner_std['query_graph']['edges']['e0'] = { 'type':'disease_to_phenotype_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n1',
                                                        'properties': { 'qualifier':'>=',
                                                                        'days':970
                                                                      }
@@ -215,7 +215,7 @@ class testExploringAgent(unittest.TestCase):
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
-            if edge['predicate'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -240,18 +240,18 @@ class testExploringAgent(unittest.TestCase):
 
         # add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'disease',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'type':'disease',
                                                        'curie':'{}'.format(disease[1])
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category': 'phenotypicfeature',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'type': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link disease to target
-        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':'disease_to_phenotype_association',
-                                                       'subject': 'n0',
-                                                       'object': 'n1',
+        reasoner_std['query_graph']['edges']['e0'] = { 'type':'disease_to_phenotype_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n1',
                                                        'properties': { 'qualifier':'>=',
                                                                        'days':970
                                                                      }
@@ -265,7 +265,7 @@ class testExploringAgent(unittest.TestCase):
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
-            if edge['predicate'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -291,28 +291,28 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'type':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
         # add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'disease',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'type':'disease',
                                                        'curie':'{}'.format(disease[1])
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'type': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
-        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':'gene_to_disease_association',
-                                                       'subject': 'n0',
-                                                       'object': 'n1'
+        reasoner_std['query_graph']['edges']['e0'] = { 'type':'gene_to_disease_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n1'
                                                      }
         # link disease to target
-        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':'disease_to_phenotype_association',
-                                                       'subject': 'n1',
-                                                       'object': 'n2',
+        reasoner_std['query_graph']['edges']['e1'] = { 'type':'disease_to_phenotype_association',
+                                                       'source_id': 'n1',
+                                                       'target_id': 'n2',
                                                        'properties': { 'qualifier':'>=',
                                                                        'days':970
                                                                      }
@@ -326,7 +326,7 @@ class testExploringAgent(unittest.TestCase):
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
-            if edge['predicate'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -353,29 +353,29 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence drug
         drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'drug',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'type':'drug',
                                                        'curie':'{}'.format(drug[1])
                                                      }
          # add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'disease',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'type':'disease',
                                                        'curie':'{}'.format(disease[1])
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'type': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
-        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':'chemical_to_disease_or_phenotypic_feature_association',
-                                                       'subject': 'n0',
-                                                       'object': 'n1'
+        reasoner_std['query_graph']['edges']['e0'] = { 'type':'chemical_to_disease_or_phenotypic_feature_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n1'
                                                      }
 
         # link disease to target
-        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':'disease_to_phenotype_association',
-                                                       'subject': 'n1',
-                                                       'object': 'n2',
+        reasoner_std['query_graph']['edges']['e1'] = { 'type':'disease_to_phenotype_association',
+                                                       'source_id': 'n1',
+                                                       'target_id': 'n2',
                                                        'properties': { 'qualifier':'>=',
                                                                        'days':970
                                                                      }
@@ -388,7 +388,7 @@ class testExploringAgent(unittest.TestCase):
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
-            if edge['predicate'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -442,7 +442,7 @@ class testExploringAgent(unittest.TestCase):
                                       }]
             # add target survival node
             phenotype = ('Survival_Time', 'EFO:0000714')
-            reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
+            reasoner_std['query_graph']['nodes']['n2'] = { 'type': 'phenotypicfeature',
                                                            'curie': '{}'.format(phenotype[1]),
                                                          }
             handler = ReasonerStdHandler(source_ara='default',
@@ -472,28 +472,28 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'type':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
         # add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'disease',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'type':'disease',
                                                        'curie':'{}'.format(disease[1])
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'type': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
-        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':'gene_to_disease_association',
-                                                       'subject': 'n0',
-                                                       'object': 'n1'
+        reasoner_std['query_graph']['edges']['e0'] = { 'type':'gene_to_disease_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n1'
                                                      }
         # link disease to target
-        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':'disease_to_phenotype_association',
-                                                       'subject': 'n1',
-                                                       'object': 'n2',
+        reasoner_std['query_graph']['edges']['e1'] = { 'type':'disease_to_phenotype_association',
+                                                       'source_id': 'n1',
+                                                       'target_id': 'n2',
                                                      }
         handler = ReasonerStdHandler(source_ara='default',
                                      dict_query=reasoner_std)
@@ -503,7 +503,7 @@ class testExploringAgent(unittest.TestCase):
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
-            if edge['predicate'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -529,28 +529,28 @@ class testExploringAgent(unittest.TestCase):
 
         # add in evidence gene
         gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
-        reasoner_std['query_graph']['nodes']['n0'] = { 'category':'gene',
+        reasoner_std['query_graph']['nodes']['n0'] = { 'type':'gene',
                                                        'curie':'{}'.format(gene1[1])
                                                      }
         # add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n1'] = { 'category':'disease',
+        reasoner_std['query_graph']['nodes']['n1'] = { 'type':'disease',
                                                        'curie':'{}'.format(disease[1])
                                                      }
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n2'] = { 'category': 'phenotypicfeature',
+        reasoner_std['query_graph']['nodes']['n2'] = { 'type': 'phenotypicfeature',
                                                        'curie': '{}'.format(phenotype[1]),
                                                      }
         # link genes/drugs to disease
-        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':'gene_to_disease_association',
-                                                       'subject': 'n0',
-                                                       'object': 'n1'
+        reasoner_std['query_graph']['edges']['e0'] = { 'type':'gene_to_disease_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n1'
                                                      }
         # link disease to target
-        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':'disease_to_phenotype_association',
-                                                       'subject': 'n1',
-                                                       'object': 'n2',
+        reasoner_std['query_graph']['edges']['e1'] = { 'type':'disease_to_phenotype_association',
+                                                       'source_id': 'n1',
+                                                       'target_id': 'n2',
                                                        'properties': { 'qualifier':'>=',
                                                                        'days':970,
                                                                        'contributions':True
@@ -564,7 +564,7 @@ class testExploringAgent(unittest.TestCase):
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge_key in KG['edges'].keys():
             edge = KG['edges'][edge_key]
-            if edge['predicate'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotype_association':
                 p_survival = edge['has_confidence_level']
                 report = edge['Description']
         print("probability of survival:",p_survival)
