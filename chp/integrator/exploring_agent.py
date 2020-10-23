@@ -142,7 +142,7 @@ class ExploringHandler:
                     gene = self.gene_curie_dict[gene_curie]
                 except:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
-                evidence["mut_" + gene] = 'True'
+                evidence["_mut_" + gene] = 'True'
                 total_nodes += 1
             # drugs
             if node['type'] == 'Drug':

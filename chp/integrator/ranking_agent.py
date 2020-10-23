@@ -27,15 +27,15 @@ class RankingHandler:
         self.query = query
         self.qg = self.query['query_graph']
         if 'knowledge_graph' not in list(self.query.keys()):
-            self.kg = { "edges": [],
-                        "nodes": []
+            self.kg = { "edges": dict(),
+                        "nodes": dict()
                       }
         else:
             self.kg = self.query['knowledge_graph']
         if 'results' not in list(self.query.keys()):
-            self.results = { "node_bindings": [],
-                             "edge_bindings": []
-                           }
+            self.results = [{ "node_bindings": dict(),
+                              "edge_bindings": dict()
+                           }]
         else:
             self.results = self.query['results']
 
@@ -90,16 +90,16 @@ class RankingHandler:
         # get evidence
         evidence = dict()
         meta_evidence = list()
-        for node in self.qg['nodes']:
-            if node['type'] == 'Gene':
-                gene_curie = node['curie']
+        for node_id in self.qg['nodes'].keys():
+            if self.qg['nodes'][node_id]['type'] == 'Gene':
+                gene_curie = self.qg['nodes'][node_id]['curie']
                 try:
                     gene = self.gene_curie_dict[gene_curie]
                 except:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
-                evidence["mut_" + gene] = 'True'
-            if node['type'] == 'Drug':
-                drug_curie = node['curie']
+                evidence["_mut_" + gene] = 'True'
+            if self.qg['nodes'][node_id]['type'] == 'Drug':
+                drug_curie = self.qg['nodes'][node_id]['curie']
                 try:
                     drug = self.drug_curie_dict[drug_curie]
                 except:
@@ -108,10 +108,10 @@ class RankingHandler:
 
         # get target
         targets = list()
-        for edge in self.qg['edges']:
-            if edge['type'] == 'causes':
-                if 'onset_qualifier' in list(edge.keys()):
-                    days = edge['onset_qualifier']
+        for edge_id in self.qg['edges'].keys():
+            if self.qg['edges'][edge_id]['type'] == 'causes':
+                if 'onset_qualifier' in list(self.qg['edges'][edge_id].keys()):
+                    days = self.qg['edges'][edge_id]['onset_qualifier']
                 # default value - needs to be documented in openAPI?
                 else:
                     days = 970
@@ -200,33 +200,41 @@ class RankingHandler:
 
     def constructDecoratedKG(self):
         self.kg = copy.deepcopy(self.qg)
-        results = {'edge_bindings':[], 'node_bindings':[]}
         # update target node info and form new KGraph id
-        edge_pairs = list()
-        for edge in self.kg['edges']:
-            if edge['type'] == 'causes':
-                edge['has_confidence_level'] = self.truth_assignment
+        edge_ids = list()
+        for edge_id in list(self.kg['edges'].keys())[:]:
+            if self.kg['edges'][edge_id]['type'] == 'causes':
+                self.kg['edges'][edge_id]['has_confidence_level'] = self.truth_assignment
                 #they may want descriptions later
                 #node['Description'] = self.patient_report
-            qg_id = edge['id']
             kg_id = str(uuid.uuid4())
-            edge_pairs.append([qg_id,kg_id])
-            edge['id'] = kg_id
+            self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_id)
+            edge_ids.append(kg_id)
         # form node pair combos for results graph
-        node_pairs = list()
-        for node in self.kg['nodes']:
-            qg_id = node['id']
+        node_ids = list()
+        for node_id in list(self.kg['nodes'].keys())[:]:
             kg_id = str(uuid.uuid4())
-            node_pairs.append([qg_id,kg_id])
-
-        # update edge/node bindings in results graph
-        for edge_pair in edge_pairs:
-            results['edge_bindings'].append({'qg_id':edge_pair[0], 'kg_id':edge_pair[1]})
-        for node_pair in node_pairs:
-            results['node_bindings'].append({'qg_id':node_pair[0], 'kg_id':node_pair[1]})
+            self.kg['nodes'][kg_id] = self.kg['nodes'].pop(node_id)
+            self.kg['nodes'][kg_id]['attributes'] = [dict()]
+            for node_type in list(self.kg['nodes'][kg_id].keys())[:]:
+                if node_type != 'name' and node_type != 'attributes':
+                    print(self.kg['nodes'][kg_id])
+                    print()
+                    self.kg['nodes'][kg_id]['attributes'][0][node_type] = self.kg['nodes'][kg_id].pop(node_type)
+            print(self.kg['nodes'][kg_id])
+            node_ids.append(kg_id)
+        # set up node/edge bindings
+        edge_count = 0
+        for edge_id in edge_ids:
+            self.results[0]['edge_bindings']['e{}'.format(edge_count)] = [{'kg_id':edge_id}]
+            edge_count += 1
+        node_count = 0
+        for node_id in node_ids:
+            self.results[0]['node_bindings']['n{}'.format(node_count)] = [{'kg_id':node_id}]
+            node_count += 1
 
         # query response
         reasoner_std = {'query_graph': self.qg,
                         'knowledge_graph': self.kg,
-                        'results': results}
-        return reasoner_std
+                        'results': self.results}
+        return {'message':reasoner_std}
