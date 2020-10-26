@@ -22,11 +22,11 @@ COMPONENTS: 6
 20 Survival_Time >= 300
 	4 True
 		SUPPORTS: 2
+			1 TAIL: 1
+				31 _Source_[Survival_Time >= 300]_ 16 [2]_geneEvidence
 			1.0 TAIL: 2
 				39 Collection[Survival_Time >= 300 = True] 68 [1,2,3]_-1161780421986398629,6106702334982451608,1121018522916220199
 				31 _Source_[Survival_Time >= 300]_ 18 [1]_noGeneEvidence
-			1 TAIL: 1
-				31 _Source_[Survival_Time >= 300]_ 16 [2]_geneEvidence
 	5 False
 		SUPPORTS: 2
 			0.0 TAIL: 2

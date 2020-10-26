@@ -5,6 +5,7 @@ import pickle
 from multiprocessing.dummy import Pool
 import time
 import json
+from chp_data.bkb_handler import BkbDataHandler
 
 class ImmutableHint:
     def __init__(self, dictionary):
@@ -34,12 +35,15 @@ class PatientProcessor:
         def getAllGeneHints(genes):
             def getGeneHints(gene):
                 hint = Hint()
-                ht = hint.query(gene)
-                return {ImmutableHint(ht): gene}
-                
+                hints = hint.query(gene)
+                hints = hints['Gene']
+                for ht in hints:
+                    ht['chp_name'] = gene
+                return hints
+
             start_time = time.time()
 
-            gene_hints = {}
+            gene_hints = []
 
             threadSize = 10
 
@@ -50,9 +54,9 @@ class PatientProcessor:
                 pool.close()
                 pool.join()
                 print('Pool time = {}'.format(time.time() - start_time))
-                
+
                 for resp in async_resp:
-                    gene_hints.update(resp)
+                    gene_hints + resp
 
                 pool.close()
                 pool.join()
@@ -60,7 +64,7 @@ class PatientProcessor:
 
         genes = getGenes()
         print(type(genes))
-        geneHints = getAllGeneHints(genes)
+        geneHints = getAllGeneHints(genes[:10])
         return geneHints
 
     def processDrugs(self, patient_data):
@@ -152,3 +156,11 @@ class CurrieLookUp:
     def lookUp(self, currie):
         currie = ImmutableHint(currie)
         gene = self.dictionary[currie]
+
+if __name__ == '__main__':
+    bkb_handler = BkbDataHandler(dataset_version='1.1')
+    patient_processor = PatientProcessor()
+    patient_data = patient_processor.readPatientFile(bkb_handler.patient_data_pk_path)
+
+    gene_hints = patient_processor.processGenes(patient_data)
+    print(gene_hints)

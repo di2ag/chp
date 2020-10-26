@@ -13,5 +13,6 @@ if os.path.exists(query_path):
 
 payload = {'query': reasoner_std}
 start_time = time.time()
-r = requests.post('http://129.170.69.138/submitQuery/', json=payload)
+r = requests.post('http://10.3.4.0/submitQuery/', json=payload)
 print('response time = {}'.format(time.time() - start_time))
+print(r.content)

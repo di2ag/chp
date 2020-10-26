@@ -7,13 +7,73 @@ import csv
 import ast
 import random
 import copy
+import logging
+import time
 
 #from pybkb.pybkb.cpp_base.fusion import fuse as cpp_fuse
 from pybkb.python_base.fusion import fuse as py_fuse
-
+from pybkb.python_base.fusion_collapse import collapse_sources
+from chp_data.bkb_handler import BkbDataHandler
 from patientBKFProcessor import PatientProcessor
 from pathwayBKFProcessor import PathwayProcessor
 from reactomePathwayProcessor import ReactomePathwayProcessor
+
+#-- Setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+class CLIDataHandler:
+    def __init__(self,
+                 patient_data_pk_path=None,
+                 interpolation_model='bigram',
+                 interpolation_selection='frequency_based',
+                 frequency_threshold=5,
+                 patient_fraction=1,
+                 fused_bkb_filename='fusion.bkb',
+                 collapsed_bkb_filename='collapsed.bkb'):
+        self.interpolation_model = interpolation_model
+        self.interpolation_selection = interpolation_selection
+        self.frequency_threshold = frequency_threshold
+        self.fused_bkb_filename = fused_bkb_filename
+        self.collapsed_bkb_filename = collapsed_bkb_filename
+
+        #-- Setup patient data path.
+        if patient_data_pk_path is None:
+            bkb_handler = BkbDataHandler()
+            patient_data_pk_path = bkb_handler.patient_data_pk_path
+        self.patient_processor = PatientProcessor()
+        self.patient_processor.loadFromPatientData(patient_data_pk_path, patient_fraction=patient_fraction)
+
+    def make_bkb(self):
+        start_time = time.time()
+        bkfs = list()
+        hashes = list()
+        bad_genes = None
+        #-- Process BKFs
+        bad_genes = self.patient_processor.processPatientBKF_v2(interpolation_model=self.interpolation_model,
+                                                                interpolation_selection=self.interpolation_selection,
+                                                                frequency_threshold=self.frequency_threshold,
+                                                                gene_subset_top_k=None,
+                                                                with_drugs=True)
+        #-- Extract patient bkfs based on hashes
+        for patient, bkf in zip(self.patient_processor.requested_patients, self.patient_processor.bkfs):
+            bkfs.append(bkf)
+            hashes.append(str(patient.patientHash))
+
+        #-- Add interpolator
+        bkfs.append(self.patient_processor.interpolator)
+        hashes.append('interpolator')
+
+        #-- Fuse and save bkb.
+        fused_bkb = py_fuse(bkfs,
+                         [1 for _ in range(len(bkfs))],
+                         hashes)
+        fused_bkb.save(self.fused_bkb_filename, use_pickle=True)
+        collapsed_bkb = collapse_sources(fused_bkb)
+        collapsed_bkb.save(self.collapsed_bkb_filename, use_pickle=True)
+        logger.info('Make BKB Ok.')
+        logger.info('Elapsed Time: {} sec'.format(time.time() - start_time))
+
 
 class DataDriver:
     def __init__(self, config_file):
@@ -343,8 +403,14 @@ class DataHandler:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_file', default=os.path.join(os.getcwd(), 'data_handler.config'), type=str)
+    parser.add_argument('--driver', action='store_true')
 
+    #TODO Add CLI options.
     args = parser.parse_args()
 
-    dataDriver = DataDriver(args.config_file)
-    dataDriver.run()
+    if args.driver:
+        dataDriver = DataDriver(args.config_file)
+        dataDriver.run()
+    else:
+        cli_data_handler = CLIDataHandler()
+        cli_data_handler.make_bkb()

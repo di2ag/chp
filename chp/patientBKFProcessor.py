@@ -553,7 +553,8 @@ class PatientProcessor:
                             phenotypic_evidence=None,
                             patient_hashes_to_process=None,
                             patient_indices_to_process=None,
-                            gene_subset_top_k=None):
+                            gene_subset_top_k=None,
+                            with_drugs=False):
         '''
         Description: Processes BKFs based on interpolation stradegy.
         Arguements:
@@ -643,7 +644,9 @@ class PatientProcessor:
                                                                        entropy_criteria)
         #-- If patient bkfs have not yet been processed, then make them.
         if len(self.bkfs) == 0:
-            self.makePatientBKFs(all_gene_mutations, interpolator_genes)
+            self.makePatientBKFs(all_gene_mutations,
+                                 interpolator_genes=interpolator_genes,
+                                 with_drugs=with_drugs)
 
         logging.info('No links for {} out of {} genes.'.format(len(no_links), len(all_gene_mutations)))
         return no_links
