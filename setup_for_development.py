@@ -38,4 +38,8 @@ print('Now running PyBKB setup...')
 #-- Run setup for PyBKB
 os.system("cd submodules/PyBKB; python3 setup_for_development.py --env {} --no_copy".format(os.path.join(WORKING_DIR, args.env)))
 
+print('Now running ChpData setup...')
+#-- Run setup for ChpData
+os.system("cd submodules/ChpData; python3 setup_for_development.py --env {}".format(os.path.join(WORKING_DIR, args.env)))
+
 print('Completed setup.')

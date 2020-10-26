@@ -1,3 +1,4 @@
+import copy
 import csv
 import tqdm
 import os
@@ -633,28 +634,28 @@ class PatientProcessor:
                 else:
                     hashed_entropies[gene1][(gene2,)] = entropy
 
+        #-- Make interpolator first because we need to know the interpolator genes before making patient BKFs
+        self.interpolator, no_links, interpolator_genes = self.makeInterpolator(all_gene_mutations,
+                                                                       interpolation_model,
+                                                                       interpolation_selection,
+                                                                       hashed_frequencies,
+                                                                       hashed_entropies,
+                                                                       entropy_criteria)
         #-- If patient bkfs have not yet been processed, then make them.
         if len(self.bkfs) == 0:
-            self.makePatientBKFs(all_gene_mutations)
+            self.makePatientBKFs(all_gene_mutations, interpolator_genes)
 
-        #-- Make interpolator
-        self.interpolator, no_links =  self.makeInterpolator(all_gene_mutations,
-                                                   interpolation_model,
-                                                   interpolation_selection,
-                                                   hashed_frequencies,
-                                                   hashed_entropies,
-                                                   entropy_criteria)
         logging.info('No links for {} out of {} genes.'.format(len(no_links), len(all_gene_mutations)))
         return no_links
 
     # make all patient BKFs fn.
-    def makePatientBKFs(self, all_gene_mutations, with_drugs=False):
+    def makePatientBKFs(self, all_gene_mutations, interpolator_genes=None, with_drugs=False):
         for pat in tqdm.tqdm(self.requested_patients, desc='Forming patient BKFs', leave=False):
             bkf = BKB(name = pat.patientID)
             for aGene in all_gene_mutations:
                 mutGeneComp_idx = bkf.addComponent('mut_{}'.format(aGene))
                 if aGene in pat.mutatedGenes:
-                    iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
+                    iNodeGenVeMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
                     bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
 
                     _mutGeneComp_idx = bkf.addComponent('_mut_{}'.format(aGene))
@@ -674,6 +675,13 @@ class PatientProcessor:
                 else:
                     iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'False')
                     bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
+            if interpolator_genes is not None:
+                for aGene in interpolator_genes:
+                    if aGene not in all_gene_mutations:
+                        if aGene in pat.mutatedGenes:
+                            mutGeneComp_idx = bkf.addComponent('mut_{}'.format(aGene))
+                            iNodeGenVeMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
+                            bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
             self.bkfs.append(bkf)
 
 
@@ -687,6 +695,8 @@ class PatientProcessor:
                          entropy_criteria):
         interpolator = BKB(name='interpolator'.format(interpolation_model, interpolation_selection))
         no_links = []
+        #-- We need to make sure we keep track of the interpolator genes in order to add them to the patient bkfs.
+        interpolator_genes = []
         for aGene in all_gene_mutations:
             mutGeneComp_idx = interpolator.addComponent('mut_{}'.format(aGene))
             iNodeGeneMutTrue_idx = interpolator.addComponentState(mutGeneComp_idx, 'True')
@@ -725,6 +735,9 @@ class PatientProcessor:
                         #-- Build Snode Tail
                         snode_tail = [(mutGeneComp_idx, iNodeGeneMutFalse_idx)]
                         for max_inter_gene in max_inter_genes:
+                            #-- Add interpolator gene to list
+                            interpolator_genes.append(max_inter_gene)
+                            #-- Build interpolator component.
                             cMutGeneComp_idx = interpolator.addComponent('mut_{}'.format(max_inter_gene))
                             iNodeCGeneMut_idx = interpolator.addComponentState(cMutGeneComp_idx, 'True')
                             snode_tail.append((cMutGeneComp_idx, iNodeCGeneMut_idx))
@@ -770,6 +783,9 @@ class PatientProcessor:
                         #-- Build Snode Tail
                         snode_tail = [(mutGeneComp_idx, iNodeGeneMutFalse_idx)]
                         for best_inter_gene in best_inter_genes:
+                            #-- Add interpolator gene to list
+                            interpolator_genes.append(best_inter_gene)
+                            #-- Build interpolator component.
                             cMutGeneComp_idx = interpolator.addComponent('mut_{}'.format(best_inter_gene))
                             iNodeCGeneMut_idx = interpolator.addComponentState(cMutGeneComp_idx, 'True')
                             snode_tail.append((cMutGeneComp_idx, iNodeCGeneMut_idx))
@@ -781,7 +797,7 @@ class PatientProcessor:
                                                          _iNodeGeneMut_idx,
                                                          interpolation_prob,
                                                          snode_tail))
-        return interpolator, no_links
+        return interpolator, no_links, interpolator_genes
 
 
     # should be called after all Patient objects have been cosntructed
