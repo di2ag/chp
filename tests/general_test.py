@@ -27,7 +27,10 @@ fused_bkb.load('/home/public/data/ncats/BabelBKBs/smallProblem/fusion.bkb')
 patient_data_file = '/home/public/data/ncats/BabelBKBs/smallProblem/patient_data.pk'
 withheld_patients_file = '/home/public/data/ncats/BabelBKBs/smallProblem/withheldPatients.csv'
 #-- Instiante reasoner
-reasoner = Reasoner(fused_bkb=fused_bkb)
+reasoner = Reasoner(fused_bkb=fused_bkb,
+                   #hosts_filename='hosts',
+                   #num_processes_per_host=10
+                   )
 
 
 #-- Set the patient data file 

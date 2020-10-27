@@ -1,3 +1,9 @@
 [submodule "submodules/biothings_explorer"]
 	path = submodules/biothings_explorer
 	url = https://github.com/biothings/biothings_explorer.git 
+[submodule "submodules/PyBKB"]
+	path = submodules/PyBKB
+	url = intuit:/home/public/git/modules/PyBKB
+[submodule "submodules/ChpData"]
+	path = submodules/ChpData
+	url = intuit:/home/public/git/projects/ChpData

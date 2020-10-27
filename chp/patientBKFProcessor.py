@@ -1,3 +1,4 @@
+import copy
 import csv
 import tqdm
 import os
@@ -6,18 +7,23 @@ import operator
 import functools
 import math
 import random
-from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
-from pybkb.common.bayesianKnowledgeBase import BKB_S_node, BKB_component, BKB_I_node
 import matplotlib.pyplot as plt
 import pickle
 import pandas as pd
+import logging
 #from concurrent.futures import ThreadPool
+
+from chp.util import process_operator
+from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
+from pybkb.common.bayesianKnowledgeBase import BKB_S_node, BKB_component, BKB_I_node
+
 
 class PatientProcessor:
     def __init__(self):
         # self.bkfs[i] and self.patients[i] reference each other
         self.bkfs = list()
         self.patientXBKF = None
+        self.interpolator = None
         self.geneFrags = None
         self.geneReliabilities = None
         self.geneFragmentsSources = None
@@ -30,9 +36,10 @@ class PatientProcessor:
 
     class Patient:
         # will need to account for mutatedReads
-        def __init__(self, patientID, cancerType, mutatedGenes, mutatedGeneVariants, variants, geneCuries):
+        def __init__(self, patientID, cancerType, mutatedGenes, mutatedGeneVariants, variants, geneCuries=[]):
             # patient gene data
             self.patientID = patientID
+            self.patientHash = hash(patientID)
             self.cancerType = cancerType
             self.mutatedGenes = mutatedGenes
             self.mutatedGeneVariants = mutatedGeneVariants
@@ -182,7 +189,7 @@ class PatientProcessor:
                 p.pathM = clinical[4]
                 p.survivalTime = clinical[5]
             else:
-                print("No Clinical - Removing: {}".format(p.patientID))
+                logging.info("No Clinical - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
         self.clinicalCollected = True
 
@@ -241,7 +248,7 @@ class PatientProcessor:
                         p.daysToTherapyStart.append(rData[3])
                         p.daysToTherapyEnd.append(rData[4])
             else:
-                print("No Radiation - Removing: {}".format(p.patientID))
+                logging.info("No Radiation - Removing: {}".format(p.patientID))
                 self.patients.remove(p) 
         self.radiationCollected = True
 
@@ -289,7 +296,7 @@ class PatientProcessor:
                         p.biologicalObject.append(dData[3])
                         p.drugCuries.append(curieDict[dData[0]])
             else:
-                print("No Drug - Removing: {}".format(p.patientID))
+                logging.info("No Drug - Removing: {}".format(p.patientID))
                 self.patients.remove(p)
         self.drugCollected = True
 
@@ -306,7 +313,7 @@ class PatientProcessor:
             elif pat in patients:
                 newPatients.append(pat)
             else:
-                print("removing:",pat.patientID)
+                logging.debug("removing: {}".format(pat.patientID))
         self.patients = newPatients
         self.holdouts = newHoldouts
 
@@ -368,6 +375,55 @@ class PatientProcessor:
                     continue
                 FT_Dict[str(geneA)][str(geneB)] = FT_Dict[str(geneA)][str(geneB)]/len(self.patients)
         return FT_Dict
+
+    def calculateGeneFrequencies(self, n=2):
+        '''
+        Calculates frequency n-tuples (Gene1, Gene2, ..., GeneN) of all genes in all patients.
+        Arguements:
+            n: (int) Number of genes in the tuple.
+        '''
+        frequencies = {}
+        for patient in tqdm.tqdm(self.requested_patients, desc='Calculating frequency tuples.', leave=False):
+            for permutation in itertools.permutations(patient.mutatedGenes, n):
+                if permutation not in frequencies:
+                    frequencies[permutation] = 1
+                else:
+                    frequencies[permutation] += 1
+        return frequencies
+
+    def calculateGeneEntropies(self, phenotypic_evidence, n=2):
+        #-- Get evidence counts, key is gene permutation, value is (num patients True, num patients False)
+        evid_counts = {}
+        for patient in tqdm.tqdm(self.requested_patients, desc='Calculating evidience counts.', leave=False):
+            patient_met_phenotypic_evidence = True
+            #-- Check to see if patient met criteria
+            for (evid_var, op_str, val) in phenotypic_evidence:
+                op = process_operator(op_str)
+                if not op(self.patient_data_dict[patient.patientHash][evid_var], val):
+                    patient_met_phenotypic_evidence = False
+                    break
+            #-- Go through gene permutations and register counts
+            for permutation in itertools.permutations(patient.mutatedGenes, n):
+                if permutation not in evid_counts:
+                    if patient_met_phenotypic_evidence:
+                        evid_counts[permutation] = [1, 0]
+                    else:
+                        evid_counts[permutation] = [0, 1]
+                else:
+                    if patient_met_phenotypic_evidence:
+                        evid_counts[permutation][0] += 1
+                    else:
+                        evid_counts[permutation][1] += 1
+        #-- Calculate entropies
+        entropies = {}
+        for gene_tuple, counts in tqdm.tqdm(evid_counts.items(), desc='Calculating entropies', leave=False):
+            entropy = 0
+            for count in counts:
+                prob = count / sum(counts)
+                if prob > 0:
+                    entropy += prob * math.log(prob)
+            entropies[gene_tuple] = -1 * entropy
+        return entropies
 
     def getPatientDataCorrelations(self, outDirect=None):
         assert len(self.patients) > 0, "Patient data has not been collected yet!"
@@ -445,18 +501,18 @@ class PatientProcessor:
                 elif "Path_M" == header_type:
                     pat_data.append(1 if header_val == pat.pathM else 0)
                 else:
-                    print(header)
+                    logging.info('{}'.format(header))
             data.append(pat_data)
 
         # form dataframe and calculate correlations to determine good predictors
-        print("Running pandas dataframe coorelations")
+        logging.info("Running pandas dataframe coorelations")
         df = pd.DataFrame(data, columns=column_names)
         corrs = df.corr(method='pearson')
         if outDirect is not None:
             df.to_csv(outDirect + 'data_table.csv')
             corrs.to_csv(outDirect + 'data_corrs.csv')
         else:
-            print('Saving coorelation data to /tmp')
+            logging.info('Saving coorelation data to /tmp')
             df.to_csv('/tmp/data_table.csv')
             df.to_csv('/tmp/data_corrs.csv')
 
@@ -485,6 +541,267 @@ class PatientProcessor:
                 bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMut_idx),
                                                                                 (varComp_idx, iNodeVar_idx)]))
             self.bkfs.append(bkf)
+
+
+
+    def processPatientBKF_v2(self,
+                            patientFalses=True,
+                            interpolation_model=None,
+                            interpolation_selection=None,
+                            frequency_threshold=0,
+                            entropy_criteria='min',
+                            phenotypic_evidence=None,
+                            patient_hashes_to_process=None,
+                            patient_indices_to_process=None,
+                            gene_subset_top_k=None,
+                            with_drugs=False):
+        '''
+        Description: Processes BKFs based on interpolation stradegy.
+        Arguements:
+            interpolation_model:        (str) [None, bigram]. Default: None
+            interpolation_selection:    (str) [None, frequency_based, entropy_based]. Default: None
+            frequency_threshold:        (int) Default: 0
+            entropy_criteria:           (str) [min, max]. If min, trys to minimize to .001 and if max tries to maximize to 1. Default: min
+            phenotypic_evidence:        (list) Phenotypic patient evidence used to calculate entropy based interpolation scheme. Default: None
+        '''
+
+        assert len(self.patients) > 0, "Have not processed Patient and gene data yet."
+        #-- Collect only subset of patients to process if requested:
+        if patient_hashes_to_process is None and patient_indices_to_process is None:
+            self.requested_patients = self.patients
+        else:
+            self.requested_patients = []
+            if patient_hashes_to_process is not None:
+                for patient in self.patients:
+                    if patient.patientHash in patient_hashes_to_process:
+                        self.requested_patients.append(patient)
+            else:
+                for idx, patient in enumerate(self.patients):
+                    if idx in patient_indices_to_process:
+                        self.requested_patients.append(patient)
+
+        # collect list of all unqiue genes and frequencies
+        all_gene_mutations = list()
+        gene_counts = {}
+        for pat in self.requested_patients:
+            for gene in pat.mutatedGenes:
+                if gene not in all_gene_mutations:
+                    all_gene_mutations.append(gene)
+                    gene_counts[gene] = 1
+                else:
+                    gene_counts[gene] += 1
+
+        #-- Rank gene counts and use only top k genes.
+        if gene_subset_top_k is not None:
+            sorted_genes = [gene for gene, count in sorted(gene_counts.items(), key=lambda item: item[1], reverse=True)]
+            #-- overwrite all gene mutations
+            all_gene_mutations = sorted_genes[:gene_subset_top_k]
+
+        if frequency_threshold > 1:
+            #-- Filter genes based on frequency threshold
+            filtered_genes = []
+            for gene in all_gene_mutations:
+                if gene_counts[gene] < frequency_threshold:
+                    filtered_genes.append(gene)
+            all_gene_mutations = list(set(all_gene_mutations) - set(filtered_genes))
+
+        all_drugs = list()
+        for pat in self.requested_patients:
+            for d in pat.drugName:
+                if d not in all_drugs:
+                    all_drugs.append(d)
+
+        #-- Frequency calcuations
+        hashed_frequencies = None
+        if interpolation_model == 'bigram' and interpolation_selection is not None:
+            frequencies = self.calculateGeneFrequencies(n=2)
+            #-- hash on the first gene
+            hashed_frequencies = {}
+            for (gene1, gene2), count in frequencies.items():
+                if gene1 not in hashed_frequencies:
+                    hashed_frequencies[gene1] = {(gene2,): count}
+                else:
+                    hashed_frequencies[gene1][(gene2,)] = count
+
+        #-- Entropy calculations
+        hashed_entropies = None
+        if interpolation_model == 'bigram' and interpolation_selection == 'entropy_based':
+            entropies = self.calculateGeneEntropies(phenotypic_evidence, n=2)
+            #-- hash on the first gene
+            hashed_entropies = {}
+            for (gene1, gene2), entropy in entropies.items():
+                if gene1 not in hashed_entropies:
+                    hashed_entropies[gene1] = {(gene2,): entropy}
+                else:
+                    hashed_entropies[gene1][(gene2,)] = entropy
+
+        #-- Make interpolator first because we need to know the interpolator genes before making patient BKFs
+        self.interpolator, no_links, interpolator_genes = self.makeInterpolator(all_gene_mutations,
+                                                                       interpolation_model,
+                                                                       interpolation_selection,
+                                                                       hashed_frequencies,
+                                                                       hashed_entropies,
+                                                                       entropy_criteria)
+        #-- If patient bkfs have not yet been processed, then make them.
+        if len(self.bkfs) == 0:
+            self.makePatientBKFs(all_gene_mutations,
+                                 interpolator_genes=interpolator_genes,
+                                 with_drugs=with_drugs)
+
+        logging.info('No links for {} out of {} genes.'.format(len(no_links), len(all_gene_mutations)))
+        return no_links
+
+    # make all patient BKFs fn.
+    def makePatientBKFs(self, all_gene_mutations, interpolator_genes=None, with_drugs=False):
+        for pat in tqdm.tqdm(self.requested_patients, desc='Forming patient BKFs', leave=False):
+            bkf = BKB(name = pat.patientID)
+            for aGene in all_gene_mutations:
+                mutGeneComp_idx = bkf.addComponent('mut_{}'.format(aGene))
+                if aGene in pat.mutatedGenes:
+                    iNodeGenVeMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
+                    bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
+
+                    _mutGeneComp_idx = bkf.addComponent('_mut_{}'.format(aGene))
+                    _iNodeGeneMut_idx = bkf.addComponentState(_mutGeneComp_idx, 'True')
+
+                    #-- Exchange mut-var with mut-drug. (Used for Relay 1).
+                    if with_drugs is True:
+                        mutDrugComp_idx = bkf.addComponent('mut-drug_{}'.format(aGene))
+                        iNodeMutDrug_idx = bkf.addComponentState(mutDrugComp_idx, pat.drugName[0])
+                        bkf.addSNode(BKB_S_node(mutDrugComp_idx, iNodeMutDrug_idx, 1.0, [(_mutGeneComp_idx, _iNodeGeneMut_idx)]))
+
+                    else:
+                        mutVarComp_idx = bkf.addComponent('mut-var_{}'.format(aGene))
+                        iNodeMutVar_idx = bkf.addComponentState(mutVarComp_idx, pat.variants[pat.mutatedGenes.index(aGene)])
+                        bkf.addSNode(BKB_S_node(mutVarComp_idx, iNodeMutVar_idx, 1.0, [(_mutGeneComp_idx, _iNodeGeneMut_idx)]))
+
+                else:
+                    iNodeGeneMut_idx = bkf.addComponentState(mutGeneComp_idx, 'False')
+                    bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
+            if interpolator_genes is not None:
+                for aGene in interpolator_genes:
+                    if aGene not in all_gene_mutations:
+                        if aGene in pat.mutatedGenes:
+                            mutGeneComp_idx = bkf.addComponent('mut_{}'.format(aGene))
+                            iNodeGenVeMut_idx = bkf.addComponentState(mutGeneComp_idx, 'True')
+                            bkf.addSNode(BKB_S_node(mutGeneComp_idx, iNodeGeneMut_idx, 1.0))
+            self.bkfs.append(bkf)
+
+
+    #-- Make interpolator fn.
+    def makeInterpolator(self,
+                         all_gene_mutations,
+                         interpolation_model,
+                         interpolation_selection,
+                         hashed_frequencies,
+                         hashed_entropies,
+                         entropy_criteria):
+        interpolator = BKB(name='interpolator'.format(interpolation_model, interpolation_selection))
+        no_links = []
+        #-- We need to make sure we keep track of the interpolator genes in order to add them to the patient bkfs.
+        interpolator_genes = []
+        for aGene in all_gene_mutations:
+            mutGeneComp_idx = interpolator.addComponent('mut_{}'.format(aGene))
+            iNodeGeneMutTrue_idx = interpolator.addComponentState(mutGeneComp_idx, 'True')
+            iNodeGeneMutFalse_idx = interpolator.addComponentState(mutGeneComp_idx, 'False')
+
+            if interpolation_model is None:
+                _mutGeneComp_idx = interpolator.addComponent('_mut_{}'.format(aGene))
+                _iNodeGeneMut_idx = interpolator.addComponentState(_mutGeneComp_idx, 'True')
+
+                interpolator.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
+
+            else:
+                if interpolation_selection == 'frequency_based':
+                    #-- Get interpolation genes that maximize frequency found together
+                    max_count = -1
+                    max_inter_genes = None
+                    for inter_genes, count in hashed_frequencies[aGene].items():
+                        if count > max_count and aGene not in inter_genes:
+                            max_count = count
+                            max_inter_genes = inter_genes
+
+                    if max_count < 1:
+                        no_links.append(aGene)
+                        _mutGeneComp_idx = interpolator.addComponent('_mut_{}'.format(aGene))
+                        _iNodeGeneMut_idx = interpolator.addComponentState(_mutGeneComp_idx, 'True')
+
+                        interpolator.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
+                    else:
+                        #-- Create _mut_Gene
+                        _mutGeneComp_idx = interpolator.addComponent('_mut_{}'.format(aGene))
+                        _iNodeGeneMut_idx = interpolator.addComponentState(_mutGeneComp_idx, 'True')
+
+                        #-- Create True path
+                        interpolator.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
+
+                        #-- Build Snode Tail
+                        snode_tail = [(mutGeneComp_idx, iNodeGeneMutFalse_idx)]
+                        for max_inter_gene in max_inter_genes:
+                            #-- Add interpolator gene to list
+                            interpolator_genes.append(max_inter_gene)
+                            #-- Build interpolator component.
+                            cMutGeneComp_idx = interpolator.addComponent('mut_{}'.format(max_inter_gene))
+                            iNodeCGeneMut_idx = interpolator.addComponentState(cMutGeneComp_idx, 'True')
+                            snode_tail.append((cMutGeneComp_idx, iNodeCGeneMut_idx))
+
+                        interpolation_prob = float(max_count / len(self.requested_patients))
+
+                        #-- Create False path
+                        interpolator.addSNode(BKB_S_node(_mutGeneComp_idx,
+                                                         _iNodeGeneMut_idx,
+                                                         interpolation_prob,
+                                                         snode_tail))
+                elif interpolation_selection == 'entropy_based':
+                    if entropy_criteria == 'min':
+                        min_entropy = 100
+                        best_inter_genes = None
+                        for inter_genes, entropy in hashed_entropies[aGene].items():
+                            if entropy <= min_entropy and entropy > 0.001:
+                                min_entropy = entropy
+                                best_inter_genes = inter_genes
+                    elif entropy_criteria == 'max':
+                        max_entropy = -1
+                        best_inter_genes = None
+                        for inter_genes, entropy in hashed_entropies[aGene].items():
+                            if entropy >= max_entropy and entropy > 0:
+                                max_entropy = entropy
+                                best_inter_genes = inter_genes
+
+                    if best_inter_genes is None:
+                        no_links.append(aGene)
+                        logging.debug("no gene link for: {}".format(aGene))
+                        _mutGeneComp_idx = interpolator.addComponent('_mut_{}'.format(aGene))
+                        _iNodeGeneMut_idx = interpolator.addComponentState(_mutGeneComp_idx, 'True')
+
+                        interpolator.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
+                    else:
+                        #-- Create _mut_Gene
+                        _mutGeneComp_idx = interpolator.addComponent('_mut_{}'.format(aGene))
+                        _iNodeGeneMut_idx = interpolator.addComponentState(_mutGeneComp_idx, 'True')
+
+                        #-- Create True path
+                        interpolator.addSNode(BKB_S_node(_mutGeneComp_idx, _iNodeGeneMut_idx, 1.0, [(mutGeneComp_idx, iNodeGeneMutTrue_idx)]))
+
+                        #-- Build Snode Tail
+                        snode_tail = [(mutGeneComp_idx, iNodeGeneMutFalse_idx)]
+                        for best_inter_gene in best_inter_genes:
+                            #-- Add interpolator gene to list
+                            interpolator_genes.append(best_inter_gene)
+                            #-- Build interpolator component.
+                            cMutGeneComp_idx = interpolator.addComponent('mut_{}'.format(best_inter_gene))
+                            iNodeCGeneMut_idx = interpolator.addComponentState(cMutGeneComp_idx, 'True')
+                            snode_tail.append((cMutGeneComp_idx, iNodeCGeneMut_idx))
+
+                        interpolation_prob = float(hashed_frequencies[aGene][best_inter_genes] / len(self.requested_patients))
+
+                        #-- Create False path
+                        interpolator.addSNode(BKB_S_node(_mutGeneComp_idx,
+                                                         _iNodeGeneMut_idx,
+                                                         interpolation_prob,
+                                                         snode_tail))
+        return interpolator, no_links, interpolator_genes
+
 
     # should be called after all Patient objects have been cosntructed
     def processPatientBKF(self, patientFalses=True):
@@ -594,7 +911,7 @@ class PatientProcessor:
                     maxCauseVal = val
                     maxCauseGene = bGene
             if maxCauseGene is None:
-                print("no gene link for",aGene)
+                logging.warning("no gene link for: {}".format(aGene))
 
                 _mutGeneComp_idx = self.patientXBKF.addComponent('_mut_{}'.format(aGene))
                 _iNodeGeneMut_idx = self.patientXBKF.addComponentState(_mutGeneComp_idx, 'True')
@@ -638,7 +955,7 @@ class PatientProcessor:
 
 
     def BKFsToFile(self, outDirect):
-        print("Writing patient BKFs to file...")
+        logging.info("Writing patient BKFs to file.")
         allBKFHashNames = dict()
         for i in range(0, len(self.bkfs)):
             #i matches the self.patients to self.bkfs.
@@ -648,11 +965,77 @@ class PatientProcessor:
         for i in range(0, len(self.holdouts)):
             patientHashVal, patientDict = self.BKFHash(i,False)
             allBKFHashNames[patientHashVal] = patientDict
+        if self.interpolator is not None:
+            self.interpolator.save('{}{}.bkf'.format(outDirect, self.interpolator.getName()))
         # write all patient BKF hashs to file
         with open(outDirect + 'patient_data.pk', 'wb') as f_:
             pickle.dump(file=f_, obj=allBKFHashNames)
-        print("Patient BKFs written.")
+        logging.info("Patient BKFs written.")
 
+    def loadFromPatientData(self, patient_data_file, patient_fraction=1):
+        #-- Reset patient processor
+        self.__init__()
+
+        #-- Read in patient data file
+        with open(patient_data_file, 'rb') as f_:
+            patient_data = pickle.load(f_)
+        self.patient_data_dict = patient_data
+
+        #-- Number of patients to load in:
+        num_requested_patients = int(len(patient_data) * patient_fraction)
+        logging.debug('Loading in {} out of {} patients from patient data file at: {}'.format(num_requested_patients,
+                                                                                              len(patient_data),
+                                                                                              patient_data_file))
+        for i, (patient_hash, patient_dict) in enumerate(patient_data.items()):
+            if i >= num_requested_patients:
+                break
+            pat = self.Patient(patient_dict['Patient_ID'],
+                               patient_dict['Cancer_Type'],
+                               patient_dict['Patient_Genes'],
+                               patient_dict['Patient_Gene_Variants'],
+                               patient_dict['Patient_Variants'])
+            if 'Patient_Gene_Curies' in patient_dict:
+                pat.geneCuries = patient_dict['Patient_Gene_Curies']
+
+            #-- Overwrite patient hash
+            pat.patientHash = patient_hash
+            for key, values in patient_dict.items():
+                if key == 'Age_of_Diagnosis':
+                    pat.ageDiagnos = values
+                    self.clinicalCollected = True
+                elif key == 'Gender':
+                    pat.gender = values
+                elif key == 'PathT':
+                    pat.pathT = values
+                elif key == 'PathN':
+                    pat.pathN = values
+                elif key == 'PathM':
+                    pat.pathM = values
+                elif key == 'Survival_Time':
+                    pat.survivalTime = values
+                elif key == 'Therapy_Name(s)':
+                    pat.therapyName = values
+                    self.radiationCollected = True
+                elif key == 'Therapy_Site(s)':
+                    pat.therapySite = values
+                elif key == 'Radiation_Dose(s)':
+                    pat.radiationDose = values
+                elif key == 'Days_To_Therapy_Start(s)':
+                    pat.daysToTherapyStart = values
+                elif key == 'Days_To_Therapy_End(s)':
+                    pat.daysToTherapyEnd = values
+                elif key == 'Drug_Name(s)':
+                    pat.drugName = values
+                    self.drugCollected = True
+                elif key == 'Drug_Curie(s)':
+                    pat.drugCuries = values
+                elif key == 'Biological_Object(s)':
+                    pat.biologicalObject = values
+                elif key == 'Process_Activity(s)':
+                    pat.processActivity = values
+                elif key == 'Process_Type(s)':
+                    pat.processType = values
+            self.patients.append(pat)
 
     def BKFHash(self,index, patient):
         pat = None
