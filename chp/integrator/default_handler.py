@@ -1,7 +1,7 @@
 '''
 Source code developed by DI2AG.
 Thayer School of Engineering at Dartmouth College
-Authors:    Dr. Eugene Santos, Jr
+	Authors:    Dr. Eugene Santos, Jr
             Mr. Chase Yakaboski,
             Mr. Gregory Hyde,
             Dr. Keum Joo Kim
@@ -10,40 +10,32 @@ Authors:    Dr. Eugene Santos, Jr
 import copy
 import csv
 import sys
-import logging
 import uuid
-import statistics
 
 from chp.query import Query
 from chp.reasoner import Reasoner
 
 from chp_data.bkb_handler import BkbDataHandler
 
-#-- Setup logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-DEBUG = True
-
-class UnsecretHandler:
+class DefaultHandler:
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
-
         # query graph components
         self.query = query
         self.qg = self.query['query_graph']
         if 'knowledge_graph' not in list(self.query.keys()):
-            self.kg = { "edges": [],
-                        "nodes": []
+            self.kg = { "edges": dict(),
+                        "nodes": dict()
                       }
         else:
             self.kg = self.query['knowledge_graph']
         if 'results' not in list(self.query.keys()):
-            self.results = { "node_bindings": [],
-                             "edge_bindings": []
-                           }
+            self.results = [{ "node_bindings": dict(),
+                              "edge_bindings": dict()
+                           }]
         else:
             self.results = self.query['results']
 
-        #-- Instiatate Reasoner
+        # Instiatate Reasoner
         self.bkb_data_handler = BkbDataHandler(dataset_version='1.1')
         self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
                                 hosts_filename=hosts_filename,
@@ -63,6 +55,7 @@ class UnsecretHandler:
             for row in reader:
                 self.drug_curie_dict[row[1]] = row[0]
 
+        # default query specification
         self.target_strategy = 'explicit'
         self.interpolation = 'standard'
 
@@ -94,9 +87,10 @@ class UnsecretHandler:
         # get phenotype node
         targets = list()
         acceptable_target_curies = ['EFO:0000714']
-        for node in self.qg['nodes']:
-            if node['type'] == 'PhenotypicFeature' and node['curie'] in acceptable_target_curies:
-                target_id = node['id']
+        for node_key in self.qg['nodes'].keys():
+            node = self.qg['nodes'][node_key]
+            if node['type'] == 'phenotypicfeature' and node['curie'] in acceptable_target_curies:
+                target_id = node_key
                 total_nodes += 1
         if total_nodes == 0:
             acceptable_target_curies_print = ','.join(acceptable_target_curies)
@@ -106,14 +100,19 @@ class UnsecretHandler:
 
         # get disease node info and ensure only 1 disease:
         acceptable_disease_curies = ['MONDO:0007254']
-        for node in self.qg['nodes']:
+        for node_key in self.qg['nodes'].keys():
+            node = self.qg['nodes'][node_key]
             if node['type'] == 'disease' and node['curie'] in acceptable_disease_curies:
-                disease_id = node['id']
-                for edge in self.qg['edges']:
-                    if edge['type'] == 'disease_to_phenotype_association' and edge['source_id'] == disease_id and edge['target_id'] == target_id and 'value' in list(edge.keys()):
-                        self.days = edge['value']
-                        if isinstance(self.days, str):
-                            self.days = int(self.days)
+                disease_id = node_key
+                for edge_key in self.qg['edges'].keys():
+                    edge = self.qg['edges'][edge_key]
+                    if edge['type'] == 'disease_to_phenotype_association' and edge['source_id'] == disease_id and edge['target_id'] == target_id:
+                        if 'properties' in edge.keys():
+                            days = edge['properties']['days']
+                            qualifier = edge['properties']['qualifier']
+                        else:
+                            days = 970
+                            qualifier = '>='
                         total_edges += 1
                 if total_edges == 0:
                     sys.exit('Disease and target edge not found. Edge type must be \'disease_to_phenotype_association\'')
@@ -126,17 +125,19 @@ class UnsecretHandler:
         elif total_nodes > 2:
             sys.exit('Too many disease nodes')
         # set BKB target
-        targets.append(('Survival_Time', '>=', self.days))
+        targets.append(('Survival_Time', qualifier, days))
 
         # get evidence
         evidence = dict()
         meta_evidence = list()
-        for node in self.qg['nodes']:
+        for node_key in self.qg['nodes'].keys():
             # genes
-            if node['type'] == 'Gene':
+            node = self.qg['nodes'][node_key]
+            if node['type'] == 'gene':
                 # check for appropriate gene node structure
-                gene_id = node['id']
-                for edge in self.qg['edges']:
+                gene_id = node_key
+                for edge_key in self.qg['edges'].keys():
+                    edge = self.qg['edges'][edge_key]
                     if edge['type'] == 'gene_to_disease_association' and edge['source_id'] == gene_id and edge['target_id'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
@@ -152,10 +153,11 @@ class UnsecretHandler:
                 evidence["_mut_" + gene] = 'True'
                 total_nodes += 1
             # drugs
-            if node['type'] == 'Drug':
+            if node['type'] == 'drug':
                 # check for appropriate drug node structure
-                drug_id = node['id']
-                for edge in self.qg['edges']:
+                drug_id = node_key
+                for edge_key in self.qg['edges'].keys():
+                    edge = self.qg['edges'][edge_key]
                     if edge['type'] == 'chemical_to_disease_or_phenotypic_feature_association' and edge['source_id'] == drug_id and edge['target_id'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
@@ -173,8 +175,6 @@ class UnsecretHandler:
 
         if total_nodes != len(self.qg['nodes']) or total_edges != len(self.qg['edges']):
             sys.exit('There are extra components in the provided QG structure')
-        if len(list(evidence.keys())) == 0:
-            sys.exit('Needs at least 1 gene')
 
         # produce BKB query
         if len(meta_evidence) > 0 and len(list(evidence.keys())) > 0:
@@ -223,7 +223,6 @@ class UnsecretHandler:
                                             interpolation=self.interpolation
                                             )
         self.target_info = []
-        sensitivities = False
         for update, prob in query.result.updates.items():
             comp_idx, state_idx = update
             comp_name = query.bkb.getComponentName(comp_idx)
@@ -254,97 +253,11 @@ class UnsecretHandler:
             self.truth_assignment /= prob_sum
             self.false_assignment /= prob_sum
 
-
         report = query.jsonExplanations(contributions_include_srcs=False,
                                         contributions_top_n_inodes=10,
                                         contributions_ignore_prefixes=['_'])
         self.report = {'Patient Analysis': report['Patient Analysis'],
                        'Contribution Analysis': report['Contributions Analysis']}
-
-
-        # UPDATE WITH NEW CONTRIB
-        if sensitivities:
-            true_pats = self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = True'.format(self.days)]
-            false_pats = self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = False'.format(self.days)]
-
-            max_true_contrib = max(self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)].values())
-            min_true_contrib = min(self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)].values())
-            max_false_contrib = max(self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)].values())
-            min_false_contrib = min(self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)].values())
-
-            # true items
-            # age
-            true_ages = []
-            for key in true_pats:
-                true_ages.append(true_pats[key]['Age_of_Diagnosis'])
-            true_age_mean = statistics.mean(true_ages)
-            true_age_std = statistics.stdev(true_ages)
-            true_sensitive_age = 'Age_of_Diagnosis {} - {}'.format(true_age_mean-true_age_std, true_age_mean+true_age_std)
-            # drugs
-            true_drugs = {}
-            for key in true_pats:
-                for drug in true_pats[key]['Drug_Name(s)']:
-                    if drug not in true_drugs.keys():
-                        true_drugs[drug] = 1
-                    else:
-                        true_drugs[drug] += 1
-
-            drug_order = {k: v for k,v in sorted(true_drugs.items(), key=lambda item: item[1], reverse=True)}
-            true_sensitive_drugs = []
-            for key in drug_order.keys():
-                true_sensitive_drugs.append('Drug_Name(s) == {} = True'.format(key))
-
-            # false items
-            # age
-            false_ages = []
-            for key in false_pats:
-                false_ages.append(false_pats[key]['Age_of_Diagnosis'])
-            false_age_mean = statistics.mean(false_ages)
-            false_age_std = statistics.stdev(false_ages)
-            false_sensitive_age = 'Age_of_Diagnosis {} - {}'.format(false_age_mean-false_age_std, false_age_mean+false_age_std)
-            # drugs
-            false_drugs = {}
-            for key in false_pats:
-                for drug in false_pats[key]['Drug_Name(s)']:
-                    if drug not in false_drugs.keys():
-                        false_drugs[drug] = 1
-                    else:
-                        false_drugs[drug] += 1
-
-            drug_order = {k: v for k,v in sorted(false_drugs.items(), key=lambda item: item[1], reverse=True)}
-            false_sensitive_drugs = []
-            for k in drug_order.keys():
-                false_sensitive_drugs.append('Drug_Name(s) == {} = True'.format(k))
-
-            # add age item
-            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Age_of_Diagnosis {} - {}'.format(true_age_mean-true_age_std, true_age_mean+true_age_std)] = max_true_contrib + 10*min_true_contrib
-            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Age_of_Diagnosis {} - {}'.format(false_age_mean-false_age_std, false_age_mean+false_age_std)] = max_false_contrib + 10*min_false_contrib
-            # add stage
-            # T
-            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Stage_T == T1'] = max_true_contrib + 9*min_true_contrib
-            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Stage_T == T4'] = max_false_contrib + 9*min_false_contrib
-            # N
-            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Stage_N == N0'] = max_true_contrib + 8*min_true_contrib
-            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Stage_N == N3'] = max_false_contrib + 8*min_false_contrib
-            # M
-            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Stage_M == M0'] = max_true_contrib + 7*min_true_contrib
-            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Stage_M == M1'] = max_false_contrib + 7*min_false_contrib
-
-            # add drug items
-            for i in range(0, 3):
-                self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)][true_sensitive_drugs[i]] = max_true_contrib + (6-i) * min_true_contrib
-                self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)][false_sensitive_drugs[i]] = max_false_contrib + (6-i) * min_false_contrib
-
-            # del surv key
-            del self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['Survival_Time >= {} = True'.format(self.days)]
-            del self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['Survival_Time >= {} = False'.format(self.days)]
-
-            # sort
-            self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)] = {k: v for k, v in sorted(self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)].items(), key=lambda item: item[1], reverse=True)}
-            self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)] = {k: v for k, v in sorted(self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)].items(), key=lambda item: item[1], reverse=True)}
-            #END UPDATE WITH NEW CONTRIB
-
-
 
     ##########################################################
     # constructDecoratedKG
@@ -358,33 +271,40 @@ class UnsecretHandler:
 
     def constructDecoratedKG(self):
         self.kg = copy.deepcopy(self.qg)
-        results = {'edge_bindings':[], 'node_bindings':[]}
         # update target node info and form edge pair combos for results graph
-        edge_pairs = list()
-        for edge in self.kg['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
-                edge['has_confidence_level'] = self.truth_assignment
-                edge['Description'] = self.report
-                # add contribution analysis
-            qg_id = edge['id']
-            kg_id = str(uuid.uuid4())
-            edge_pairs.append([qg_id,kg_id])
-            edge['id'] = kg_id
-        # form node pair combos for results graph
-        node_pairs = list()
-        for node in self.kg['nodes']:
-            qg_id = node['id']
-            kg_id = str(uuid.uuid4())
-            node_pairs.append([qg_id,kg_id])
 
-        # update edge/node bindings in results graph
-        for edge_pair in edge_pairs:
-            results['edge_bindings'].append({'qg_id':edge_pair[0], 'kg_id':edge_pair[1]})
-        for node_pair in node_pairs:
-            results['node_bindings'].append({'qg_id':node_pair[0], 'kg_id':node_pair[1]})
+        node_pairs = dict()
+        for node_key in list(self.kg['nodes'].keys())[:]:
+            qg_node_curie = self.kg['nodes'][node_key].pop('curie')
+            self.kg['nodes'][qg_node_curie] = self.kg['nodes'].pop(node_key)
+            node_pairs[node_key] = qg_node_curie
+            if self.kg['nodes'][qg_node_curie]['type'] == 'gene':
+                self.kg['nodes'][qg_node_curie]['name'] = self.gene_curie_dict[qg_node_curie]
+            elif self.kg['nodes'][qg_node_curie]['type'] == 'drug':
+                self.kg['nodes'][qg_node_curie]['name'] = self.drug_curie_dict[qg_node_curie]
+
+        edge_pairs = dict()
+        knowledge_edges = 0
+        for edge_key in list(self.kg['edges'].keys())[:]:
+            kg_id = 'kge{}'.format(knowledge_edges)
+            knowledge_edges += 1
+            self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_key)
+            self.kg['edges'][kg_id]['source_id'] = node_pairs[self.kg['edges'][kg_id]['source_id']]
+            self.kg['edges'][kg_id]['target_id'] = node_pairs[self.kg['edges'][kg_id]['target_id']]
+            edge_pairs[edge_key] = kg_id
+            if self.kg['edges'][kg_id]['type'] == 'disease_to_phenotype_association':
+                self.kg['edges'][kg_id]['has_confidence_level'] = self.truth_assignment
+                if 'properties' in self.kg['edges'][kg_id].keys() and 'contributions' in self.kg['edges'][kg_id]['properties'].keys() and self.kg['edges'][kg_id]['properties']['contributions'] == True:
+                    self.kg['edges'][kg_id]['Description'] = self.report
+
+        for edge_pair_key in edge_pairs:
+            self.results[0]['edge_bindings'][edge_pair_key] = { 'kg_id': edge_pairs[edge_pair_key]}
+        for node_pair_key in node_pairs:
+            self.results[0]['node_bindings'][node_pair_key] = { 'kg_id': node_pairs[node_pair_key]}
 
         # query response
         reasoner_std = {'query_graph': self.qg,
                         'knowledge_graph': self.kg,
-                        'results': results}
+                        'results': self.results}
+        reasoner_std = {'message' : reasoner_std}
         return reasoner_std

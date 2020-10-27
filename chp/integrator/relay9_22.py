@@ -11,17 +11,14 @@ import copy
 import csv
 import sys
 import uuid
+import pickle
 
 from chp.query import Query
 from chp.reasoner import Reasoner
 
 from chp_data.bkb_handler import BkbDataHandler
 
-#from pybkb.common.bayesianKnowledgeBase import bayesianKnowledgeBase as BKB
-#from pybkb.common.bayesianKnowledgeBase import BKB_I_node, BKB_component, BKB_S_node
-#from pybkb.python_base.fusion import fuse
-
-class RankingHandler:
+class Relay9_22:
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
         # query graph components
         self.query = query
@@ -40,17 +37,24 @@ class RankingHandler:
             self.results = self.query['results']
 
         # Instiatate Reasoner
-        self.bkb_data_handler = BkbDataHandler(dataset_version='1.1')
+        self.bkb_data_handler = BkbDataHandler(dataset_version='1.2')
         self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
                                 hosts_filename=hosts_filename,
                                 num_processes_per_host=num_processes_per_host)
+
         # prepare curie gene dict
+        self.true_gene_contrib = dict()
+        self.false_gene_contrib = dict()
         self.gene_curie_dict = dict()
+        self.gene_to_curie = dict()
         with open(self.bkb_data_handler.gene_curie_path, 'r') as gene_file:
             reader = csv.reader(gene_file)
             next(reader)
             for row in reader:
                 self.gene_curie_dict[row[1]] = row[0]
+                self.true_gene_contrib[row[0]] = 0
+                self.false_gene_contrib[row[0]] = 0
+                self.gene_to_curie[row[0]] = row[1]
         # prepare curie drug dict
         self.drug_curie_dict = dict()
         with open(self.bkb_data_handler.drug_curie_path, 'r') as drug_file:
@@ -77,66 +81,38 @@ class RankingHandler:
     ##########################################################
     # buildQueries
     # Input:
-    # Output: list of queries
+    # Output: built query
     #--------------------------------------------------------
     # Description: Parses over sent query graph to form a BKB
-    # query. The BKB query is returned. Only allows 1 gene curie
-    # or 1 drug curie. Raises error if both or non. There is an
-    # optional edge property 'onset_qualifier'. In the event this
-    # is not provided we default to 970 days. This needs to be
-    # documented in openAPI documentation?
+    # query. The BKB query is returned.
 
     def buildQueries(self):
-        # get evidence
+
         evidence = dict()
-        meta_evidence = list()
+        targets = list()
+        acceptable_target_curies = ['EFO:0000714']
         for node in self.qg['nodes']:
-            if node['type'] == 'Gene':
-                gene_curie = node['curie']
-                try:
-                    gene = self.gene_curie_dict[gene_curie]
-                except:
-                    sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
-                evidence["_mut_" + gene] = 'True'
             if node['type'] == 'Drug':
                 drug_curie = node['curie']
                 try:
-                    drug = self.drug_curie_dict[drug_curie]
+                    self.drug = self.drug_curie_dict[drug_curie]
                 except:
                     sys.exit('Invalid CHEMBL Identifier. Must be in form CHEMBL:<ID>')
-                meta_evidence.append(('Drug_Name(s)', '==', drug))
-
-        # get target
-        targets = list()
+                evidence['drug_{}'.format(self.drug)] = 'True'
         for edge in self.qg['edges']:
-            if edge['type'] == 'causes':
-                if 'onset_qualifier' in list(edge.keys()):
-                    days = edge['onset_qualifier']
-                # default value - needs to be documented in openAPI?
+            if edge['type'] == 'chemical_to_disease_or_phenotypic_feature_association':
+                if 'value' in edge.keys():
+                    self.days = edge['value']
                 else:
-                    days = 970
-                targets.append(('Survival_Time', '>=', days))
-        if len(list(evidence.keys())) + len(meta_evidence) > 1:
-            sys.exit('More than 1 piece of evidence')
+                    self.days = 970
 
-        if len(list(evidence.keys())) + len(meta_evidence) == 0:
-            sys.exit('No evidence provided')
+        targets.append(('Survival_Time', '>=', self.days))
 
-        if len(list(evidence.keys())) > 0:
-            query = Query(evidence=evidence,
-                          targets=[],
-                          meta_evidence=None,
-                          meta_targets=targets,
-                          type='updating')
-        elif len(meta_evidence) > 0:
-            query = Query(evidence=None,
-                          targets=[],
-                          meta_evidence=meta_evidence,
-                          meta_targets=targets,
-                          type='updating')
-        else:
-            sys.exit('Problem in constructing BKB query')
-
+        query = Query(evidence=evidence,
+                      targets=[],
+                      meta_evidence=None,
+                      meta_targets=targets,
+                      type='updating')
         self.chp_query = query
         return query
 
@@ -188,6 +164,37 @@ class RankingHandler:
             self.truth_assignment /= prob_sum
             self.false_assignment /= prob_sum
 
+        report = query.jsonExplanations(contributions_include_srcs=False,
+                                        contributions_top_n_inodes=10,
+                                        contributions_ignore_prefixes=['_'])
+        self.report = {'Patient Analysis': report['Patient Analysis'],
+                       'Contribution Analysis': report['Contributions Analysis']}
+        # total contrib values
+        true_contrib = self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['drug_{} = True'.format(self.drug)]
+        false_contrib = self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['drug_{} = True'.format(self.drug)]
+        # total patients in contrib cat
+        true_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = True'.format(self.days)].keys())
+        false_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = False'.format(self.days)].keys())
+        # true_individual contrib
+        true_ind_cont = float(true_contrib)/float(true_pats)
+        false_ind_cont = float(false_contrib)/float(false_pats)
+
+        self.gene_list_contrib = dict()
+
+
+        patient_dict = pickle.load(open(self.bkb_data_handler.patient_data_pk_path, 'rb'))
+        for key in patient_dict:
+            pat = patient_dict[key]
+            if pat['Survival_Time'] > self.days and self.drug in pat['Drug_Name(s)']:
+                for gene in pat['Patient_Genes']:
+                    self.true_gene_contrib[gene] += true_ind_cont
+            elif pat['Survival_Time'] < self.days and self.drug in pat['Drug_Name(s)']:
+                for gene in pat['Patient_Genes']:
+                    self.false_gene_contrib[gene] += false_ind_cont
+        self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.true_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
+        self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.false_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
+
+
     ##########################################################
     # constructDecoratedKG
     # Input:
@@ -201,13 +208,13 @@ class RankingHandler:
     def constructDecoratedKG(self):
         self.kg = copy.deepcopy(self.qg)
         results = {'edge_bindings':[], 'node_bindings':[]}
-        # update target node info and form new KGraph id
+        # update target node info and form edge pair combos for results graph
         edge_pairs = list()
         for edge in self.kg['edges']:
-            if edge['type'] == 'causes':
+            if edge['type'] == 'chemical_to_disease_or_phenotypic_feature_association':
                 edge['has_confidence_level'] = self.truth_assignment
                 #they may want descriptions later
-                #node['Description'] = self.patient_report
+                edge['Description'] = self.report['Contribution Analysis']
             qg_id = edge['id']
             kg_id = str(uuid.uuid4())
             edge_pairs.append([qg_id,kg_id])

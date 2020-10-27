@@ -150,11 +150,11 @@ class Query:
             dfs[target] = df
         return dfs
 
-    def getExplanations(self):
+    def getExplanations(self, contributions_include_srcs=True, contributions_top_n_inodes=None, contributions_ignore_prefixes=None):
         explain_dict = dict()
         if self.independ_result is not None:
             explain_dict['Assumptions'] = 'Query assumes independence between genetic evidence.'
-            explain_dict['Sensitivity'] = ['No sensitivity information is a available in the contributions field.']
+            explain_dict['Contributions Analysis'] = ['No sensitivity information is a available in the contributions field.']
             mostSigPatsIndepend = dict()
             query_patients = dict()
             for q in self.independ_queries:
@@ -185,8 +185,12 @@ class Query:
             return explain_dict
         else:
             explain_dict['Assumptions'] = 'Query does not assume independence between genetic evidence.'
-        inode_dict = self.result.process_inode_contributions()
-        explain_dict['Sensitivity'] = list()
+        inode_dict = self.result.process_inode_contributions(include_srcs=contributions_include_srcs,
+                                                             top_n_inodes=contributions_top_n_inodes,
+                                                             ignore_prefixes=contributions_ignore_prefixes,
+                                                             remove_tuples=True)
+        explain_dict['Contributions Analysis'] = inode_dict
+        '''
         for target, contrib_dict in inode_dict.items():
             target_str = ' '.join(target)
             most_sig_inodes = list()
@@ -204,7 +208,8 @@ class Query:
                     continue
             contrib_explain = 'The most sensitive variables for {} are {}'.format(target_str,
                                                                                     ', '.join(most_sig_inodes))
-            explain_dict['Sensitivity'].append(contrib_explain)
+            explain_dict['Contributions Analysis'].append(contrib_explain)
+        '''
         explain_dict['Patient Analysis'] = self.getSourcePatientAnalysis()
         if self.interpolation is None or self.interpolation == 'standard':
             explain_dict['Interpolation Strategy'] = 'No interpolation stradegy was used.'
@@ -274,20 +279,24 @@ class Query:
                                                       for src_hash in src_hashs_intersection}
         return data
 
-    def jsonExplanations(self):
-        explain = self.getExplanations()
+    def jsonExplanations(self, contributions_include_srcs=True, contributions_top_n_inodes=None, contributions_ignore_prefixes=None):
+        explain = self.getExplanations(contributions_include_srcs=contributions_include_srcs,
+                                       contributions_top_n_inodes=contributions_top_n_inodes,
+                                       contributions_ignore_prefixes=contributions_ignore_prefixes)
         jsonSigPatients = dict()
-        for target, pat_data_dict in explain['Patient Analysis'].items():
-            if pat_data_dict is not None:
-                target_str = '{} = {}'.format(target[0], target[1])
-                jsonSigPatients[target_str] = dict()
-                for patient_idx, data_dict in pat_data_dict.items():
-                    jsonSigPatients[target_str][patient_idx] = dict()
-                    if not data_dict is None:
-                        for info_name, data in data_dict.items():
-                            if type(data) == tuple:
-                                data = list(data)
-                            jsonSigPatients[target_str][patient_idx][info_name] = data
+        for analysis_type, infer_pat_data_dict in explain['Patient Analysis'].items():
+            if infer_pat_data_dict is not None:
+                jsonSigPatients[analysis_type] = dict()
+                for target_str, pat_data_dict in infer_pat_data_dict.items():
+                    jsonSigPatients[analysis_type][target_str] = dict()
+                    if pat_data_dict is not None:
+                        for patient_idx, data_dict in pat_data_dict.items():
+                            jsonSigPatients[analysis_type][target_str][patient_idx] = dict()
+                            if not data_dict is None:
+                                for info_name, data in data_dict.items():
+                                    if type(data) == tuple:
+                                        data = list(data)
+                                    jsonSigPatients[analysis_type][target_str][patient_idx][info_name] = data
         explain['Patient Analysis'] = jsonSigPatients
         return explain
 

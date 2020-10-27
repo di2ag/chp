@@ -42,14 +42,28 @@ class Reasoner:
     def __init__(self, bkb_data_handler=None, fused_bkb=None, collapsed_bkb=None,  patient_data=None, gene_var_direct=None, max_new_ev=None,
                  hosts_filename=None, num_processes_per_host=0, venv=None):
         if bkb_data_handler is not None:
-            self.fused_bkb = BKB()
-            #-- try to load pickle file
-            try:
-                self.fused_bkb = self.fused_bkb.load(bkb_data_handler.fusion_bkb_path, use_pickle=True)
-            except:
-                logger.warning('Could not load fused bkb from pickle at:\n\t{}.\n\tReverting to normal load procedure. Consider saving fused bkb as a pickle.'.format(bkb_data_handler.fusion_bkb_path))
-                self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
-            self.collapsed_bkb = bkb_data_handler.collapsed_bkb_path
+            load_start_time = time.time()
+            #-- Check if collapsed bkb exists and load it if it does.
+            if bkb_data_handler.collapsed_bkb_path is not None:
+                self.fused_bkb = None
+                self.collapsed_bkb = BKB()
+                logger.debug('Loading collapsed BKB from: {}'.format(bkb_data_handler.collapsed_bkb_path))
+                try:
+                    self.collapsed_bkb = self.collapsed_bkb.load(bkb_data_handler.collapsed_bkb_path, use_pickle=True)
+                except:
+                    logger.warning('Could not load collapsed bkb from pickle at:\n\t{}.\nReverting to normal load procedure. Consider saving collapsed bkb as a pickle.'.format(bkb_data_handler.collapsed_bkb_path))
+                    self.collapsed_bkb.load(bkb_data_handler.collapsed_bkb_path)
+            else:
+                self.fused_bkb = BKB()
+                #-- try to load pickle file
+                logger.debug('Loading fused BKB from: {}'.format(bkb_data_handler.fusion_bkb_path))
+                try:
+                    self.fused_bkb = self.fused_bkb.load(bkb_data_handler.fusion_bkb_path, use_pickle=True)
+                except:
+                    logger.warning('Could not load fused bkb from pickle at:\n\t{}.\nReverting to normal load procedure. Consider saving fused bkb as a pickle.'.format(bkb_data_handler.fusion_bkb_path))
+                    self.fused_bkb.load(bkb_data_handler.fusion_bkb_path)
+                    self.collapsed_bkb = bkb_data_handler.collapsed_bkb_path
+            logger.debug('Loaded BKB in {} secs.'.format(time.time() - load_start_time))
             self.cached_bkb_dir = bkb_data_handler.cached_bkb_dir
             self.set_src_metadata(bkb_data_handler.patient_data_pk_path)
         else:
@@ -97,6 +111,54 @@ class Reasoner:
             logger.debug('Saved collapsed BKB at: {}'.format(collapsed_bkb_path))
         return collapsed_bkb
 
+    def getSrcHashes(self):
+        if self.fused_bkb is None:
+            return self.getSrcHashesFromCollapsedBkb()
+        return self.getSrcHashesFromFusedBkb()
+
+    def getSrcHashesFromFusedBkb(self):
+        #-- Preprocess src hash values
+        src_component_indices = self.fused_bkb.getSrcComponents()
+        src_hashs = dict()
+        src_hashs_inverse = dict()
+        for comp_idx in src_component_indices:
+            for state_idx in range(self.fused_bkb.getNumberComponentINodes(comp_idx)):
+                state_name = self.fused_bkb.getComponentINodeName(comp_idx, state_idx)
+                #-- Collect src numbers and string name or hash
+                src_num = int(state_name.split('_')[0][1:-1])
+                try:
+                    src_hash = int(''.join(state_name.split('_')[1:]))
+                    src_hashs[src_num] = src_hash
+                    src_hashs_inverse[src_hash] = src_num
+                except ValueError:
+                    continue
+                    #src_hashs[src_num] = state_name
+        #self.src_hashs = set(src_hashs)
+        return src_hashs, src_hashs_inverse
+
+    def getSrcHashesFromCollapsedBkb(self):
+        #-- Preprocess src hash values
+        src_component_indices = self.collapsed_bkb.getSrcComponents()
+        #print(src_component_indices)
+        src_hashs = dict()
+        src_hashs_inverse = dict()
+        for comp_idx in src_component_indices:
+            for state_idx in self.collapsed_bkb.getAllComponentINodeIndices(comp_idx):
+                state_name = self.collapsed_bkb.getComponentINodeName(comp_idx, state_idx)
+                name_split = state_name.split('_')
+                try:
+                    num_split = [int(_num) for _num in name_split[0][1:-1].split(',')]
+                    hash_split = [int(_hash) for _hash in name_split[1].split(',')]
+                except ValueError:
+                    continue
+                for src_num, src_hash in zip(num_split, hash_split):
+                    if src_num in src_hashs:
+                        if src_hashs[src_num] != src_hash:
+                            raise ValueError('Source numbers and hashes did not match up. Check collapsed bkb.')
+                    src_hashs[src_num] = src_hash
+                    src_hashs_inverse[src_hash] = src_num
+        return src_hashs, src_hashs_inverse
+
     def setup(self):
         #-- Collapse sources in fused bkb
         if self.collapsed_bkb is None:
@@ -105,7 +167,7 @@ class Reasoner:
             self.collapsed_bkb = self.getCollapsedBKB(self.fused_bkb)
         #self.collapsed_bkb.save('collapsed.bkb')
         #self.collapsed_bkb.makeGraph()
-        
+        '''
         #-- Preprocess src hash values
         src_component_indices = self.fused_bkb.getSrcComponents()
         src_hashs = dict()
@@ -125,6 +187,8 @@ class Reasoner:
         #self.src_hashs = set(src_hashs)
         self.src_hashs = src_hashs
         self.src_hashs_inverse = src_hashs_inverse
+        '''
+        self.src_hashs, self.src_hashs_inverse = self.getSrcHashes()
 
         #-- Preprocess Patient Variant data into dictionary
         for src_hash, data_dict in self.metadata.items():
@@ -352,7 +416,6 @@ class Reasoner:
 
             #-- Update with gene helper
             transformed_meta.update(helper_evidence)
-            logger.debug('Transformed Meta Evidence {}'.format(transformed_meta))
             return transformed_meta, bkb
         else:
             raise ValueError('Target Strategy must be chain or topological.')
@@ -468,12 +531,46 @@ class Reasoner:
         #    input('Stopped')
         return query
 
+    @staticmethod
+    def fixQuery(query):
+        ''' Assures query is in proper format before analysis.
+
+        Parameters
+        ----------
+        query: chp query object, required
+            The chp query object to be fixed.
+
+        Returns
+        -------
+        fixed_query: chp query object
+            The fixed query that is ready for analysis.
+        '''
+        fixed_meta_targets = []
+        fixed_meta_evidence = []
+
+        #-- Ensure meta targets are in the right format.
+        if query.meta_evidence is not None:
+            for meta_evidence in query.meta_evidence:
+                fixed_meta_evidence.append(tuple(meta_evidence))
+            query.meta_evidence = fixed_meta_evidence
+
+        #-- Ensure meta targets are in the right format.
+        if query.meta_targets is not None:
+            for meta_target in query.meta_targets:
+                fixed_meta_targets.append(tuple(meta_target))
+            query.meta_targets = fixed_meta_targets
+
+        return query
+
     '''
     Target strategy can be chain, where targets are located in the chain rule (legacy) or
     topological where target is attached to all nodes at the bottom of the topological sort. This
     methodolgy can only except on target then.
     '''
     def analyze_query(self, query, save_dir=None, preprocessed_bkb=None, target_strategy='chain', interpolation='independence', check_mutex=False):
+        #-- Make sure query is in correct format
+        query = self.fixQuery(query)
+
         #-- Set up query parameters
         query.patient_data = self.metadata
         query.target_strategy = target_strategy
@@ -492,9 +589,16 @@ class Reasoner:
         num_gene_evidence = len(query.evidence)
 
         #-- Make a bkb query hash.
-        query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.serialize().decode('cp437'),
+        meta_data_str = ''
+        for pat_id, pat in sorted(self.metadata.items(), key=lambda kv: kv[0]):
+            meta_data_str += str(pat_id)
+            for demo, demo_val in sorted(pat.items(), key=lambda kv: kv[0]):
+                meta_data_str += (demo + str(demo_val))
+            
+        query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.to_str(),
                                                str(query.meta_evidence),
                                                str(query.meta_targets),
+                                               meta_data_str,
                                                target_strategy,
                                                interpolation]).encode('utf-8'))
         query_bkb_path = os.path.join(self.cached_bkb_dir, '{}.bkb'.format(query_bkb_hash))
