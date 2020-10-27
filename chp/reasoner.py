@@ -589,9 +589,16 @@ class Reasoner:
         num_gene_evidence = len(query.evidence)
 
         #-- Make a bkb query hash.
-        query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.serialize().decode('cp437'),
+        meta_data_str = ''
+        for pat_id, pat in sorted(self.metadata.items(), key=lambda kv: kv[0]):
+            meta_data_str += str(pat_id)
+            for demo, demo_val in sorted(pat.items(), key=lambda kv: kv[0]):
+                meta_data_str += (demo + str(demo_val))
+            
+        query_bkb_hash = zlib.adler32(''.join([self.collapsed_bkb.to_str(),
                                                str(query.meta_evidence),
                                                str(query.meta_targets),
+                                               meta_data_str,
                                                target_strategy,
                                                interpolation]).encode('utf-8'))
         query_bkb_path = os.path.join(self.cached_bkb_dir, '{}.bkb'.format(query_bkb_hash))
