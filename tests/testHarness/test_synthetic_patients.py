@@ -37,7 +37,6 @@ class testSyntheticPatients(unittest.TestCase):
         patient_sets = self.build_synthetic_sets()
         fragments = self.build_synthetic_BKB_frags(patient_sets)
         dicts, source_names, reliabilities = self.build_synthetic_dicts(patient_sets)
-        dict = dicts[0]
         fused_bkbs = self.fuse_synthetic_frags(fragments, source_names, reliabilities)
         query_responses = self.run_synthetic_queries(fused_bkbs, dicts)
         for i in range(0, len(query_responses)):
