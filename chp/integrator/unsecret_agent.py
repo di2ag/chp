@@ -26,45 +26,47 @@ DEBUG = True
 
 class UnsecretHandler:
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
-
         # query graph components
         self.query = query
-        self.qg = self.query['query_graph']
-        if 'knowledge_graph' not in list(self.query.keys()):
-            self.kg = { "edges": [],
-                        "nodes": []
-                      }
-        else:
-            self.kg = self.query['knowledge_graph']
-        if 'results' not in list(self.query.keys()):
-            self.results = { "node_bindings": [],
-                             "edge_bindings": []
-                           }
-        else:
-            self.results = self.query['results']
-
-        #-- Instiatate Reasoner
         self.bkb_data_handler = BkbDataHandler(dataset_version='1.1')
-        self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
-                                hosts_filename=hosts_filename,
-                                num_processes_per_host=num_processes_per_host)
-        # prepare curie gene dict
-        self.gene_curie_dict = dict()
-        with open(self.bkb_data_handler.gene_curie_path, 'r') as gene_file:
-            reader = csv.reader(gene_file)
-            next(reader)
-            for row in reader:
-                self.gene_curie_dict[row[1]] = row[0]
-        # prepare curie drug dict
-        self.drug_curie_dict = dict()
-        with open(self.bkb_data_handler.drug_curie_path, 'r') as drug_file:
-            reader = csv.reader(drug_file)
-            next(reader)
-            for row in reader:
-                self.drug_curie_dict[row[1]] = row[0]
 
-        self.target_strategy = 'explicit'
-        self.interpolation = 'standard'
+        # Only do the rest of this if a query is passed
+        if self.query is not None:
+            self.qg = self.query['query_graph']
+            if 'knowledge_graph' not in list(self.query.keys()):
+                self.kg = { "edges": [],
+                            "nodes": []
+                          }
+            else:
+                self.kg = self.query['knowledge_graph']
+            if 'results' not in list(self.query.keys()):
+                self.results = { "node_bindings": [],
+                                 "edge_bindings": []
+                               }
+            else:
+                self.results = self.query['results']
+
+            #-- Instiatate Reasoner
+            self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
+                                    hosts_filename=hosts_filename,
+                                    num_processes_per_host=num_processes_per_host)
+            # prepare curie gene dict
+            self.gene_curie_dict = dict()
+            with open(self.bkb_data_handler.gene_curie_path, 'r') as gene_file:
+                reader = csv.reader(gene_file)
+                next(reader)
+                for row in reader:
+                    self.gene_curie_dict[row[1]] = row[0]
+            # prepare curie drug dict
+            self.drug_curie_dict = dict()
+            with open(self.bkb_data_handler.drug_curie_path, 'r') as drug_file:
+                reader = csv.reader(drug_file)
+                next(reader)
+                for row in reader:
+                    self.drug_curie_dict[row[1]] = row[0]
+
+            self.target_strategy = 'explicit'
+            self.interpolation = 'standard'
 
     ##########################################################
     # checkQuery
