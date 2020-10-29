@@ -56,14 +56,14 @@ class ReasonerStdHandler:
             next(reader)
             for row in reader:
                 curies["gene"].append({"name": row[0],
-                                       "curie": row[2]})
+                                       "curie": row[1]})
         # Read in the drug curie map
         with open(self.handler.bkb_data_handler.drug_curie_path, 'r') as drug_file:
             reader = csv.reader(drug_file)
             next(reader)
             for row in reader:
                 curies["chemical_substance"].append({"name": row[0],
-                                                     "curie": row[2]})
+                                                     "curie": row[1]})
 
         # Add diseases
         curies["disease"].append({"name": 'breast_cancer',
