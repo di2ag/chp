@@ -38,6 +38,8 @@ class ReasonerStdHandler:
                 self.query = json.loads(json_query)
             else:
                 self.query = dict_query
+        else:
+            self.query = None
         self.handler = self.getHandler()
 
     def getCuries(self):
