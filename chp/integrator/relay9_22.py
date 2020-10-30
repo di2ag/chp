@@ -172,18 +172,26 @@ class Relay9_22:
                                         contributions_ignore_prefixes=['_'])
         self.report = {'Patient Analysis': report['Patient Analysis'],
                        'Contribution Analysis': report['Contributions Analysis']}
-        # total contrib values
-        true_contrib = self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['drug_{} = True'.format(self.drug)]
-        false_contrib = self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['drug_{} = True'.format(self.drug)]
-        # total patients in contrib cat
-        true_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = True'.format(self.days)].keys())
-        false_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = False'.format(self.days)].keys())
-        # true_individual contrib
-        true_ind_cont = float(true_contrib)/float(true_pats)
-        false_ind_cont = float(false_contrib)/float(false_pats)
+
+        if 'Survival_Time >= {} = True'.format(self.days) in self.report['Contribution Analysis'].keys():
+            true_contrib = self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['drug_{} = True'.format(self.drug)]
+            true_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = True'.format(self.days)].keys())
+            true_ind_cont = float(true_contrib)/float(true_pats)
+        else:
+            true_contrib = 0
+            true_pats = 0
+            true_ind_cont = 0
+
+        if 'Survival_Time >= {} = False'.format(self.days) in self.report['Contribution Analysis'].keys():
+            false_contrib = self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['drug_{} = True'.format(self.drug)]
+            false_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = False'.format(self.days)].keys())
+            false_ind_cont = float(false_contrib)/float(false_pats)
+        else:
+            false_contrib = 0
+            false_pats = 0
+            false_int_cont = 0
 
         self.gene_list_contrib = dict()
-
 
         patient_dict = pickle.load(open(self.bkb_data_handler.patient_data_pk_path, 'rb'))
         for key in patient_dict:
