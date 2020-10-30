@@ -105,7 +105,7 @@ class DefaultHandler:
             if node['type'] == 'disease' and node['curie'] in acceptable_disease_curies:
                 disease_id = node["id"]
                 for edge in self.qg['edges']:
-                    if edge['type'] == 'disease_to_phenotype_association' and edge['source_id'] == disease_id and edge['target_id'] == target_id:
+                    if edge['type'] == 'disease_to_phenotypic_feature_association' and edge['source_id'] == disease_id and edge['target_id'] == target_id:
                         if 'properties' in edge:
                             days = edge['properties']['value']
                             qualifier = edge['properties']['qualifier']
@@ -283,7 +283,7 @@ class DefaultHandler:
         for edge in self.kg['edges']:
             qg_edge_id = copy.deepcopy(edge["id"])
             edge["id"] = str(uuid.uuid4())
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 edge['has_confidence_level'] = self.truth_assignment
                 if 'properties' in edge:
                     if 'contributions' in edge['properties']:

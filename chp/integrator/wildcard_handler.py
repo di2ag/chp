@@ -119,7 +119,7 @@ class WildCardHandler:
                         sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>')
                     evidence['mut_{}'.format(self.gene)] == 'True'
         for edge in self.qg['edges']:
-            if edge['type'] == 'disease_to_phenotypic_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 if 'properties' in edge:
                     self.op = edge['properties']['qualifier']
                     self.value = edge['properties']['value']
@@ -294,7 +294,7 @@ class WildCardHandler:
                     _kg_source_id = copy.deepcopy(kg_source_id)
                     _kg_target_id = copy.deepcopy(kg_target_id)
                     _edge = copy.deepcopy(edge)
-                    if _edge["type"] == 'disease_to_phenotypic_association':
+                    if _edge["type"] == 'disease_to_phenotypic_feature_association':
                         _edge['has_confidence_level'] = self.truth_assignment
                         kg_edge_id = str(uuid.uuid4())
                         qg_edge_id = copy.deepcopy(_edge["id"])
