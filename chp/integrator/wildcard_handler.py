@@ -104,7 +104,7 @@ class WildCardHandler:
                 else:
                     sys.exit('You can only have one contribution target. Make sure to leave only one node with a black curie.')
             else:
-                if node['type'] == 'drug':
+                if node['type'] == 'chemical_substance':
                     drug_curie = node['curie']
                     try:
                         self.drug = self.drug_curie_dict[drug_curie]
@@ -120,12 +120,14 @@ class WildCardHandler:
                     evidence['mut_{}'.format(self.gene)] == 'True'
         for edge in self.qg['edges']:
             if edge['type'] == 'disease_to_phenotypic_association':
-                if 'value' in edge.keys():
-                    self.days = edge['value']
+                if 'properties' in edge:
+                    self.op = edge['properties']['qualifier']
+                    self.value = edge['properties']['value']
                 else:
-                    self.days = 970
+                    self.op = '>='
+                    self.value = 970
 
-        targets.append(('Survival_Time', '>=', self.days))
+        targets.append(('Survival_Time', self.op, self.value))
 
         query = Query(evidence=evidence,
                       targets=[],
@@ -189,11 +191,11 @@ class WildCardHandler:
         self.report = {'Patient Analysis': report['Patient Analysis'],
                        'Contribution Analysis': report['Contributions Analysis']}
         # total contrib values
-        true_contrib = self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)]['drug_{} = True'.format(self.drug)]
-        false_contrib = self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)]['drug_{} = True'.format(self.drug)]
+        true_contrib = self.report['Contribution Analysis']['Survival_Time {} {} = True'.format(self.op, self.value)]['drug_{} = True'.format(self.drug)]
+        false_contrib = self.report['Contribution Analysis']['Survival_Time {} {} = False'.format(self.op, self.value)]['drug_{} = True'.format(self.drug)]
         # total patients in contrib cat
-        true_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = True'.format(self.days)].keys())
-        false_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time >= {} = False'.format(self.days)].keys())
+        true_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time {} {} = True'.format(self.op, self.value)].keys())
+        false_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time {} {} = False'.format(self.op, self.value)].keys())
         # true_individual contrib
         true_ind_cont = float(true_contrib)/float(true_pats)
         false_ind_cont = float(false_contrib)/float(false_pats)
@@ -204,14 +206,14 @@ class WildCardHandler:
         patient_dict = pickle.load(open(self.bkb_data_handler.patient_data_pk_path, 'rb'))
         for key in patient_dict:
             pat = patient_dict[key]
-            if pat['Survival_Time'] > self.days and self.drug in pat['Drug_Name(s)']:
+            if pat['Survival_Time'] > self.value and self.drug in pat['Drug_Name(s)']:
                 for gene in pat['Patient_Genes']:
                     self.true_gene_contrib[gene] += true_ind_cont
-            elif pat['Survival_Time'] < self.days and self.drug in pat['Drug_Name(s)']:
+            elif pat['Survival_Time'] < self.value and self.drug in pat['Drug_Name(s)']:
                 for gene in pat['Patient_Genes']:
                     self.false_gene_contrib[gene] += false_ind_cont
-        self.report['Contribution Analysis']['Survival_Time >= {} = True'.format(self.days)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.true_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
-        self.report['Contribution Analysis']['Survival_Time >= {} = False'.format(self.days)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.false_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
+        self.report['Contribution Analysis']['Survival_Time {} {} = True'.format(self.op, self.value)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.true_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
+        self.report['Contribution Analysis']['Survival_Time {} {} = False'.format(self.op, self.value)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.false_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
 
 
     ##########################################################
