@@ -19,9 +19,14 @@ from chp.reasoner import Reasoner
 from chp_data.bkb_handler import BkbDataHandler
 
 class WildCardHandler:
-    def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
+    def __init__(self,
+                 query,
+                 hosts_filename=None,
+                 num_processes_per_host=0,
+                 max_results=10):
         # query graph components
         self.query = query
+        self.max_results = max_results
         self.qg = self.query['query_graph']
         if 'knowledge_graph' not in list(self.query.keys()):
             self.kg = { "edges": [],
@@ -255,7 +260,7 @@ class WildCardHandler:
                 self.kg["nodes"].append(node)
             else:
                 # Process all contribution target nodes
-                for _, gene in rel_contrib[:10]:
+                for _, gene in rel_contrib[:self.max_results]:
                     _node = copy.deepcopy(node)
                     kg_id = str(uuid.uuid4())
                     qg_id = copy.deepcopy(_node["id"])
