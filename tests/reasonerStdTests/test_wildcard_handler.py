@@ -57,7 +57,7 @@ class testWildCardHandler(unittest.TestCase):
 
         # link disease to target survival node
         reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
-                                                      'type':'disease_to_phenotypic_association',
+                                                      'type':'disease_to_phenotypic_feature_association',
                                                       'source_id':'n{}'.format('2'),
                                                       'target_id':'n{}'.format('3'),
                                                      'properties': {
@@ -96,7 +96,7 @@ class testWildCardHandler(unittest.TestCase):
 
         # extract probability
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotypic_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
                 #gene_contribs = edge['Description']
                 break

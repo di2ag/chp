@@ -75,7 +75,7 @@ class testExploringAgent(unittest.TestCase):
                                                        'id': 'e1'
                                                      })
         # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotype_association',
+        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotypic_feature_association',
                                                        'source_id': 'n2',
                                                        'target_id': 'n3',
                                                        'id': 'e3',
@@ -90,7 +90,7 @@ class testExploringAgent(unittest.TestCase):
         reasoner_std_final = handler.constructDecoratedKG()
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -161,7 +161,7 @@ class testExploringAgent(unittest.TestCase):
                                                        'target_id': 'n3'
                                                      })
         # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotype_association',
+        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotypic_feature_association',
                                                       'id': 'e3',
                                                        'source_id': 'n3',
                                                        'target_id': 'n4',
@@ -178,7 +178,7 @@ class testExploringAgent(unittest.TestCase):
         reasoner_std_final = handler.constructDecoratedKG()
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -215,7 +215,7 @@ class testExploringAgent(unittest.TestCase):
                                                        'curie': '{}'.format(phenotype[1]),
                                                      })
         # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotype_association',
+        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotypic_feature_association',
                                                       'id': '00',
                                                        'source_id': 'n0',
                                                        'target_id': 'n1',
@@ -231,7 +231,7 @@ class testExploringAgent(unittest.TestCase):
         reasoner_std_final = handler.constructDecoratedKG()
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -260,7 +260,7 @@ class testExploringAgent(unittest.TestCase):
                                                        'curie': '{}'.format(phenotype[1]),
                                                      })
         # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotype_association',
+        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotypic_feature_association',
                                                       'id': '00',
                                                        'source_id': 'n0',
                                                        'target_id': 'n1',
@@ -276,7 +276,7 @@ class testExploringAgent(unittest.TestCase):
         reasoner_std_final = handler.constructDecoratedKG()
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -325,7 +325,7 @@ class testExploringAgent(unittest.TestCase):
                                                        'target_id': 'n1'
                                                      })
         # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotype_association',
+        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotypic_feature_association',
                                                       'id': 'e1',
                                                        'source_id': 'n1',
                                                        'target_id': 'n2',
@@ -341,7 +341,7 @@ class testExploringAgent(unittest.TestCase):
         reasoner_std_final = handler.constructDecoratedKG()
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -391,7 +391,7 @@ class testExploringAgent(unittest.TestCase):
                                                      })
 
         # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotype_association',
+        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotypic_feature_association',
                                                       'id': 'e1',
                                                        'source_id': 'n1',
                                                        'target_id': 'n2',
@@ -406,7 +406,7 @@ class testExploringAgent(unittest.TestCase):
         reasoner_std_final = handler.constructDecoratedKG()
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -513,7 +513,7 @@ class testExploringAgent(unittest.TestCase):
                                                        'target_id': 'n1'
                                                      })
         # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotype_association',
+        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotypic_feature_association',
                                                       'id': 'e1',
                                                        'source_id': 'n1',
                                                        'target_id': 'n2',
@@ -526,7 +526,7 @@ class testExploringAgent(unittest.TestCase):
         reasoner_std_final = handler.constructDecoratedKG()
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
 
@@ -575,7 +575,7 @@ class testExploringAgent(unittest.TestCase):
                                                        'target_id': 'n1'
                                                      })
         # link disease to target
-        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotype_association',
+        reasoner_std['query_graph']['edges'].append({ 'type':'disease_to_phenotypic_feature_association',
                                                       'id': 'e1',
                                                        'source_id': 'n1',
                                                        'target_id': 'n2',
@@ -591,7 +591,7 @@ class testExploringAgent(unittest.TestCase):
         reasoner_std_final = handler.constructDecoratedKG()
         KG = reasoner_std_final['message']['knowledge_graph']
         for edge in KG['edges']:
-            if edge['type'] == 'disease_to_phenotype_association':
+            if edge['type'] == 'disease_to_phenotypic_feature_association':
                 p_survival = edge['has_confidence_level']
                 report = edge['Description']
         print("probability of survival:",p_survival)
