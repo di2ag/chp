@@ -18,7 +18,7 @@ from chp.reasoner import Reasoner
 
 from chp_data.bkb_handler import BkbDataHandler
 
-class ExpanderHandler:
+class WildCardHandler:
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
         # query graph components
         self.query = query
@@ -224,78 +224,112 @@ class ExpanderHandler:
 
         #-- Return top 100 genes contributors for true target
         #-- Calculate Relative Contributions and sort
-        rel_contrib = {}
+        rel_contrib_dict = {}
         for target, gene_contrib in self.report['Contribution Analysis'].items():
             for gene, contrib in gene_contrib.items():
-                if gene in rel_contrib:
+                if gene in rel_contrib_dict:
                     if 'True' in target:
-                        rel_contrib[gene] += contrib
+                        rel_contrib_dict[gene] += contrib
                     else:
-                        rel_contrib[gene] -= contrib
+                        rel_contrib_dict[gene] -= contrib
                 else:
                     if 'True' in target:
-                        rel_contrib[gene] = contrib
+                        rel_contrib_dict[gene] = contrib
                     else:
-                        rel_contrib[gene] = -contrib
-        rel_contrib = sorted([(contrib, gene) for gene, contrib in rel_contrib.items()], reverse=True)
+                        rel_contrib_dict[gene] = -contrib
+        rel_contrib = sorted([(contrib, gene) for gene, contrib in rel_contrib_dict.items()], reverse=True)
+        
         #-- Build results
         self.kg = {'nodes': [], 'edges': []}
-        for contrib, gene in rel_contrib[:100]:
-            edge_pairs = list()
-            node_pairs = list()
-            qg = copy.deepcopy(self.qg)
-            for edge in qg['edges']:
-                if edge['type'] == 'disease_to_phenotypic_association':
-                    edge['has_confidence_level'] = self.truth_assignment
-                    #they may want descriptions later
-                    #edge['Description'] = self.report['Contribution Analysis']
-                elif edge['type'] == 'gene_to_disease_association':
-                    edge['weight'] = contrib
-                qg_id = edge['id']
-                kg_id = str(uuid.uuid4())
-                edge_pairs.append([qg_id,kg_id])
-                edge['id'] = kg_id
-                #-- Process edge nodes
-                qg_source_id = edge['source_id']
-                qg_target_id = edge['target_id']
-                kg_source_id = str(uuid.uuid4())
-                kg_target_id = str(uuid.uuid4())
-                for qg_node_id, kg_node_id in zip([qg_source_id, qg_target_id], [kg_source_id, kg_target_id]):
-                    for node in qg['nodes']:
-                        if node['id'] == qg_node_id:
-                            if node['type'] == self.contribution_target:
-                                node['curie'] = gene.split('-')[-1]
-                                node['name'] = gene.split('-')[0]
-                            node['id'] = kg_node_id
-                            node_pairs.append([qg_node_id, kg_node_id])
-                            self.kg['nodes'].append(node)
-                            break
-                edge['source_id'] = kg_source_id
-                edge['target_id'] = kg_target_id
-                self.kg['edges'].append(edge)
-            '''
-            # form node pair combos for results graph
-            node_pairs = list()
-            for node in qg['nodes']:
-                qg_id = node['id']
-                kg_id = str(uuid.uuid4())
-                if node['type'] == self.contribution_target:
-                    node['curie'] = gene.split('-')[-1]
-                    node['name'] = gene.split('-')[0]
-                node['id'] = kg_id
-                node_pairs.append([qg_id,kg_id])
-                self.kg['nodes'].append(node)
-            '''
-            # update edge/node bindings in results graph
-            edge_bindings = []
-            node_bindings = []
-            for edge_pair in edge_pairs:
-                edge_bindings.append({'qg_id':edge_pair[0], 'kg_id':edge_pair[1]})
-            for node_pair in node_pairs:
-                node_bindings.append({'qg_id':node_pair[0], 'kg_id':node_pair[1]})
 
-            results['edge_bindings'].append(edge_bindings)
-            results['node_bindings'].append(node_bindings)
+        #-- build all the nodes first
+        _qg = copy.deepcopy(self.qg)
+        node_bindings = []
+        for node in _qg['nodes']:
+            if node["type"] != self.contribution_target:
+                # Change the id
+                kg_id = str(uuid.uuid4())
+                qg_id = copy.deepcopy(node["id"])
+                node_bindings.append([qg_id, kg_id])
+                node["id"] = kg_id
+                self.kg["nodes"].append(node)
+            else:
+                # Process all contribution target nodes
+                for _, gene in rel_contrib[:10]:
+                    _node = copy.deepcopy(node)
+                    kg_id = str(uuid.uuid4())
+                    qg_id = copy.deepcopy(_node["id"])
+                    node_bindings.append([qg_id, kg_id])
+                    _node["id"] = kg_id
+                    _node["curie"] = gene.split('-')[-1]
+                    _node["name"] = gene.split('-')[0]
+                    self.kg["nodes"].append(_node)
+
+        #-- Build a helper maps
+        kg_node_map = {node["id"]: node for node in self.kg["nodes"]}
+        qg_to_kg_map = {}
+        for qg_id, kg_id in node_bindings:
+            if qg_id not in qg_to_kg_map:
+                qg_to_kg_map[qg_id] = [kg_id]
+            else:
+                qg_to_kg_map[qg_id].append(kg_id)
+
+        #-- Build results and edges
+        # Put query probability edge as first result
+        node_bindings = []
+        edge_bindings = []
+        _qg = copy.deepcopy(self.qg)
+        for edge in _qg["edges"]:
+            qg_source_id = edge["source_id"]
+            qg_target_id = edge["target_id"]
+            for kg_source_id in qg_to_kg_map[qg_source_id]:
+                for kg_target_id in qg_to_kg_map[qg_target_id]:
+                    _kg_source_id = copy.deepcopy(kg_source_id)
+                    _kg_target_id = copy.deepcopy(kg_target_id)
+                    _edge = copy.deepcopy(edge)
+                    if _edge["type"] == 'disease_to_phenotypic_association':
+                        _edge['has_confidence_level'] = self.truth_assignment
+                        kg_edge_id = str(uuid.uuid4())
+                        qg_edge_id = copy.deepcopy(_edge["id"])
+                        edge_bindings.insert(0, {"qg_id": qg_edge_id,
+                                              "kg_id": kg_edge_id})
+                        node_bindings.insert(0, [
+                            {"qg_id": qg_source_id,
+                             "kg_id": _kg_source_id},
+                            {"qg_id": qg_target_id,
+                             "kg_id": _kg_target_id}
+                        ])
+                        # Add edge to knowledge graph
+                        _edge["id"] = kg_edge_id
+                        _edge["source_id"] = _kg_source_id
+                        _edge["target_id"] = _kg_target_id
+                        self.kg["edges"].append(_edge)
+                    elif self.contribution_target == 'gene' and _edge["type"] == 'gene_to_disease_association':
+                        gene_name = kg_node_map[_kg_source_id]["name"]
+                        gene_curie = kg_node_map[_kg_source_id]["curie"]
+                        _edge['weight'] = rel_contrib_dict["{}-{}".format(gene_name, gene_curie)]
+                        kg_edge_id = str(uuid.uuid4())
+                        qg_edge_id = copy.deepcopy(_edge["id"])
+                        edge_bindings.append({"qg_id": qg_edge_id,
+                                              "kg_id": kg_edge_id})
+                        node_bindings.append([
+                            {"qg_id": qg_source_id,
+                             "kg_id": _kg_source_id},
+                            {"qg_id": qg_target_id,
+                             "kg_id": _kg_target_id}
+                        ])
+                        # Add edge to knowledge graph
+                        _edge["id"] = kg_edge_id
+                        _edge["source_id"] = _kg_source_id
+                        _edge["target_id"] = _kg_target_id
+                        self.kg["edges"].append(_edge)
+                    else:
+                        _edge["id"] = str(uuid.uuid4())
+                        _edge["source_id"] = _kg_source_id
+                        _edge["target_id"] = _kg_target_id
+                        self.kg["edges"].append(_edge)
+        results['edge_bindings'] = edge_bindings
+        results['node_bindings'] = node_bindings
 
         # query response
         reasoner_std = {'query_graph': self.qg,

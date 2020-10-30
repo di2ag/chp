@@ -4,10 +4,10 @@ import unittest
 
 from chp.reasoner_std import ReasonerStdHandler
 
-# Tests chp/integrator/expander_agent.py
+# Tests chp/integrator/wildcard_handler.py
 # 1.
 
-class testExpanderAgent(unittest.TestCase):
+class testWildCardHandler(unittest.TestCase):
 
     # 1.
     def test_negative(self):
@@ -59,8 +59,8 @@ class testExpanderAgent(unittest.TestCase):
         reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
                                                       'type':'disease_to_phenotypic_association',
                                                       'value':1000,
-                                                      'source_id':'n{}'.format('0'),
-                                                      'target_id':'n{}'.format('1')
+                                                      'source_id':'n{}'.format('2'),
+                                                      'target_id':'n{}'.format('3')
                                                    })
 
         # link genes/drugs to disease
@@ -79,7 +79,7 @@ class testExpanderAgent(unittest.TestCase):
         json_formatted_str = json.dumps(reasoner_std, indent=2)
         print(json_formatted_str)
 
-        handler = ReasonerStdHandler(source_ara='expander',
+        handler = ReasonerStdHandler(source_ara='default',
                                      dict_query=reasoner_std)
         queries = handler.buildChpQueries()
         queries = handler.runChpQueries()
@@ -87,6 +87,8 @@ class testExpanderAgent(unittest.TestCase):
 
         KG = reasoner_std_final['knowledge_graph']
         res = reasoner_std_final['results']
+        print(json.dumps(KG, indent=2))
+        print(json.dumps(res, indent=2))
 
         # extract probability
         for edge in KG['edges']:
@@ -97,19 +99,28 @@ class testExpanderAgent(unittest.TestCase):
         print("probability of survival:",p_survival)
         #print(gene_contribs)
 
-        print(json.dumps(KG['edges'], indent=2))
+        #print(json.dumps(KG['edges'], indent=2))
         # extract a relative contribution
-        for node_bind in res['node_bindings'][0]:
-            if node_bind['qg_id'] == 'n1':
-                print('Got here')
-                for node in KG['nodes']:
-                    if node['id'] == node_bind['kg_id']:
-                        top_gene = [node['name'], node['curie']]
-                        break
-                for edge in KG['edges']:
-                    if edge['source_id'] == node_bind['kg_id']:
-                        top_gene.append(edge['weight'])
-        print(top_gene)
+        # create maps
+        qg_edge_map = {edge["id"]: edge for edge in reasoner_std_final['query_graph']['edges']}
+        qg_node_map = {node["id"]: node for node in reasoner_std_final['query_graph']['nodes']}
+        kg_edge_map = {edge["id"]: edge for edge in reasoner_std_final['knowledge_graph']['edges']}
+        kg_node_map = {node["id"]: node for node in reasoner_std_final['knowledge_graph']['nodes']}
+
+        #print(res["edge_bindings"])
+        #print(len(res["edge_bindings"]))
+
+        for edge_bind in res['edge_bindings']:
+            qg_id = edge_bind["qg_id"]
+            kg_id = edge_bind["kg_id"]
+            kg_edge = kg_edge_map[kg_id]
+            if kg_edge["type"] == 'gene_to_disease_association':
+                weight = kg_edge["weight"]
+                kg_gene_id = kg_edge["source_id"]
+                kg_node = kg_node_map[kg_gene_id]
+                gene_info = (kg_node["name"], kg_node["curie"], weight)
+                break
+        print(gene_info)
 
 if __name__ == '__main__':
     unittest.main()
