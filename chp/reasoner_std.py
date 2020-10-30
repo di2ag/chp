@@ -28,11 +28,18 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 class ReasonerStdHandler:
-    def __init__(self,source_ara, json_query=None, dict_query=None, hosts_filename=None, num_processes_per_host=0):
+    def __init__(self,
+                 source_ara,
+                 json_query=None,
+                 dict_query=None,
+                 hosts_filename=None,
+                 num_processes_per_host=0,
+                 max_results=10):
         self.integrator = source_ara
         self.json_query = json_query
         self.hosts_filename = hosts_filename
         self.num_processes_per_host = num_processes_per_host
+        self.max_results = max_results
         if json_query is not None or dict_query is not None:
             if dict_query is None:
                 self.query = json.loads(json_query)
@@ -92,7 +99,8 @@ class ReasonerStdHandler:
     def getHandler(self):
         if self.integrator == 'default':
             if self.checkWildCardQuery():
-                handler = WildCardHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
+                handler = WildCardHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host,
+                                          max_results=self.max_results)
             else:
                 handler = DefaultHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host)
         elif self.integrator == 'exploring':
