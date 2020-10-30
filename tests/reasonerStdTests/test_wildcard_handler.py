@@ -32,7 +32,7 @@ class testWildCardHandler(unittest.TestCase):
         # add in evidence drug
         drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
         reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
-                                                      'type':'drug',
+                                                      'type':'chemical_substance',
                                                       'curie':'{}'.format(drug[1])
                                                    })
 
@@ -51,16 +51,19 @@ class testWildCardHandler(unittest.TestCase):
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
         reasoner_std['query_graph']['nodes'].append({ 'id': 'n{}'.format('3'),
-                                                      'type': 'PhenotypicFeature',
+                                                      'type': 'phenotypic_feature',
                                                       'curie': '{}'.format(phenotype[1]),
                                                    })
 
         # link disease to target survival node
         reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
                                                       'type':'disease_to_phenotypic_association',
-                                                      'value':1000,
                                                       'source_id':'n{}'.format('2'),
-                                                      'target_id':'n{}'.format('3')
+                                                      'target_id':'n{}'.format('3'),
+                                                     'properties': {
+                                                         'qualifier': '>=',
+                                                         'value': 940
+                                                     }
                                                    })
 
         # link genes/drugs to disease
@@ -80,7 +83,8 @@ class testWildCardHandler(unittest.TestCase):
         print(json_formatted_str)
 
         handler = ReasonerStdHandler(source_ara='default',
-                                     dict_query=reasoner_std)
+                                     dict_query=reasoner_std,
+                                     max_results=30)
         queries = handler.buildChpQueries()
         queries = handler.runChpQueries()
         reasoner_std_final = handler.constructDecoratedKG()
