@@ -27,14 +27,15 @@ class DefaultHandler:
         if self.query is not None:
             self.qg = self.query['query_graph']
             if 'knowledge_graph' not in list(self.query.keys()):
-                self.kg = { "edges": [],
-                            "nodes": []
+                self.kg = { "edges": dict(),
+                            "nodes": dict()
                           }
             else:
                 self.kg = self.query['knowledge_graph']
             if 'results' not in list(self.query.keys()):
-                self.results = { "node_bindings": [],
-                                  "edge_bindings": []}
+                self.results = [{ "node_bindings": dict(),
+                                  "edge_bindings": dict()
+                               }]
             else:
                 self.results = self.query['results']
 
@@ -89,9 +90,10 @@ class DefaultHandler:
         # get phenotype node
         targets = list()
         acceptable_target_curies = ['EFO:0000714']
-        for node in self.qg['nodes']:
+        for node_key in self.qg['nodes'].keys():
+            node = self.qg['nodes'][node_key]
             if node['type'] == 'phenotypic_feature' and node['curie'] in acceptable_target_curies:
-                target_id = node["id"]
+                target_id = node_key
                 total_nodes += 1
         if total_nodes == 0:
             acceptable_target_curies_print = ','.join(acceptable_target_curies)
@@ -101,12 +103,14 @@ class DefaultHandler:
 
         # get disease node info and ensure only 1 disease:
         acceptable_disease_curies = ['MONDO:0007254']
-        for node in self.qg['nodes']:
+        for node_key in self.qg['nodes'].keys():
+            node = self.qg['nodes'][node_key]
             if node['type'] == 'disease' and node['curie'] in acceptable_disease_curies:
-                disease_id = node["id"]
-                for edge in self.qg['edges']:
+                disease_id = node_key
+                for edge_key in self.qg['edges'].keys():
+                    edge = self.qg['edges'][edge_key]
                     if edge['type'] == 'disease_to_phenotypic_feature_association' and edge['source_id'] == disease_id and edge['target_id'] == target_id:
-                        if 'properties' in edge:
+                        if 'properties' in edge.keys():
                             days = edge['properties']['value']
                             qualifier = edge['properties']['qualifier']
                         else:
@@ -129,12 +133,14 @@ class DefaultHandler:
         # get evidence
         evidence = dict()
         meta_evidence = list()
-        for node in self.qg['nodes']:
+        for node_key in self.qg['nodes'].keys():
             # genes
+            node = self.qg['nodes'][node_key]
             if node['type'] == 'gene':
                 # check for appropriate gene node structure
-                gene_id = node["id"]
-                for edge in self.qg['edges']:
+                gene_id = node_key
+                for edge_key in self.qg['edges'].keys():
+                    edge = self.qg['edges'][edge_key]
                     if edge['type'] == 'gene_to_disease_association' and edge['source_id'] == gene_id and edge['target_id'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
@@ -152,8 +158,9 @@ class DefaultHandler:
             # drugs
             if node['type'] == 'chemical_substance':
                 # check for appropriate drug node structure
-                drug_id = node["id"]
-                for edge in self.qg['edges']:
+                drug_id = node_key
+                for edge_key in self.qg['edges'].keys():
+                    edge = self.qg['edges'][edge_key]
                     if edge['type'] == 'chemical_to_disease_or_phenotypic_feature_association' and edge['source_id'] == drug_id and edge['target_id'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
@@ -252,8 +259,8 @@ class DefaultHandler:
         report = query.jsonExplanations(contributions_include_srcs=False,
                                         contributions_top_n_inodes=10,
                                         contributions_ignore_prefixes=['_'])
-        self.report = {'Patient Analysis': report['Patient Analysis'],
-                       'Contribution Analysis': report['Contributions Analysis']}
+        self.report = {'patient_analysis': report['Patient Analysis'],
+                       'contribution_analysis': report['Contributions Analysis']}
 
     ##########################################################
     # constructDecoratedKG
@@ -269,34 +276,34 @@ class DefaultHandler:
         self.kg = copy.deepcopy(self.qg)
         # update target node info and form edge pair combos for results graph
 
-        node_map = dict()
-        for node in self.kg['nodes']:
-            qg_id = copy.deepcopy(node["id"])
-            node["id"] = str(uuid.uuid4())
-            node_map[qg_id] = node["id"]
-            if node["type"] == 'gene':
-                node["name"] = self.gene_curie_dict[node["curie"]]
-            elif node["type"] == 'chemical_substance':
-                node["name"] = self.drug_curie_dict[node["curie"]]
+        node_pairs = dict()
+        for node_key in list(self.kg['nodes'].keys())[:]:
+            qg_node_curie = self.kg['nodes'][node_key].pop('curie')
+            self.kg['nodes'][qg_node_curie] = self.kg['nodes'].pop(node_key)
+            node_pairs[node_key] = qg_node_curie
+            if self.kg['nodes'][qg_node_curie]['type'] == 'gene':
+                self.kg['nodes'][qg_node_curie]['name'] = self.gene_curie_dict[qg_node_curie]
+            elif self.kg['nodes'][qg_node_curie]['type'] == 'chemical_substance':
+                self.kg['nodes'][qg_node_curie]['name'] = self.drug_curie_dict[qg_node_curie]
 
-        edge_bindings = []
-        for edge in self.kg['edges']:
-            qg_edge_id = copy.deepcopy(edge["id"])
-            edge["id"] = str(uuid.uuid4())
-            if edge['type'] == 'disease_to_phenotypic_feature_association':
-                edge['has_confidence_level'] = self.truth_assignment
-                if 'properties' in edge:
-                    if 'contributions' in edge['properties']:
-                        if edge['properties']['contributions'] == True:
-                            edge['Description'] = self.report
-                # Add result edge binding
-                edge_bindings.append({"qg_id": qg_edge_id,
-                                      "kg_id": edge["id"]})
-            edge['source_id'] = node_map[edge["source_id"]]
-            edge['target_id'] = node_map[edge["target_id"]]
+        edge_pairs = dict()
+        knowledge_edges = 0
+        for edge_key in list(self.kg['edges'].keys())[:]:
+            kg_id = 'kge{}'.format(knowledge_edges)
+            knowledge_edges += 1
+            self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_key)
+            self.kg['edges'][kg_id]['source_id'] = node_pairs[self.kg['edges'][kg_id]['source_id']]
+            self.kg['edges'][kg_id]['target_id'] = node_pairs[self.kg['edges'][kg_id]['target_id']]
+            edge_pairs[edge_key] = kg_id
+            if self.kg['edges'][kg_id]['type'] == 'disease_to_phenotypic_feature_association':
+                self.kg['edges'][kg_id]['has_confidence_level'] = self.truth_assignment
+                if 'properties' in self.kg['edges'][kg_id].keys() and 'contributions' in self.kg['edges'][kg_id]['properties'].keys() and self.kg['edges'][kg_id]['properties']['contributions'] == True:
+                    self.kg['edges'][kg_id]['description'] = self.report
 
-        self.results["node_bindings"] = []
-        self.results["edge_bindings"] = edge_bindings
+        for edge_pair_key in edge_pairs:
+            self.results[0]['edge_bindings'][edge_pair_key] = { 'kg_id': edge_pairs[edge_pair_key]}
+        for node_pair_key in node_pairs:
+            self.results[0]['node_bindings'][node_pair_key] = { 'kg_id': node_pairs[node_pair_key]}
 
         # query response
         reasoner_std = {'query_graph': self.qg,

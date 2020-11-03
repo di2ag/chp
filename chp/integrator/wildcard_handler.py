@@ -12,6 +12,7 @@ import csv
 import sys
 import uuid
 import pickle
+from collections import defaultdict
 
 from chp.query import Query
 from chp.reasoner import Reasoner
@@ -29,15 +30,15 @@ class WildCardHandler:
         self.max_results = max_results
         self.qg = self.query['query_graph']
         if 'knowledge_graph' not in list(self.query.keys()):
-            self.kg = { "edges": [],
-                        "nodes": []
+            self.kg = { "edges": {},
+                        "nodes": {}
                       }
         else:
             self.kg = self.query['knowledge_graph']
         if 'results' not in list(self.query.keys()):
-            self.results = { "node_bindings": [],
-                             "edge_bindings": []
-                           }
+            self.results = [{ "node_bindings": {},
+                             "edge_bindings": {}
+                           }]
         else:
             self.results = self.query['results']
 
@@ -97,7 +98,7 @@ class WildCardHandler:
         targets = list()
         acceptable_target_curies = ['EFO:0000714']
         self.contribution_target = None
-        for node in self.qg['nodes']:
+        for node_id, node in self.qg['nodes'].items():
             if 'curie' not in node.keys():
                 if self.contribution_target is None:
                     self.contribution_target = node['type']
@@ -118,7 +119,7 @@ class WildCardHandler:
                     except:
                         sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>')
                     evidence['mut_{}'.format(self.gene)] == 'True'
-        for edge in self.qg['edges']:
+        for edge_id, edge in self.qg['edges'].items():
             if edge['type'] == 'disease_to_phenotypic_feature_association':
                 if 'properties' in edge:
                     self.op = edge['properties']['qualifier']
@@ -188,14 +189,14 @@ class WildCardHandler:
         report = query.jsonExplanations(contributions_include_srcs=False,
                                         contributions_top_n_inodes=10,
                                         contributions_ignore_prefixes=['_'])
-        self.report = {'Patient Analysis': report['Patient Analysis'],
-                       'Contribution Analysis': report['Contributions Analysis']}
+        self.report = {'patient_analysis': report['Patient Analysis'],
+                       'contribution_analysis': report['Contributions Analysis']}
         # total contrib values
-        true_contrib = self.report['Contribution Analysis']['Survival_Time {} {} = True'.format(self.op, self.value)]['drug_{} = True'.format(self.drug)]
-        false_contrib = self.report['Contribution Analysis']['Survival_Time {} {} = False'.format(self.op, self.value)]['drug_{} = True'.format(self.drug)]
+        true_contrib = self.report['contribution_analysis']['Survival_Time {} {} = True'.format(self.op, self.value)]['drug_{} = True'.format(self.drug)]
+        false_contrib = self.report['contribution_analysis']['Survival_Time {} {} = False'.format(self.op, self.value)]['drug_{} = True'.format(self.drug)]
         # total patients in contrib cat
-        true_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time {} {} = True'.format(self.op, self.value)].keys())
-        false_pats = len(self.report['Patient Analysis']['All Involved Patients']['Survival_Time {} {} = False'.format(self.op, self.value)].keys())
+        true_pats = len(self.report['patient_analysis']['All Involved Patients']['Survival_Time {} {} = True'.format(self.op, self.value)].keys())
+        false_pats = len(self.report['patient_analysis']['All Involved Patients']['Survival_Time {} {} = False'.format(self.op, self.value)].keys())
         # true_individual contrib
         true_ind_cont = float(true_contrib)/float(true_pats)
         false_ind_cont = float(false_contrib)/float(false_pats)
@@ -212,8 +213,8 @@ class WildCardHandler:
             elif pat['Survival_Time'] < self.value and self.drug in pat['Drug_Name(s)']:
                 for gene in pat['Patient_Genes']:
                     self.false_gene_contrib[gene] += false_ind_cont
-        self.report['Contribution Analysis']['Survival_Time {} {} = True'.format(self.op, self.value)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.true_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
-        self.report['Contribution Analysis']['Survival_Time {} {} = False'.format(self.op, self.value)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.false_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
+        self.report['contribution_analysis']['Survival_Time {} {} = True'.format(self.op, self.value)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.true_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
+        self.report['contribution_analysis']['Survival_Time {} {} = False'.format(self.op, self.value)] = {'{}-{}'.format(k,self.gene_to_curie[k]): v for k,v in sorted(self.false_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
 
 
     ##########################################################
@@ -227,12 +228,10 @@ class WildCardHandler:
     # returned.
 
     def constructDecoratedKG(self):
-        results = {'edge_bindings':[], 'node_bindings':[]}
-
         #-- Return top 100 genes contributors for true target
         #-- Calculate Relative Contributions and sort
         rel_contrib_dict = {}
-        for target, gene_contrib in self.report['Contribution Analysis'].items():
+        for target, gene_contrib in self.report['contribution_analysis'].items():
             for gene, contrib in gene_contrib.items():
                 if gene in rel_contrib_dict:
                     if 'True' in target:
@@ -245,101 +244,83 @@ class WildCardHandler:
                     else:
                         rel_contrib_dict[gene] = -contrib
         rel_contrib = sorted([(contrib, gene) for gene, contrib in rel_contrib_dict.items()], reverse=True)
-        
-        #-- Build results
-        self.kg = {'nodes': [], 'edges': []}
 
-        #-- build all the nodes first
-        _qg = copy.deepcopy(self.qg)
-        node_bindings = []
-        for node in _qg['nodes']:
-            if node["type"] != self.contribution_target:
-                # Change the id
-                kg_id = str(uuid.uuid4())
-                qg_id = copy.deepcopy(node["id"])
-                node_bindings.append([qg_id, kg_id])
-                node["id"] = kg_id
-                self.kg["nodes"].append(node)
+        # Construct first result which is the result of the standard probablistic query. 
+        self.kg = copy.deepcopy(self.qg)
+        # Process Nodes
+        node_pairs = defaultdict(None)
+        contrib_qg_id = None
+        for node_key in list(self.kg["nodes"].keys())[:]:
+            qg_node_curie = self.kg['nodes'][node_key].pop('curie', None)
+            if qg_node_curie is not None:
+                self.kg['nodes'][qg_node_curie] = self.kg['nodes'].pop(node_key)
+                if self.kg['nodes'][qg_node_curie]['type'] == 'gene':
+                    self.kg['nodes'][qg_node_curie]['name'] = self.gene_curie_dict[qg_node_curie]
+                elif self.kg['nodes'][qg_node_curie]['type'] == 'chemical_substance':
+                    self.kg['nodes'][qg_node_curie]['name'] = self.drug_curie_dict[qg_node_curie]
             else:
-                # Process all contribution target nodes
-                for _, gene in rel_contrib[:self.max_results]:
-                    _node = copy.deepcopy(node)
-                    kg_id = str(uuid.uuid4())
-                    qg_id = copy.deepcopy(_node["id"])
-                    node_bindings.append([qg_id, kg_id])
-                    _node["id"] = kg_id
-                    _node["curie"] = gene.split('-')[-1]
-                    _node["name"] = gene.split('-')[0]
-                    self.kg["nodes"].append(_node)
+                self.kg["nodes"].pop(node_key)
+            node_pairs[node_key] = qg_node_curie
 
-        #-- Build a helper maps
-        kg_node_map = {node["id"]: node for node in self.kg["nodes"]}
-        qg_to_kg_map = {}
-        for qg_id, kg_id in node_bindings:
-            if qg_id not in qg_to_kg_map:
-                qg_to_kg_map[qg_id] = [kg_id]
-            else:
-                qg_to_kg_map[qg_id].append(kg_id)
+        # Process Edges
+        edge_pairs = dict()
+        knowledge_edges = 0
+        for edge_key in list(self.kg['edges'].keys())[:]:
+            kg_id = 'kge{}'.format(knowledge_edges)
+            knowledge_edges += 1
+            self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_key)
+            self.kg['edges'][kg_id]['source_id'] = node_pairs[self.kg['edges'][kg_id]['source_id']]
+            self.kg['edges'][kg_id]['target_id'] = node_pairs[self.kg['edges'][kg_id]['target_id']]
+            edge_pairs[edge_key] = kg_id
+            if self.kg['edges'][kg_id]['type'] == 'disease_to_phenotypic_feature_association':
+                self.kg['edges'][kg_id]['has_confidence_level'] = self.truth_assignment
+                if 'properties' in self.kg['edges'][kg_id].keys() and 'contributions' in self.kg['edges'][kg_id]['properties'].keys() and self.kg['edges'][kg_id]['properties']['contributions'] == True:
+                    self.kg['edges'][kg_id]['Description'] = self.report
 
-        #-- Build results and edges
-        # Put query probability edge as first result
-        node_bindings = []
-        edge_bindings = []
-        _qg = copy.deepcopy(self.qg)
-        for edge in _qg["edges"]:
-            qg_source_id = edge["source_id"]
-            qg_target_id = edge["target_id"]
-            for kg_source_id in qg_to_kg_map[qg_source_id]:
-                for kg_target_id in qg_to_kg_map[qg_target_id]:
-                    _kg_source_id = copy.deepcopy(kg_source_id)
-                    _kg_target_id = copy.deepcopy(kg_target_id)
-                    _edge = copy.deepcopy(edge)
-                    if _edge["type"] == 'disease_to_phenotypic_feature_association':
-                        _edge['has_confidence_level'] = self.truth_assignment
-                        kg_edge_id = str(uuid.uuid4())
-                        qg_edge_id = copy.deepcopy(_edge["id"])
-                        edge_bindings.insert(0, {"qg_id": qg_edge_id,
-                                              "kg_id": kg_edge_id})
-                        node_bindings.insert(0, [
-                            {"qg_id": qg_source_id,
-                             "kg_id": _kg_source_id},
-                            {"qg_id": qg_target_id,
-                             "kg_id": _kg_target_id}
-                        ])
-                        # Add edge to knowledge graph
-                        _edge["id"] = kg_edge_id
-                        _edge["source_id"] = _kg_source_id
-                        _edge["target_id"] = _kg_target_id
-                        self.kg["edges"].append(_edge)
-                    elif self.contribution_target == 'gene' and _edge["type"] == 'gene_to_disease_association':
-                        gene_name = kg_node_map[_kg_source_id]["name"]
-                        gene_curie = kg_node_map[_kg_source_id]["curie"]
-                        _edge['weight'] = rel_contrib_dict["{}-{}".format(gene_name, gene_curie)]
-                        kg_edge_id = str(uuid.uuid4())
-                        qg_edge_id = copy.deepcopy(_edge["id"])
-                        edge_bindings.append({"qg_id": qg_edge_id,
-                                              "kg_id": kg_edge_id})
-                        node_bindings.append([
-                            {"qg_id": qg_source_id,
-                             "kg_id": _kg_source_id},
-                            {"qg_id": qg_target_id,
-                             "kg_id": _kg_target_id}
-                        ])
-                        # Add edge to knowledge graph
-                        _edge["id"] = kg_edge_id
-                        _edge["source_id"] = _kg_source_id
-                        _edge["target_id"] = _kg_target_id
-                        self.kg["edges"].append(_edge)
-                    else:
-                        _edge["id"] = str(uuid.uuid4())
-                        _edge["source_id"] = _kg_source_id
-                        _edge["target_id"] = _kg_target_id
-                        self.kg["edges"].append(_edge)
-        results['edge_bindings'] = edge_bindings
-        results['node_bindings'] = node_bindings
+        # Put first result of standard prob query of only curie nodes (i.e. no wildcard nodes where used as evidence)
+        for edge_pair_key in edge_pairs:
+            self.results[0]['edge_bindings'][edge_pair_key] = { 'kg_id': str(edge_pairs[edge_pair_key])}
+        for node_pair_key in node_pairs:
+            self.results[0]['node_bindings'][node_pair_key] = { 'kg_id': str(node_pairs[node_pair_key])}
+
+        # Build relative contribution results and added associated edges into knowledge graph
+        for contrib, gene in rel_contrib[:self.max_results]:
+            name, curie = gene.split('-')
+            rg = copy.deepcopy(self.qg)
+            _node_pairs = {}
+            _edge_pairs = {}
+            # Process node pairs
+            for node_id, node in rg["nodes"].items():
+                if node["type"] == self.contribution_target:
+                    self.kg["nodes"][curie] = copy.deepcopy(node)
+                    self.kg["nodes"][curie].update({"name": name})
+                    _node_pairs[node_id] = curie
+                else:
+                    _node_pairs[node_id] = node_pairs[node_id]
+            print(_node_pairs)
+            # Process edge pairs
+            for edge_id, edge in rg["edges"].items():
+                if self.contribution_target == 'gene' and edge["type"] == 'gene_to_disease_association':
+                    knowledge_edges += 1
+                    kg_edge_id = 'kge{}'.format(knowledge_edges)
+                    self.kg["edges"][kg_edge_id] = copy.deepcopy(edge)
+                    self.kg["edges"][kg_edge_id]["source_id"] = _node_pairs[self.kg["edges"][kg_edge_id]["source_id"]]
+                    self.kg["edges"][kg_edge_id]["target_id"] = _node_pairs[self.kg["edges"][kg_edge_id]["target_id"]]
+                    self.kg["edges"][kg_edge_id]["weight"] = contrib
+                    _edge_pairs[edge_id] = kg_edge_id
+                else:
+                    _edge_pairs[edge_id] = edge_pairs[edge_id]
+            # Process node and edge binding results
+            _res = {"edge_bindings": {},
+                    "node_bindings": {}}
+            for edge_pair_key in _edge_pairs:
+                _res["edge_bindings"][edge_pair_key] = { "kg_id": str(_edge_pairs[edge_pair_key])}
+            for node_pair_key in _node_pairs:
+                _res["node_bindings"][node_pair_key] = { "kg_id": str(_node_pairs[node_pair_key])}
+            self.results.append(_res)
 
         # query response
         reasoner_std = {'query_graph': self.qg,
                         'knowledge_graph': self.kg,
-                        'results': results}
+                        'results': self.results}
         return reasoner_std

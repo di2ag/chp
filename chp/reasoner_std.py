@@ -90,11 +90,10 @@ class ReasonerStdHandler:
 
         Currently only supports single gene wildcard queries.
         """
-        if self.query is not None:
-            qg = self.query["query_graph"]
-            for node in qg["nodes"]:
-                if node["type"] == 'gene' and 'curie' not in node:
-                    return True
+        qg = self.query["query_graph"]
+        for _, node in qg["nodes"].items():
+            if node["type"] == 'gene' and 'curie' not in node:
+                return True
         return False
 
     def getHandler(self):
