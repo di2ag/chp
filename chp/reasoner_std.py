@@ -98,7 +98,7 @@ class ReasonerStdHandler:
 
     def getHandler(self):
         if self.integrator == 'default':
-            if self.checkWildCardQuery() and self.query is not None:
+            if self.checkWildCardQuery():
                 handler = WildCardHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host,
                                           max_results=self.max_results)
             else:
