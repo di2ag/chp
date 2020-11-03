@@ -89,8 +89,8 @@ class testWildCardHandler(unittest.TestCase):
         queries = handler.runChpQueries()
         reasoner_std_final = handler.constructDecoratedKG()
 
-        KG = reasoner_std_final['knowledge_graph']
-        res = reasoner_std_final['results']
+        KG = reasoner_std_final["message"]['knowledge_graph']
+        res = reasoner_std_final["message"]['results']
         print(json.dumps(KG, indent=2))
         print(json.dumps(res, indent=2))
 

@@ -322,4 +322,5 @@ class WildCardHandler:
         reasoner_std = {'query_graph': self.qg,
                         'knowledge_graph': self.kg,
                         'results': self.results}
+        reasoner_std = {'message' : reasoner_std}
         return reasoner_std
