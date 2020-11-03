@@ -3,7 +3,7 @@ import json
 import unittest
 import logging
 
-from chp.reasoner_std import ReasonerStdHandler
+#from chp.reasoner_std import ReasonerStdHandler
 
 # Tests chp/integrator/exploring_agent handler. Uses 8 test cases:
 # 1. Testing negative result normalization
@@ -13,15 +13,17 @@ from chp.reasoner_std import ReasonerStdHandler
 # 5. Test with one gene
 # 6. Test with one drug
 
-API_ADDRESS = 'http://127.0.0.1:8000'
+#API_ADDRESS = 'http://127.0.0.1:8000'
+API_ADDRESS = 'http://127.0.0.1:80'
 
 logger = logging.getLogger(__name__)
 logger.warning('Make sure your django server is running at: {}.'.format(API_ADDRESS))
 
-def submitQuery(query):
-    payload = {'query': query}
+def submitQuery(query, max_results=10):
+    payload = {'message': query,
+               'max_results': max_results}
 
-    r = requests.post('{}/submitQuery/'.format(API_ADDRESS), json=payload)
+    r = requests.post('{}/query/'.format(API_ADDRESS), json=payload)
     chp_res = json.loads(r.content)
     return chp_res
 
@@ -586,6 +588,119 @@ class testRankingAgent(unittest.TestCase):
             if edge['id'] == KG_result_edge:
                 p_survival = edge['has_confidence_level']
         print("probability of survival:",p_survival)
+
+class testWildCardHandler(unittest.TestCase):
+
+    # 1.
+    def test_negative(self):
+        # empty response
+        reasoner_std = { "query_graph": dict(),
+                         "knowledge_graph": dict(),
+                         "response": dict()
+                       }
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": [],
+                                        "nodes": []
+                                      }
+        # empty knowledge graph
+        reasoner_std["knowledge_graph"] = { "edges": [],
+                                            "nodes": []
+                                          }
+        # empty response graph
+        reasoner_std["results"] = { "node_bindings": [],
+                                    "edge_bindings": []
+                                  }
+
+        # add in evidence drug
+        drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
+        reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('0'),
+                                                      'type':'drug',
+                                                      'curie':'{}'.format(drug[1])
+                                                   })
+
+        # add in gene node (to be filled by contribution analysis
+        reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('1'),
+                                                      'type':'gene',
+                                                   })
+
+        #add in disease node
+        disease = ('Breast_Cancer', 'MONDO:0007254')
+        reasoner_std['query_graph']['nodes'].append({ 'id':'n{}'.format('2'),
+                                                      'type':'disease',
+                                                      'curie':'{}'.format(disease[1])
+                                                   })
+
+        # add target survival node
+        phenotype = ('Survival_Time', 'EFO:0000714')
+        reasoner_std['query_graph']['nodes'].append({ 'id': 'n{}'.format('3'),
+                                                      'type': 'PhenotypicFeature',
+                                                      'curie': '{}'.format(phenotype[1]),
+                                                   })
+
+        # link disease to target survival node
+        reasoner_std['query_graph']['edges'].append({ 'id':'e{}'.format('0'),
+                                                      'type':'disease_to_phenotypic_association',
+                                                      'value':1000,
+                                                      'source_id':'n{}'.format('2'),
+                                                      'target_id':'n{}'.format('3')
+                                                   })
+
+        # link genes/drugs to disease
+        reasoner_std['query_graph']['edges'].append({ 'id': 'e{}'.format(1),
+                                                       'type':'gene_to_disease_association',
+                                                       'source_id': 'n1',
+                                                       'target_id': 'n2'
+                                                     })
+        reasoner_std['query_graph']['edges'].append({  'id': 'e{}'.format(2),
+                                                       'type':'chemical_to_disease_or_phenotypic_feature_association',
+                                                       'source_id': 'n0',
+                                                       'target_id': 'n2'
+                                                     })
+
+
+        # set ara source
+        reasoner_std['reasoner_id'] = 'default'
+
+        # submit query
+        chp_res = submitQuery(reasoner_std, max_results=15)
+
+        QG = chp_res['query_graph']
+        KG = chp_res['knowledge_graph']
+        res = chp_res['results']
+        #print(json.dumps(KG, indent=2))
+        #print(json.dumps(res, indent=2))
+
+        # extract probability
+        for edge in KG['edges']:
+            if edge['type'] == 'disease_to_phenotypic_association':
+                p_survival = edge['has_confidence_level']
+                #gene_contribs = edge['Description']
+                break
+        print("probability of survival:",p_survival)
+        #print(gene_contribs)
+
+        #print(json.dumps(KG['edges'], indent=2))
+        # extract a relative contribution
+        # create maps
+        qg_edge_map = {edge["id"]: edge for edge in QG['edges']}
+        qg_node_map = {node["id"]: node for node in QG['nodes']}
+        kg_edge_map = {edge["id"]: edge for edge in KG['edges']}
+        kg_node_map = {node["id"]: node for node in KG['nodes']}
+
+        #print(res["edge_bindings"])
+        #print(len(res["edge_bindings"]))
+
+        for edge_bind in res['edge_bindings']:
+            qg_id = edge_bind["qg_id"]
+            kg_id = edge_bind["kg_id"]
+            kg_edge = kg_edge_map[kg_id]
+            if kg_edge["type"] == 'gene_to_disease_association':
+                weight = kg_edge["weight"]
+                kg_gene_id = kg_edge["source_id"]
+                kg_node = kg_node_map[kg_gene_id]
+                gene_info = (kg_node["name"], kg_node["curie"], weight)
+                break
+        print(gene_info)
 
 if __name__ == '__main__':
     unittest.main()
