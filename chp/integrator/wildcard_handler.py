@@ -297,7 +297,6 @@ class WildCardHandler:
                     _node_pairs[node_id] = curie
                 else:
                     _node_pairs[node_id] = node_pairs[node_id]
-            print(_node_pairs)
             # Process edge pairs
             for edge_id, edge in rg["edges"].items():
                 if self.contribution_target == 'gene' and edge["type"] == 'gene_to_disease_association':
