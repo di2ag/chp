@@ -198,8 +198,8 @@ class WildCardHandler:
         true_pats = len(self.report['patient_analysis']['All Involved Patients']['Survival_Time {} {} = True'.format(self.op, self.value)].keys())
         false_pats = len(self.report['patient_analysis']['All Involved Patients']['Survival_Time {} {} = False'.format(self.op, self.value)].keys())
         # true_individual contrib
-        true_ind_cont = float(true_contrib)/float(true_pats)
-        false_ind_cont = float(false_contrib)/float(false_pats)
+        true_ind_cont = float(true_contrib)/float(true_pats)/self.truth_assignment
+        false_ind_cont = float(false_contrib)/float(false_pats)/self.false_assignment
 
         self.gene_list_contrib = dict()
 
@@ -243,7 +243,7 @@ class WildCardHandler:
                         rel_contrib_dict[gene] = contrib
                     else:
                         rel_contrib_dict[gene] = -contrib
-        rel_contrib = sorted([(contrib, gene) for gene, contrib in rel_contrib_dict.items()], reverse=True)
+        rel_contrib = [(contrib,gene) for gene, contrib in sorted(rel_contrib_dict.items(), key=lambda x: abs(x[1]), reverse=True)]
 
         # Construct first result which is the result of the standard probablistic query. 
         self.kg = copy.deepcopy(self.qg)
@@ -258,24 +258,27 @@ class WildCardHandler:
                     self.kg['nodes'][qg_node_curie]['name'] = self.gene_curie_dict[qg_node_curie]
                 elif self.kg['nodes'][qg_node_curie]['type'] == 'chemical_substance':
                     self.kg['nodes'][qg_node_curie]['name'] = self.drug_curie_dict[qg_node_curie]
+                node_pairs[node_key] = qg_node_curie
             else:
                 self.kg["nodes"].pop(node_key)
-            node_pairs[node_key] = qg_node_curie
 
         # Process Edges
         edge_pairs = dict()
         knowledge_edges = 0
         for edge_key in list(self.kg['edges'].keys())[:]:
-            kg_id = 'kge{}'.format(knowledge_edges)
-            knowledge_edges += 1
-            self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_key)
-            self.kg['edges'][kg_id]['source_id'] = node_pairs[self.kg['edges'][kg_id]['source_id']]
-            self.kg['edges'][kg_id]['target_id'] = node_pairs[self.kg['edges'][kg_id]['target_id']]
-            edge_pairs[edge_key] = kg_id
-            if self.kg['edges'][kg_id]['type'] == 'disease_to_phenotypic_feature_association':
-                self.kg['edges'][kg_id]['has_confidence_level'] = self.truth_assignment
-                if 'properties' in self.kg['edges'][kg_id].keys() and 'contributions' in self.kg['edges'][kg_id]['properties'].keys() and self.kg['edges'][kg_id]['properties']['contributions'] == True:
-                    self.kg['edges'][kg_id]['Description'] = self.report
+            if self.kg['edges'][edge_key]['type'] == 'gene_to_disease_association':
+                self.kg['edges'].pop(edge_key)
+            else:
+                kg_id = 'kge{}'.format(knowledge_edges)
+                knowledge_edges += 1
+                self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_key)
+                self.kg['edges'][kg_id]['source_id'] = node_pairs[self.kg['edges'][kg_id]['source_id']]
+                self.kg['edges'][kg_id]['target_id'] = node_pairs[self.kg['edges'][kg_id]['target_id']]
+                edge_pairs[edge_key] = kg_id
+                if self.kg['edges'][kg_id]['type'] == 'disease_to_phenotypic_feature_association':
+                    self.kg['edges'][kg_id]['has_confidence_level'] = self.truth_assignment
+                    if 'properties' in self.kg['edges'][kg_id].keys() and 'contributions' in self.kg['edges'][kg_id]['properties'].keys() and self.kg['edges'][kg_id]['properties']['contributions'] == True:
+                        self.kg['edges'][kg_id]['Description'] = self.report
 
         # Put first result of standard prob query of only curie nodes (i.e. no wildcard nodes where used as evidence)
         for edge_pair_key in edge_pairs:
