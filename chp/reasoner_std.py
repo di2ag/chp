@@ -90,15 +90,16 @@ class ReasonerStdHandler:
 
         Currently only supports single gene wildcard queries.
         """
-        qg = self.query["query_graph"]
-        for _, node in qg["nodes"].items():
-            if node["type"] == 'gene' and 'curie' not in node:
-                return True
+        if self.query is not None:
+            qg = self.query["query_graph"]
+            for _, node in qg["nodes"].items():
+                if node["type"] == 'gene' and 'curie' not in node:
+                    return True
         return False
 
     def getHandler(self):
         if self.integrator == 'default':
-            if self.checkWildCardQuery() and self.query is not None:
+            if self.checkWildCardQuery():
                 handler = WildCardHandler(self.query, hosts_filename=self.hosts_filename, num_processes_per_host=self.num_processes_per_host,
                                           max_results=self.max_results)
             else:
