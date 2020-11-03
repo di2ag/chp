@@ -91,7 +91,7 @@ class ReasonerStdHandler:
         Currently only supports single gene wildcard queries.
         """
         qg = self.query["query_graph"]
-        for node in qg["nodes"]:
+        for _, node in qg["nodes"].items():
             if node["type"] == 'gene' and 'curie' not in node:
                 return True
         return False
