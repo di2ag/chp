@@ -1,0 +1,6 @@
+[submodule "submodules/PyBKB"]
+	path = submodules/PyBKB
+	url = git@intuition.thayer.dartmouth.edu:/home/public/git/modules/PyBKB
+[submodule "submodules/ChpData"]
+	path = submodules/ChpData
+	url = git@intuition.thayer.dartmouth.edu:/home/public/git/projects/ChpData
