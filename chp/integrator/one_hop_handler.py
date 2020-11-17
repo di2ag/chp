@@ -12,18 +12,15 @@ import copy
 import csv
 import sys
 import pickle
-from collections import defaultdict
 
 from chp.query import Query
 from chp.reasoner import Reasoner
-
 from chp_data.bkb_handler import BkbDataHandler
 
-class WildCardHandler:
+class OneHopHandler:
 
-    """ WildCardHandler is the handler for gene wildcards. That is
-        query graphs (QGs) that consists of 4 nodes and 3 edges. Importantly,
-        the gene node has no curie identifier.
+    """ OneHopeHandler is the handler for 1-hop queries. That is
+        query graphs (QGs) that consists of 2 nodes and a single edge.
 
         :param query: the query graph sent by the ARA.
         :type query: dict
@@ -56,6 +53,9 @@ class WildCardHandler:
             self.results = []
         else:
             self.results = self.query['results']
+
+        self.op = '>='
+        self.value = 970
 
         # Instiatate Reasoner
         self.bkb_data_handler = BkbDataHandler(dataset_version='1.4')
@@ -99,31 +99,39 @@ class WildCardHandler:
             :return: A  internal CHP query.
             :rtype: Query
         """
+
         evidence = dict()
         targets = list()
-        acceptable_target_curies = ['EFO:0000714']
         self.contribution_target = None
-        for node_id, node in self.qg['nodes'].items():
-            if 'id' not in node.keys():
-                if self.contribution_target is None:
-                    self.contribution_target = node['category']
-                else:
-                    sys.exit('You can only have one contribution target. Make sure to leave only one node with a black curie.')
-            else:
-                if node['category'] == 'biolink:Drug':
-                    self.drug_curie = node['id']
-                    if self.drug_curie not in self.drug_curie_dict.keys():
-                        sys.exit('Invalid CHEMBL Identifier. Must be in form CHEMBL:<ID>')
-                    evidence['demo_{}'.format(self.drug_curie)] = 'True'
-        for edge_id, edge in self.qg['edges'].items():
-            if edge['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
-                if 'properties' in edge:
-                    self.op = edge['properties']['qualifier']
-                    self.value = edge['properties']['days']
-                else:
-                    self.op = '>='
-                    self.value = 970
 
+        if len(self.qg['nodes']) > 2 or len(self.qg['edges']) > 1:
+            sys.exit('1 hop quries can only have 2 nodes and 1 edge')
+
+        # check edge for source and target
+        edge_key = list(self.qg['edges'].keys())[0]
+        edge = self.qg['edges'][edge_key]
+        if 'subject' not in edge.keys() or 'object' not in edge.keys():
+            sys.exit('Edge must have both a \'subject\' and and \'object\' key')
+        subject = edge['subject']
+        obj = edge['object']
+
+        # get drug node
+        if self.qg['nodes'][subject]['category'] != 'biolink:Drug':
+            sys.exit('Subject node must be \'category\' biolink:Drug')
+        elif 'id' not in self.qg['nodes'][subject].keys():
+            sys.exit('Must have \'id\' key in drug node')
+        self.drug_curie = self.qg['nodes'][subject]['id']
+        if self.drug_curie not in self.drug_curie_dict.keys():
+            sys.exit('Invalid CHEMBL Identifier. Must be CHEMBL:<ID>')
+        evidence['demo_{}'.format(self.drug_curie)] = 'True'
+
+        # ensure gene is wildcard
+        if self.qg['nodes'][obj]['category'] != 'biolink:Gene':
+            sys.exit('Object node must be \'category\' biolink:Gene')
+        elif 'id' in self.qg['nodes'][obj].keys():
+            sys.exit('Must NOT have \'id\' key in gene node')
+
+        # default survival time
         targets.append(('survival_time', self.op, self.value))
 
         query = Query(evidence=evidence,
@@ -135,11 +143,14 @@ class WildCardHandler:
         return query
 
     def runQueries(self):
+
         """ Runs build BKB query to calculate probability of survival.
-            A probability is returned to specificy survival time w.r.t a drug.
+            Uniquely for the 1-hop query the probability is not going to
+            be returned, rather the relative gene contributions are.
             Contributions for each gene are calculuated and classified under
             their true/false target assignments.
         """
+
         query = self.reasoner.analyze_query(copy.deepcopy(self.chp_query),
                                             save_dir=None,
                                             target_strategy=self.target_strategy,
@@ -213,15 +224,16 @@ class WildCardHandler:
         self.report['contribution_analysis']['survival_time {} {} = False'.format(self.op, self.value)] = {'{}-{}'.format(k,self.gene_curie_dict[k]): v for k,v in sorted(self.false_gene_contrib.items(), key=lambda item: item[1], reverse=True)}
 
     def constructDecoratedKG(self):
+
         """ Knowledge Graph (KG) is a copy of the Query graph. However we replace
             the wildcard gene node with all of the relative contributing genes.
             Edges are also updated to account for these added genes. Results map
-            New gene nodes to the QG wildcard gene. Additionally the first result returned
-            is the overall probability of survival
+            New gene nodes to the QG wildcard gene.
 
             :return: reasoner_std is our API response message combining KG and results.
             :rtype: dict
         """
+
         # Calculate Relative Contributions and sort
         rel_contrib_dict = {}
         true_contribs = self.report['contribution_analysis']['survival_time {} {} = True'.format(self.op, self.value)]
@@ -230,87 +242,55 @@ class WildCardHandler:
         for contrib_key in contrib_keys:
             rel_contrib_dict[contrib_key] = true_contribs[contrib_key] - false_contribs[contrib_key]
         rel_contrib = [(contrib,gene) for gene, contrib in sorted(rel_contrib_dict.items(), key=lambda x: abs(x[1]), reverse=True)]
-        rel_contrib = [(contrib,gene) for gene, contrib in sorted(rel_contrib_dict.items(), key=lambda x: abs(x[1]), reverse=True)]
 
-        # Construct first result which is the result of the standard probablistic query.
         self.kg = copy.deepcopy(self.qg)
-        # Process Nodes
-        node_pairs = defaultdict(None)
-        contrib_qg_id = None
-        for node_key in list(self.kg["nodes"].keys())[:]:
-            qg_node_curie = self.kg['nodes'][node_key].pop('id', None)
-            if qg_node_curie is not None:
-                self.kg['nodes'][qg_node_curie] = self.kg['nodes'].pop(node_key)
-                if self.kg['nodes'][qg_node_curie]['category'] == 'biolink:Gene':
-                    self.kg['nodes'][qg_node_curie]['name'] = self.gene_curie_dict[qg_node_curie]
-                elif self.kg['nodes'][qg_node_curie]['category'] == 'biolink:Drug':
-                    self.kg['nodes'][qg_node_curie]['name'] = self.drug_curie_dict[qg_node_curie]
-                node_pairs[node_key] = qg_node_curie
-            else:
-                self.kg["nodes"].pop(node_key)
 
-        # Process Edges
-        edge_pairs = dict()
-        knowledge_edges = 0
-        for edge_key in list(self.kg['edges'].keys())[:]:
-            if self.kg['edges'][edge_key]['predicate'] == 'biolink:GeneToDiseaseAssociation':
-                self.kg['edges'].pop(edge_key)
-            else:
-                kg_id = 'kge{}'.format(knowledge_edges)
-                knowledge_edges += 1
-                self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_key)
-                self.kg['edges'][kg_id]['subject'] = node_pairs[self.kg['edges'][kg_id]['subject']]
-                self.kg['edges'][kg_id]['object'] = node_pairs[self.kg['edges'][kg_id]['object']]
-                edge_pairs[edge_key] = kg_id
-                if self.kg['edges'][kg_id]['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
-                    self.kg['edges'][kg_id]['has_confidence_level'] = self.truth_assignment
-                    if 'properties' in self.kg['edges'][kg_id].keys() and 'contributions' in self.kg['edges'][kg_id]['properties'].keys() and self.kg['edges'][kg_id]['properties']['contributions'] == True:
-                        self.kg['edges'][kg_id]['Description'] = self.report
+        self.edge_bindings = dict()
+        self.node_bindings = dict()
 
-        # Put first result of standard prob query of only curie nodes (i.e. no wildcard nodes where used as evidence)
-        self.results.append({'edge_bindings':dict(),
-                             'node_bindings':dict()})
-        for edge_pair_key in edge_pairs:
-            self.results[0]['edge_bindings'][edge_pair_key] = [{ 'id': str(edge_pairs[edge_pair_key])}]
-        for node_pair_key in node_pairs:
-            self.results[0]['node_bindings'][node_pair_key] = [{ 'id': str(node_pairs[node_pair_key])}]
+        # get edge subject, object, edge label and pop edge
+        edge_key = list(self.kg['edges'].keys())[0]
+        edge = self.kg['edges'][edge_key]
+        edge_label = edge['predicate']
+        subject = edge['subject']
+        obj = edge['object']
+        self.kg['edges'].pop(edge_key)
 
-        # Build relative contribution results and added associated edges into knowledge graph
+        # move curie to key
+        drug_curie = self.kg['nodes'][subject].pop('id')
+        self.kg['nodes'][drug_curie] = self.kg['nodes'].pop(subject)
+        self.kg['nodes'][drug_curie]['name'] = self.drug_curie_dict[drug_curie]
+        self.node_bindings[subject] = drug_curie
+
+        # remove wildcard gene node from kg
+        self.kg['nodes'].pop(obj)
+
+        # add kg gene nodes and edges
+        edge_count = 0
+        node_count = 1
         if len(rel_contrib) < self.max_results:
             self.max_results = len(rel_contrib)
         for contrib, gene in rel_contrib[:self.max_results]:
-            name, curie = gene.split('-')
-            rg = copy.deepcopy(self.qg)
-            _node_pairs = {}
-            _edge_pairs = {}
-            # Process node pairs
-            for node_id, node in rg["nodes"].items():
-                if node["category"] == self.contribution_target:
-                    self.kg["nodes"][curie] = copy.deepcopy(node)
-                    self.kg["nodes"][curie].update({"name": name})
-                    _node_pairs[node_id] = curie
-                else:
-                    _node_pairs[node_id] = node_pairs[node_id]
-            # Process edge pairs
-            for edge_id, edge in rg["edges"].items():
-                if self.contribution_target == 'biolink:Gene' and edge["predicate"] == 'biolink:GeneToDiseaseAssociation':
-                    knowledge_edges += 1
-                    kg_edge_id = 'kge{}'.format(knowledge_edges)
-                    self.kg["edges"][kg_edge_id] = copy.deepcopy(edge)
-                    self.kg["edges"][kg_edge_id]["subject"] = _node_pairs[self.kg["edges"][kg_edge_id]["subject"]]
-                    self.kg["edges"][kg_edge_id]["object"] = _node_pairs[self.kg["edges"][kg_edge_id]["object"]]
-                    self.kg["edges"][kg_edge_id]["value"] = contrib
-                    _edge_pairs[edge_id] = kg_edge_id
-                else:
-                    _edge_pairs[edge_id] = edge_pairs[edge_id]
-            # Process node and edge binding results
-            _res = {"edge_bindings": {},
-                    "node_bindings": {}}
-            for edge_pair_key in _edge_pairs:
-                _res["edge_bindings"][edge_pair_key] = [{ "id": str(_edge_pairs[edge_pair_key])}]
-            for node_pair_key in _node_pairs:
-                _res["node_bindings"][node_pair_key] = [{ "id": str(_node_pairs[node_pair_key])}]
-            self.results.append(_res)
+            # add node
+            if 'DEFINE' in gene:
+                continue
+            gene_curie, gene_name = gene.split('-')
+            self.kg['nodes'][gene_curie] = { 'name' : gene_name,
+                                             'category' : 'biolink:Gene'}
+            # add edge
+            self.kg['edges']['kge{}'.format(edge_count)] = {'predicate' : 'biolink:chemical_to_gene_association',
+                                                            'subject' : drug_curie,
+                                                            'object' : gene_curie,
+                                                            'value' : contrib}
+            # add to results
+            node_binding = {subject : [{'id': drug_curie}],
+                            'n{}'.format(node_count) : [{'id':gene_curie}]}
+            edge_binding = {edge_key : [{'id':'kge{}'.format(edge_count)}]}
+            self.results.append({'node_bindings': node_binding,
+                            'edge_bindings': edge_binding})
+
+            edge_count += 1
+            node_count += 1
 
         # query response
         reasoner_std = {'query_graph': self.qg,
