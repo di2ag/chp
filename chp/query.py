@@ -270,12 +270,12 @@ class Query:
             if len(src_hashs_union) == 0:
                 data['All Involved Patients'][target_str] = None
             else:
-                data['All Involved Patients'][target_str] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash]
+                data['All Involved Patients'][target_str] = {self.patient_data[src_hash]['patient_id']: self.patient_data[src_hash]
                                                       for src_hash in src_hashs_union}
             if len(src_hashs_intersection) == 0:
                 data['Most Significant Patients'][target_str] = None
             else:
-                data['Most Significant Patients'][target_str] = {self.patient_data[src_hash]['Patient_ID']: self.patient_data[src_hash]
+                data['Most Significant Patients'][target_str] = {self.patient_data[src_hash]['patient_id']: self.patient_data[src_hash]
                                                       for src_hash in src_hashs_intersection}
         return data
 
