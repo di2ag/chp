@@ -278,7 +278,7 @@ class OneHopHandler:
             self.kg['nodes'][gene_curie] = { 'name' : gene_name,
                                              'category' : 'biolink:Gene'}
             # add edge
-            self.kg['edges']['kge{}'.format(edge_count)] = {'predicate' : 'biolink:chemical_to_gene_association',
+            self.kg['edges']['kge{}'.format(edge_count)] = {'predicate' : 'biolink:ChemicalToGeneAssociation',
                                                             'subject' : drug_curie,
                                                             'object' : gene_curie,
                                                             'value' : contrib}
