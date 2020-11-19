@@ -284,7 +284,7 @@ class OneHopHandler:
                                                             'value' : contrib}
             # add to results
             node_binding = {subject : [{'id': drug_curie}],
-                            'n{}'.format(node_count) : [{'id':gene_curie}]}
+                            obj : [{'id':gene_curie}]}
             edge_binding = {edge_key : [{'id':'kge{}'.format(edge_count)}]}
             self.results.append({'node_bindings': node_binding,
                             'edge_bindings': edge_binding})
