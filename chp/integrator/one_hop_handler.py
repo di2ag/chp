@@ -38,7 +38,7 @@ class OneHopHandler:
                  query,
                  hosts_filename=None,
                  num_processes_per_host=0,
-                 max_results=50):
+                 max_results=100):
         # query graph components
         self.query = query
         self.max_results = max_results

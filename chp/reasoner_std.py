@@ -35,7 +35,7 @@ class ReasonerStdHandler:
                  dict_query=None,
                  hosts_filename=None,
                  num_processes_per_host=0,
-                 max_results=10):
+                 max_results=100):
         self.integrator = source_ara
         self.json_query = json_query
         self.hosts_filename = hosts_filename
