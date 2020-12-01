@@ -6,4 +6,4 @@ The Python Bayesian Knowledge Base Library.
 
 """
 
-from _version import __version__
+from chp._version import __version__
