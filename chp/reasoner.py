@@ -192,15 +192,15 @@ class Reasoner:
 
         #-- Preprocess Patient Variant data into dictionary
         for src_hash, data_dict in self.metadata.items():
-            if 'Patient_Gene_Variants' in data_dict:
+            if 'gene_curie_variants' in data_dict:
                 #-- Transform into directionary
                 gene_variant_dict = dict()
-                for gene_variant_str in data_dict['Patient_Gene_Variants']:
+                for gene_variant_str in data_dict['gene_curie_variants']:
                     gene_variant_split = gene_variant_str.split('-')
                     gene = gene_variant_split[0]
                     variant = gene_variant_split[1]
                     gene_variant_dict[gene] = variant
-                data_dict['Patient_Gene_Variant'] = gene_variant_dict
+                data_dict['gene_curie_variants'] = gene_variant_dict
 
         #-- Setup Metadata labels and ranges
         self.metadata_labels = list()
@@ -333,7 +333,6 @@ class Reasoner:
             demo_chain_bkb = BKB()
             for i, meta in enumerate(meta_variables):
                 demo_chained_bkb, _, _ = _addDemographicOption(meta, demo_chain_bkb, self.src_hashs, self.metadata, option_dependencies=meta_variables[:i], include_src_tags=True)
-            #print('Fuck YOu')
             #demo_chained_bkb.makeGraph()
             #print(checkMutex(demo_chained_bkb))
             demo_dummy_bkb = _makeDemoDummyBKB(meta_variables)

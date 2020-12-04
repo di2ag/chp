@@ -1,11 +1,12 @@
-'''
-Source code developed by DI2AG.
-Thayer School of Engineering at Dartmouth College
-	Authors:    Dr. Eugene Santos, Jr
-            Mr. Chase Yakaboski,
-            Mr. Gregory Hyde,
-            Dr. Keum Joo Kim
-'''
+"""
+    Source code developed by DI2AG.
+    Thayer School of Engineering at Dartmouth College
+    Authors:    Dr. Eugene Santos, Jr
+                Mr. Chase Yakaboski,
+                Mr. Gregory Hyde,
+                Mr. Luke Veenhuis,
+                Dr. Keum Joo Kim
+"""
 
 import copy
 import csv
@@ -18,10 +19,25 @@ from chp.reasoner import Reasoner
 from chp_data.bkb_handler import BkbDataHandler
 
 class DefaultHandler:
+    """WildCardHandler is the handler for gene wildcards. That is
+        query graphs (QGs) that consists of 4 nodes and 3 edges.
+
+        :param query: the query graph sent by the ARA.
+        :type query: dict
+        :param hosts_filename: a filename for a stored QG. Defaults to None
+        :type hosts_filename: str
+        :param num_processes_per_host: Not implemented thouroughly, but would be
+            used for distributed reasoning.
+        :type num_processes_per_host: int
+        :param max_results: specific to 1-hop queries, specifies the number of
+            wildcard genes to return.
+        :type max_results: int
+    """
+
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
         # query graph components
         self.query = query
-        self.bkb_data_handler = BkbDataHandler(dataset_version='1.1')
+        self.bkb_data_handler = BkbDataHandler(dataset_version='1.3')
 
         # Only do the rest of this if a query is passed
         if self.query is not None:
@@ -33,9 +49,7 @@ class DefaultHandler:
             else:
                 self.kg = self.query['knowledge_graph']
             if 'results' not in list(self.query.keys()):
-                self.results = [{ "node_bindings": dict(),
-                                  "edge_bindings": dict()
-                               }]
+                self.results = []
             else:
                 self.results = self.query['results']
 
@@ -62,26 +76,17 @@ class DefaultHandler:
             self.target_strategy = 'explicit'
             self.interpolation = 'standard'
 
-    ##########################################################
-    # checkQuery
-    # Input:
-    # Output: boolean True/False
-    #--------------------------------------------------------
-    # Description: NOT IMPLEMENTED. Checks the query graph
-    # to ensure it meets our specifications
-
     def checkQuery(self):
+        """ Currently not implemented. Would check validity of query.
+        """
         return True
 
-    ##########################################################
-    # buildQueries
-    # Input:
-    # Output: built query
-    #--------------------------------------------------------
-    # Description: Parses over sent query graph to form a BKB
-    # query. The BKB query is returned.
-
     def buildQueries(self):
+        """ Parses over the sent query graph to form a BKB query.
+
+            :return: A  internal CHP query.
+            :rtype: Query
+        """
 
         # ensure we are using all nodes/edges
         total_nodes = 0
@@ -92,12 +97,12 @@ class DefaultHandler:
         acceptable_target_curies = ['EFO:0000714']
         for node_key in self.qg['nodes'].keys():
             node = self.qg['nodes'][node_key]
-            if node['type'] == 'phenotypic_feature' and node['curie'] in acceptable_target_curies:
+            if node['category'] == 'biolink:PhenotypicFeature' and node['id'] in acceptable_target_curies:
                 target_id = node_key
                 total_nodes += 1
         if total_nodes == 0:
             acceptable_target_curies_print = ','.join(acceptable_target_curies)
-            sys.exit('Survival Node not found. Node type muse be \'PhenotypicFeature\' and curie must be in: ' + acceptable_target_curies_print)
+            sys.exit('Survival Node not found. Node category must be \'biolink:PhenotypicFeature\' and id must be in: ' + acceptable_target_curies_print)
         elif total_nodes > 1:
             sys.exit('Too many target nodes')
 
@@ -105,30 +110,30 @@ class DefaultHandler:
         acceptable_disease_curies = ['MONDO:0007254']
         for node_key in self.qg['nodes'].keys():
             node = self.qg['nodes'][node_key]
-            if node['type'] == 'disease' and node['curie'] in acceptable_disease_curies:
+            if node['category'] == 'biolink:Disease' and node['id'] in acceptable_disease_curies:
                 disease_id = node_key
                 for edge_key in self.qg['edges'].keys():
                     edge = self.qg['edges'][edge_key]
-                    if edge['type'] == 'disease_to_phenotypic_feature_association' and edge['source_id'] == disease_id and edge['target_id'] == target_id:
+                    if edge['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation' and edge['subject'] == disease_id and edge['object'] == target_id:
                         if 'properties' in edge.keys():
-                            days = edge['properties']['value']
+                            days = edge['properties']['days']
                             qualifier = edge['properties']['qualifier']
                         else:
                             days = 970
                             qualifier = '>='
                         total_edges += 1
                 if total_edges == 0:
-                    sys.exit('Disease and target edge not found. Edge type must be \'disease_to_phenotype_association\'')
+                    sys.exit('Disease and target edge not found. Edge type must be \'biolink:DiseaseToPhenotypicFeatureAssociation\'')
                 elif total_edges > 1:
                     sys.exit('Disease has too many outgoing edges')
                 total_nodes += 1
         if total_nodes  == 1:
             acceptable_disease_curies_print = ','.join(acceptable_disease_curies)
-            sys.exit('Disease node not found. Node type must be \'disease\' and curie must be in: ' + acceptable_disease_curies_print)
+            sys.exit('Disease node not found. Node type must be \'biolink:Disease\' and curie must be in: ' + acceptable_disease_curies_print)
         elif total_nodes > 2:
             sys.exit('Too many disease nodes')
         # set BKB target
-        targets.append(('Survival_Time', qualifier, days))
+        targets.append(('survival_time', qualifier, days))
 
         # get evidence
         evidence = dict()
@@ -136,44 +141,44 @@ class DefaultHandler:
         for node_key in self.qg['nodes'].keys():
             # genes
             node = self.qg['nodes'][node_key]
-            if node['type'] == 'gene':
+            if node['category'] == 'biolink:Gene':
                 # check for appropriate gene node structure
                 gene_id = node_key
                 for edge_key in self.qg['edges'].keys():
                     edge = self.qg['edges'][edge_key]
-                    if edge['type'] == 'gene_to_disease_association' and edge['source_id'] == gene_id and edge['target_id'] == disease_id:
+                    if edge['predicate'] == 'biolink:GeneToDiseaseAssociation' and edge['subject'] == gene_id and edge['object'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
-                    sys.exit('Gene and disease edge not found. Edge type must be \'gene_to_disease_association\'')
+                    sys.exit('Gene and disease edge not found. Edge type must be \'biolink:GeneToDiseaseAssociation\'')
                 elif total_edges > total_nodes:
                     sys.exit('Gene has too many outgoing edges')
                 # check for appropriate gene node curie
-                gene_curie = node['curie']
-                try:
-                    gene = self.gene_curie_dict[gene_curie]
-                except:
+                gene_curie = node['id']
+                if gene_curie in self.gene_curie_dict.keys():
+                    gene = gene_curie
+                else:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
                 evidence["_mut_" + gene] = 'True'
                 total_nodes += 1
             # drugs
-            if node['type'] == 'chemical_substance':
+            if node['category'] == 'biolink:Drug':
                 # check for appropriate drug node structure
                 drug_id = node_key
                 for edge_key in self.qg['edges'].keys():
                     edge = self.qg['edges'][edge_key]
-                    if edge['type'] == 'chemical_to_disease_or_phenotypic_feature_association' and edge['source_id'] == drug_id and edge['target_id'] == disease_id:
+                    if edge['predicate'] == 'biolink:ChemicalToDiseaseOrPhenotypicFeatureAssociation' and edge['subject'] == drug_id and edge['object'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
-                    sys.exit('Drug and disease edge not found. Edge type must be \'chemical_to_disease_or_phenotypic_feature_association\'')
+                    sys.exit('Drug and disease edge not found. Edge type must be \'biolink:ChemicalToDiseaseOrPhenotypicFeatureAssociation\'')
                 elif total_edges > total_nodes:
                     sys.exit('Drug has too many outgoing edges')
                 # check for appropriate drug node curie
-                drug_curie = node['curie']
-                try:
-                    drug = self.drug_curie_dict[drug_curie]
-                except:
+                drug_curie = node['id']
+                if drug_curie in self.drug_curie_dict.keys():
+                    drug = drug_curie
+                else:
                     sys.exit('Invalid CHEMBL Identifier. Must be in form CHEMBL:<ID>')
-                meta_evidence.append(('Drug_Name(s)', '==', drug))
+                meta_evidence.append(('drug_curies', '==', drug))
                 total_nodes += 1
 
         if total_nodes != len(self.qg['nodes']) or total_edges != len(self.qg['edges']):
@@ -208,18 +213,12 @@ class DefaultHandler:
         self.chp_query = query
         return query
 
-    ##########################################################
-    # runQueries
-    # Input:
-    # Output:
-    #--------------------------------------------------------
-    # Description: Runs built BKB query to calculate probability
-    # of survival. Outputs are checked for -1s. If BOTH are -1
-    # they are left alone (should interpret as no inference and
-    # should document in openAPI). Otherwise probabilities are
-    # normalized
-
     def runQueries(self):
+        """ Runs build BKB query to calculate probability of survival.
+            A probability is returned to specificy survival time w.r.t evidence.
+            Traditional bkb contributions are evaluated and will include contributions
+            for all pieces in the evidence.
+        """
         query = self.reasoner.analyze_query(copy.deepcopy(self.chp_query),
                                             save_dir=None,
                                             target_strategy=self.target_strategy,
@@ -273,17 +272,27 @@ class DefaultHandler:
     # returned.
 
     def constructDecoratedKG(self):
+        """ Knowledge graph is a copy of query graph where
+            we add a edge property, 'has_confidence_level' annotated with
+            our determined value. The whole query response is formed and
+            returned. If specified in the QG, contributions will be stored
+            under the KG edge between disease and survival nodes.
+
+            :return: reasoner_std is our API response message combining KG and results.
+            :rtype: dict
+        """
+
         self.kg = copy.deepcopy(self.qg)
         # update target node info and form edge pair combos for results graph
 
         node_pairs = dict()
         for node_key in list(self.kg['nodes'].keys())[:]:
-            qg_node_curie = self.kg['nodes'][node_key].pop('curie')
+            qg_node_curie = self.kg['nodes'][node_key].pop('id')
             self.kg['nodes'][qg_node_curie] = self.kg['nodes'].pop(node_key)
             node_pairs[node_key] = qg_node_curie
-            if self.kg['nodes'][qg_node_curie]['type'] == 'gene':
+            if self.kg['nodes'][qg_node_curie]['category'] == 'biolink:Gene':
                 self.kg['nodes'][qg_node_curie]['name'] = self.gene_curie_dict[qg_node_curie]
-            elif self.kg['nodes'][qg_node_curie]['type'] == 'chemical_substance':
+            elif self.kg['nodes'][qg_node_curie]['category'] == 'biolink:Drug':
                 self.kg['nodes'][qg_node_curie]['name'] = self.drug_curie_dict[qg_node_curie]
 
         edge_pairs = dict()
@@ -292,18 +301,20 @@ class DefaultHandler:
             kg_id = 'kge{}'.format(knowledge_edges)
             knowledge_edges += 1
             self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_key)
-            self.kg['edges'][kg_id]['source_id'] = node_pairs[self.kg['edges'][kg_id]['source_id']]
-            self.kg['edges'][kg_id]['target_id'] = node_pairs[self.kg['edges'][kg_id]['target_id']]
+            self.kg['edges'][kg_id]['subject'] = node_pairs[self.kg['edges'][kg_id]['subject']]
+            self.kg['edges'][kg_id]['object'] = node_pairs[self.kg['edges'][kg_id]['object']]
             edge_pairs[edge_key] = kg_id
-            if self.kg['edges'][kg_id]['type'] == 'disease_to_phenotypic_feature_association':
+            if self.kg['edges'][kg_id]['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
                 self.kg['edges'][kg_id]['has_confidence_level'] = self.truth_assignment
                 if 'properties' in self.kg['edges'][kg_id].keys() and 'contributions' in self.kg['edges'][kg_id]['properties'].keys() and self.kg['edges'][kg_id]['properties']['contributions'] == True:
-                    self.kg['edges'][kg_id]['description'] = self.report
+                    self.kg['edges'][kg_id]['properties'] = {'contributions':self.report}
 
+        self.results.append({'edge_bindings':dict(),
+                             'node_bindings':dict()})
         for edge_pair_key in edge_pairs:
-            self.results[0]['edge_bindings'][edge_pair_key] = { 'kg_id': edge_pairs[edge_pair_key]}
+            self.results[0]['edge_bindings'][edge_pair_key] = [{ 'id': edge_pairs[edge_pair_key]}]
         for node_pair_key in node_pairs:
-            self.results[0]['node_bindings'][node_pair_key] = { 'kg_id': node_pairs[node_pair_key]}
+            self.results[0]['node_bindings'][node_pair_key] = [{ 'id': node_pairs[node_pair_key]}]
 
         # query response
         reasoner_std = {'query_graph': self.qg,

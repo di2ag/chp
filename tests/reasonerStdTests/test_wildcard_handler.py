@@ -1,20 +1,37 @@
+"""
+    Source code developed by DI2AG.
+    Thayer School of Engineering at Dartmouth College
+    Authors:    Dr. Eugene Santos, Jr
+                Mr. Chase Yakaboski,
+                Mr. Gregory Hyde,
+                Mr. Luke Veenhuis,
+                Dr. Keum Joo Kim
+"""
+
 import requests
 import json
 import unittest
 
 from chp.reasoner_std import ReasonerStdHandler
 
-# Tests chp/integrator/wildcard_handler.py
-# 1.
-
 class testWildCardHandler(unittest.TestCase):
 
-    # 1.
-    def test_negative(self):
+    """ Unit tests for the wildcard_handler
+        1. test_drug - queries Cyclophosphamide which has no sparsity issues
+        2. test_sparse_drug - queries the drug Gemzar which has a sparsity issue.
+               Used to throw an error. Should be handled.
+    """
+
+    def test_drug(self):
+
+        """ queries Cyclophosphamide which has no sparsity issue. Should return
+            top 5 genes and a probability of survival
+        """
+
         # empty response
         reasoner_std = { "query_graph": {},
                          "knowledge_graph": {},
-                         "response": {}
+                         "results": []
                        }
         # empty query graph
         reasoner_std["query_graph"] = { "edges": {},
@@ -24,94 +41,165 @@ class testWildCardHandler(unittest.TestCase):
         reasoner_std["knowledge_graph"] = { "edges": {},
                                             "nodes": {}
                                           }
-        # empty response graph
-        reasoner_std["results"] = [{ "node_bindings": {},
-                                    "edge_bindings": {}
-                                  }]
 
         # add in evidence drug
         drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
-        reasoner_std['query_graph']['nodes']['n{}'.format('0')] = {
-                                                      'type':'chemical_substance',
-                                                      'curie':'{}'.format(drug[1])
-        }
+        reasoner_std['query_graph']['nodes']['n0'] = {
+                                                      'category':'biolink:Drug',
+                                                      'id':'{}'.format(drug[1])
+                                                     }
 
         # add in gene node (to be filled by contribution analysis
-        reasoner_std['query_graph']['nodes']['n{}'.format('1')] = {
-                                                      'type':'gene',
-                                                   }
+        reasoner_std['query_graph']['nodes']['n1'] = {
+                                                      'category':'biolink:Gene'
+                                                     }
 
         #add in disease node
         disease = ('Breast_Cancer', 'MONDO:0007254')
-        reasoner_std['query_graph']['nodes']['n{}'.format('2')] = {
-                                                      'type':'disease',
-                                                      'curie':'{}'.format(disease[1])
-                                                   }
+        reasoner_std['query_graph']['nodes']['n2'] = {
+                                                      'category':'biolink:Disease',
+                                                      'id':'{}'.format(disease[1])
+                                                     }
 
         # add target survival node
         phenotype = ('Survival_Time', 'EFO:0000714')
-        reasoner_std['query_graph']['nodes']['n{}'.format('3')] = {
-                                                      'type': 'phenotypic_feature',
-                                                      'curie': '{}'.format(phenotype[1]),
-                                                   }
+        reasoner_std['query_graph']['nodes']['n3'] = {
+                                                      'category': 'biolink:PhenotypicFeature',
+                                                      'id': '{}'.format(phenotype[1]),
+                                                     }
 
         # link disease to target survival node
-        reasoner_std['query_graph']['edges']['e{}'.format('0')] = {
-                                                      'type':'disease_to_phenotypic_feature_association',
-                                                      'source_id':'n{}'.format('2'),
-                                                      'target_id':'n{}'.format('3'),
-                                                     'properties': {
-                                                         'qualifier': '>=',
-                                                         'value': 940
+        reasoner_std['query_graph']['edges']['e0'] = {
+                                                      'predicate':'biolink:DiseaseToPhenotypicFeatureAssociation',
+                                                      'subject':'n2',
+                                                      'object':'n3',
+                                                      'properties': {
+                                                                     'qualifier': '>=',
+                                                                     'days': 940
+                                                                    }
                                                      }
-                                                   }
 
         # link genes/drugs to disease
-        reasoner_std['query_graph']['edges']['e{}'.format(1)] = {
-                                                       'type':'gene_to_disease_association',
-                                                       'source_id': 'n1',
-                                                       'target_id': 'n2'
+        reasoner_std['query_graph']['edges']['e1'] = {
+                                                      'predicate':'biolink:GeneToDiseaseAssociation',
+                                                      'subject': 'n1',
+                                                      'object': 'n2'
                                                      }
-        reasoner_std['query_graph']['edges']['e{}'.format(2)] = {
-                                                       'type':'chemical_to_disease_or_phenotypic_feature_association',
-                                                       'source_id': 'n0',
-                                                       'target_id': 'n2'
+        reasoner_std['query_graph']['edges']['e2'] = {
+                                                      'predicate':'biolink:ChemicalToDiseaseOrPhenotypicFeatureAssociation',
+                                                      'subject': 'n0',
+                                                      'object': 'n2'
                                                      }
-
-
-        json_formatted_str = json.dumps(reasoner_std, indent=2)
-        print(json_formatted_str)
 
         handler = ReasonerStdHandler(source_ara='default',
                                      dict_query=reasoner_std,
-                                     max_results=30)
+                                     max_results=5)
         queries = handler.buildChpQueries()
         queries = handler.runChpQueries()
         reasoner_std_final = handler.constructDecoratedKG()
 
         KG = reasoner_std_final["message"]['knowledge_graph']
-        res = reasoner_std_final["message"]['results']
-        print(json.dumps(KG, indent=2))
-        print(json.dumps(res, indent=2))
+
+        res_pretty = json.dumps(reasoner_std_final, indent=2)
+        print(res_pretty)
 
         # extract probability
         for _, edge in KG['edges'].items():
-            if edge['type'] == 'disease_to_phenotypic_feature_association':
+            if edge['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
                 p_survival = edge['has_confidence_level']
                 #gene_contribs = edge['Description']
                 break
         print("probability of survival:",p_survival)
 
-        for qg_id, edge_bind in res[1]['edge_bindings'].items():
-            kg_id = edge_bind["kg_id"]
-            kg_edge = KG["edges"][kg_id]
-            if kg_edge["type"] == 'gene_to_disease_association':
-                weight = kg_edge["weight"]
-                kg_gene_id = kg_edge["source_id"]
-                kg_node = KG["nodes"][kg_gene_id]
-                gene_info = (kg_node["name"], kg_gene_id, weight)
+    def test_sparse_drug(self):
+
+        """ queries the drug Gemzar which has a sparsity issue. Used to throw an error.
+            Should be handled.
+        """
+
+        # empty response
+        reasoner_std = { "query_graph": {},
+                         "knowledge_graph": {},
+                         "results": []
+                       }
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": {},
+                                        "nodes": {}
+                                      }
+        # empty knowledge graph
+        reasoner_std["knowledge_graph"] = { "edges": {},
+                                            "nodes": {}
+                                          }
+
+        # add in evidence drug
+        drug = ('GEMZAR', 'CHEMBL:CHEMBL888')
+        reasoner_std['query_graph']['nodes']['n0'] = {
+                                                      'category':'biolink:Drug',
+                                                      'id':'{}'.format(drug[1])
+                                                     }
+
+        # add in gene node (to be filled by contribution analysis
+        reasoner_std['query_graph']['nodes']['n1'] = {
+                                                      'category':'biolink:Gene'
+                                                     }
+
+        #add in disease node
+        disease = ('Breast_Cancer', 'MONDO:0007254')
+        reasoner_std['query_graph']['nodes']['n2'] = {
+                                                      'category':'biolink:Disease',
+                                                      'id':'{}'.format(disease[1])
+                                                     }
+
+        # add target survival node
+        phenotype = ('Survival_Time', 'EFO:0000714')
+        reasoner_std['query_graph']['nodes']['n3'] = {
+                                                      'category': 'biolink:PhenotypicFeature',
+                                                      'id': '{}'.format(phenotype[1]),
+                                                     }
+
+        # link disease to target survival node
+        reasoner_std['query_graph']['edges']['e0'] = {
+                                                      'predicate':'biolink:DiseaseToPhenotypicFeatureAssociation',
+                                                      'subject':'n2',
+                                                      'object':'n3',
+                                                      'properties': {
+                                                                     'qualifier': '>=',
+                                                                     'days': 940
+                                                                    }
+                                                     }
+
+        # link genes/drugs to disease
+        reasoner_std['query_graph']['edges']['e1'] = {
+                                                      'predicate':'biolink:GeneToDiseaseAssociation',
+                                                      'subject': 'n1',
+                                                      'object': 'n2'
+                                                     }
+        reasoner_std['query_graph']['edges']['e2'] = {
+                                                      'predicate':'biolink:ChemicalToDiseaseOrPhenotypicFeatureAssociation',
+                                                      'subject': 'n0',
+                                                      'object': 'n2'
+                                                     }
+
+        handler = ReasonerStdHandler(source_ara='default',
+                                     dict_query=reasoner_std,
+                                     max_results=5)
+        queries = handler.buildChpQueries()
+        queries = handler.runChpQueries()
+        reasoner_std_final = handler.constructDecoratedKG()
+
+        KG = reasoner_std_final["message"]['knowledge_graph']
+
+        res_pretty = json.dumps(reasoner_std_final, indent=2)
+        print(res_pretty)
+
+        # extract probability
+        for _, edge in KG['edges'].items():
+            if edge['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
+                p_survival = edge['has_confidence_level']
+                #gene_contribs = edge['Description']
                 break
-        print(gene_info)
+        print("probability of survival:",p_survival)
+
 
 if __name__ == '__main__':
     unittest.main()
