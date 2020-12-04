@@ -50,6 +50,11 @@ class ReasonerStdHandler:
         self.handler = self.getHandler()
 
     def getCuries(self):
+        """ Returns the avaliable curies and there associated names.
+        """
+        with open(self.handler.bkb_data_handler.curies_path, 'r') as curies_file:
+            return json.load(curies_file)
+        '''
         curies = {
             "gene": [],
             "chemical_substance": [],
@@ -81,6 +86,7 @@ class ReasonerStdHandler:
                                              "curie": 'EFO:0000714'})
 
         return curies
+        '''
 
     def checkQuery(self):
         return True
