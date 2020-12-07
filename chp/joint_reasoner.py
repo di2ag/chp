@@ -22,7 +22,9 @@ import logging
 import sys
 
 #from chp.util import process_operator
-from pybkb.python_base.learning import BkbDataBuilder
+#from pybkb.python_base.learning import BkbDataBuilder
+
+from pybkb.python_base.reasoning.joint_reasoner import JointReasoner
 from chp_data.bkb_handler import BkbDataHandler
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,7 @@ def recursive_dd(max_depth, end_type, cur_depth=0):
     else:
         return defaultdict(end_type)
 
-class JointReasoner:
+class ChpJointReasoner:
     def __init__(
             self,
             bkb_handler=None,
@@ -73,9 +75,26 @@ class JointReasoner:
         self.num_genes = num_genes
         self.num_drugs = num_drugs
         self.patient_data = self._process_patient_data(patient_data, discretize, num_genes, num_drugs)
+        self.reasoner = JointReasoner(self.patient_data)
         self._calculate_feature_state_tables()
         self.num_patients = len(self.patient_data)
         logger.info('Completed setup.')
+
+    def analyze_query(self, query):
+        targets, evidence = self._process_query(query)
+
+    def _process_query(self, query):
+        # Process evidence
+        evidence = query.evidence
+        for meta_evidence in query.meta_evidence:
+
+        
+        targets = []
+
+    def _process_meta_evidence(self, 
+
+
+
 
     def _calculate_feature_state_tables(self):
         # Used for just some functionalities

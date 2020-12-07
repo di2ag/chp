@@ -87,6 +87,7 @@ class ReasonerStdHandler:
                                              "curie": 'EFO:0000714'})
 
         return curies
+        '''
 
     def checkQuery(self):
         return True

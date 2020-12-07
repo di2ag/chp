@@ -15,6 +15,7 @@ import uuid
 
 from chp.query import Query
 from chp.reasoner import Reasoner
+from pybkb.python_base.reasoning.joint_reasoner import JointReasoner
 
 from chp_data.bkb_handler import BkbDataHandler
 
@@ -36,27 +37,29 @@ class DefaultHandler:
 
     def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
         # query graph components
-        self.query = query
+        self.init_query = query
         self.bkb_data_handler = BkbDataHandler(dataset_version='1.3')
 
         # Only do the rest of this if a query is passed
-        if self.query is not None:
-            self.qg = self.query['query_graph']
-            if 'knowledge_graph' not in list(self.query.keys()):
-                self.kg = { "edges": dict(),
-                            "nodes": dict()
-                          }
-            else:
-                self.kg = self.query['knowledge_graph']
-            if 'results' not in list(self.query.keys()):
-                self.results = []
-            else:
-                self.results = self.query['results']
+        if self.init_query is not None:
+            # Setup queries
+            self._setup_queries()
 
-            # Instiatate Reasoner
-            self.reasoner = Reasoner(bkb_data_handler=self.bkb_data_handler,
+            # Instiatate Reasoners
+            if 'default' in self.query_dict:
+                self.reasoner = Reasoner(self.bkb_data_handler=self.bkb_data_handler,
                                     hosts_filename=hosts_filename,
                                     num_processes_per_host=num_processes_per_host)
+            if 'simple' in self.query_dict:
+                with open(self.bkb_data_handler.patient_data_pk_path, 'rb') as f_:
+                    patient_data = pickle.load(f_)
+                self.joint_reasoner = JointReasoner(dataset=patient_data,
+                                                    discretize=10)
+
+            # Read in curies
+            with open(self.bkb_data_handler.curies_path, 'r') as f_:
+                self.curies = json.load(f_)
+
             # prepare curie gene dict
             self.gene_curie_dict = dict()
             with open(self.bkb_data_handler.gene_curie_path, 'r') as gene_file:
@@ -76,6 +79,67 @@ class DefaultHandler:
             self.target_strategy = 'explicit'
             self.interpolation = 'standard'
 
+    def _setup_queries(self):
+        if type(self.init_query) == list:
+            self.query_dict = defaultdict(list)
+            self.query_map = []
+            for query in self.query:
+                self.query_map.append(query["query_id"])
+                if self._is_simple_query(query):
+                    self.query_dict['simple'].append(self._setup_single_query(query))
+                else:
+                    self.query_dict['default'].append(self._setup_single_query(query))
+        else:
+            if self._is_simple_query(self.init_query):
+                self.query_dict = {"simple": [self._setup_single_query(self.init_query)]}
+            self.query_dict = {"default": [self._setup_single_query(self.init_query)]}
+
+    def _setup_single_query(self, query):
+        if 'knowledge_graph' not in query:
+            query["knowledge_graph"] = {
+                "edges": {},
+                "nodes": {},
+            }
+        if 'results' not in query:
+            query["results"] = []
+        return query
+
+    def _is_simple_query(self, query):
+        """ Check if this is a one drug, one gene, one outcome standard query.
+        """
+        _found_outcome = False
+        _found_disease = False
+        _found_gene = False
+        _found_drug = False
+        for node_key, node in query["query_graph"]["nodes"].items():
+            if node["category"] == 'biolink:PhenotypicFeature':
+                # If we've already found the target and there's another phenotypic feature, then this isn't simple.
+                if _found_target:
+                    return False
+            if node['category'] == 'biolink:Disease':
+                # If we've already found disease and there's another disease, then this isn't simple.
+                if _found_disease:
+                    return False
+                else:
+                    _found_disease = True
+            if node["category"] == 'biolink:Gene':
+                if _found_gene:
+                    return False
+                else:
+                    _found_gene = True
+            if node['category'] == 'biolink:Drug':
+                if _found_drug:
+                    return False
+                else:
+                    _found_drug = True
+        if all(_found_disease,
+               _found_drug,
+               _found_gene,
+               _found_outcome):
+            return True
+        else:
+            return False
+
     def checkQuery(self):
         """ Currently not implemented. Would check validity of query.
         """
@@ -84,10 +148,16 @@ class DefaultHandler:
     def buildQueries(self):
         """ Parses over the sent query graph to form a BKB query.
 
-            :return: A  internal CHP query.
+            :return: A internal CHP query.
             :rtype: Query
         """
+        self.chp_query_dict = defaultdict(list)
+        for query_type, query in self.query_dict:
+            for _query in query:
+                self.chp_query_dict[query_type].append(self._extract_chp_query(_query))
+        return self.chp_query_dict
 
+    def _extract_chp_query(self, query):
         # ensure we are using all nodes/edges
         total_nodes = 0
         total_edges = 0
@@ -95,8 +165,8 @@ class DefaultHandler:
         # get phenotype node
         targets = list()
         acceptable_target_curies = ['EFO:0000714']
-        for node_key in self.qg['nodes'].keys():
-            node = self.qg['nodes'][node_key]
+        for node_key in query["query_graph"]['nodes'].keys():
+            node = query["query_graph"]['nodes'][node_key]
             if node['category'] == 'biolink:PhenotypicFeature' and node['id'] in acceptable_target_curies:
                 target_id = node_key
                 total_nodes += 1
@@ -108,12 +178,12 @@ class DefaultHandler:
 
         # get disease node info and ensure only 1 disease:
         acceptable_disease_curies = ['MONDO:0007254']
-        for node_key in self.qg['nodes'].keys():
-            node = self.qg['nodes'][node_key]
+        for node_key in query["query_graph"]['nodes'].keys():
+            node = query["query_graph"]['nodes'][node_key]
             if node['category'] == 'biolink:Disease' and node['id'] in acceptable_disease_curies:
                 disease_id = node_key
-                for edge_key in self.qg['edges'].keys():
-                    edge = self.qg['edges'][edge_key]
+                for edge_key in query["query_graph"]['edges'].keys():
+                    edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation' and edge['subject'] == disease_id and edge['object'] == target_id:
                         if 'properties' in edge.keys():
                             days = edge['properties']['days']
@@ -138,14 +208,14 @@ class DefaultHandler:
         # get evidence
         evidence = dict()
         meta_evidence = list()
-        for node_key in self.qg['nodes'].keys():
+        for node_key in query["query_graph"]['nodes'].keys():
             # genes
-            node = self.qg['nodes'][node_key]
+            node = query["query_graph"]['nodes'][node_key]
             if node['category'] == 'biolink:Gene':
                 # check for appropriate gene node structure
                 gene_id = node_key
-                for edge_key in self.qg['edges'].keys():
-                    edge = self.qg['edges'][edge_key]
+                for edge_key in query["query_graph"]['edges'].keys():
+                    edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == 'biolink:GeneToDiseaseAssociation' and edge['subject'] == gene_id and edge['object'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
@@ -164,8 +234,8 @@ class DefaultHandler:
             if node['category'] == 'biolink:Drug':
                 # check for appropriate drug node structure
                 drug_id = node_key
-                for edge_key in self.qg['edges'].keys():
-                    edge = self.qg['edges'][edge_key]
+                for edge_key in query["query_graph"]['edges'].keys():
+                    edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == 'biolink:ChemicalToDiseaseOrPhenotypicFeatureAssociation' and edge['subject'] == drug_id and edge['object'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
@@ -181,37 +251,36 @@ class DefaultHandler:
                 meta_evidence.append(('drug_curies', '==', drug))
                 total_nodes += 1
 
-        if total_nodes != len(self.qg['nodes']) or total_edges != len(self.qg['edges']):
+        if total_nodes != len(query["query_graph"]['nodes']) or total_edges != len(query["query_graph"]['edges']):
             sys.exit('There are extra components in the provided QG structure')
 
         # produce BKB query
         if len(meta_evidence) > 0 and len(list(evidence.keys())) > 0:
-            query = Query(evidence=evidence,
+            chp_query = Query(evidence=evidence,
                           targets=[],
                           meta_evidence=meta_evidence,
                           meta_targets=targets,
                           type='updating')
         elif len(list(evidence.keys())) > 0:
-            query = Query(evidence=evidence,
+            chp_query = Query(evidence=evidence,
                           targets=[],
                           meta_evidence=None,
                           meta_targets=targets,
                           type='updating')
         elif len(meta_evidence) > 0:
-            query = Query(evidence=None,
+            chp_query = Query(evidence=None,
                           targets=[],
                           meta_evidence=meta_evidence,
                           meta_targets=targets,
                           type='updating')
         else:
-            query = Query(evidence=None,
+            chp_query = Query(evidence=None,
                           targets=[],
                           meta_evidence=None,
                           meta_targets=targets,
                           type='updating')
 
-        self.chp_query = query
-        return query
+        return chp_query
 
     def runQueries(self):
         """ Runs build BKB query to calculate probability of survival.
@@ -219,6 +288,10 @@ class DefaultHandler:
             Traditional bkb contributions are evaluated and will include contributions
             for all pieces in the evidence.
         """
+        for query_type, chp_query in self.chp_query_dict.items():
+            if query_type == 'simple':
+                self._run_simple_query(chp_query)
+
         query = self.reasoner.analyze_query(copy.deepcopy(self.chp_query),
                                             save_dir=None,
                                             target_strategy=self.target_strategy,
