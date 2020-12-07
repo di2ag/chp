@@ -52,10 +52,10 @@ class ReasonerStdHandler:
 
     def getCuries(self):
         curies = {
-            "gene": [],
-            "chemical_substance": [],
-            "phenotypic_feature": [],
-            "disease": [],
+            "biolink:Gene": [],
+            "biolink:Drug": [],
+            "biolink:PhenotypicFeature": [],
+            "biolink:Disease": [],
         }
 
         # Read in the gene curie map
@@ -63,23 +63,23 @@ class ReasonerStdHandler:
             reader = csv.reader(gene_file)
             next(reader)
             for row in reader:
-                curies["gene"].append({"name": row[0],
-                                       "curie": row[1]})
+                curies["biolink:Gene"].append({"name": row[0],
+                                               "id": row[1]})
         # Read in the drug curie map
         with open(self.handler.bkb_data_handler.drug_curie_path, 'r') as drug_file:
             reader = csv.reader(drug_file)
             next(reader)
             for row in reader:
-                curies["chemical_substance"].append({"name": row[0],
-                                                     "curie": row[1]})
+                curies["biolink:Drug"].append({"name": row[0],
+                                               "id": row[1]})
 
         # Add diseases
-        curies["disease"].append({"name": 'breast_cancer',
-                                  "curie": 'MONDO:0007254'})
+        curies["biolink:Disease"].append({"name": 'breast_cancer',
+                                          "id": 'MONDO:0007254'})
 
         # Add phenotypic features, i.e. outcomes
-        curies["phenotypic_feature"].append({"name": 'survival_time',
-                                             "curie": 'EFO:0000714'})
+        curies["biolink:PhenotypicFeature"].append({"name": 'survival_time',
+                                                    "id": 'EFO:0000714'})
 
         return curies
 
