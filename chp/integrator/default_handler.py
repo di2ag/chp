@@ -14,8 +14,7 @@ import sys
 import uuid
 
 from chp.query import Query
-from chp.reasoner import Reasoner
-from pybkb.python_base.reasoning.joint_reasoner import JointReasoner
+from chp.reasoner_coulomb import DynamicReasoner, JointReasoner
 
 from chp_data.bkb_handler import BkbDataHandler
 
@@ -47,10 +46,16 @@ class DefaultHandler:
 
             # Instiatate Reasoners
             if 'default' in self.query_dict:
-                self.reasoner = Reasoner(self.bkb_data_handler=self.bkb_data_handler,
-                                    hosts_filename=hosts_filename,
-                                    num_processes_per_host=num_processes_per_host)
+                self.dynamic_reasoner = DynamicReasoner(
+                    bkb_data_handler=self.bkb_data_handler,
+                    hosts_filename=hosts_filename,
+                    num_processes_per_host=num_processes_per_host)
             if 'simple' in self.query_dict:
+                self.joint_reasoner = JointReasoner(
+                    bkb_data_handler=self.bkb_data_handler,
+                    hosts_filename=hosts_filename,
+                    num_processes_per_host=num_processes_per_host)
+
                 with open(self.bkb_data_handler.patient_data_pk_path, 'rb') as f_:
                     patient_data = pickle.load(f_)
                 self.joint_reasoner = JointReasoner(dataset=patient_data,

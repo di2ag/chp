@@ -19,20 +19,21 @@ import pandas as pd
 import random
 
 class Query:
-    def __init__(self, evidence=None,
+    def __init__(self,
+                 evidence=None,
                  targets=None,
                  marginal_evidence=None,
                  type='updating',
                  name='query0',
-                 meta_evidence=None,
-                 meta_targets=None):
+                 dynamic_evidence=None,
+                 dynamic_targets=None):
         self.evidence = evidence
         self.targets = targets
         self.marginal_evidence = marginal_evidence
         self.type = type
         self.name = name
-        self.meta_evidence = meta_evidence
-        self.meta_targets = meta_targets
+        self.dynamic_evidence = dynamic_evidence
+        self.dynamic_targets = dynamic_targets
         self.result = None
         self.bkb = None
         self.independ_queries = None
@@ -43,10 +44,11 @@ class Query:
         self.target_strategy = None
         self.gene_var_direct = None
         self.max_new_ev = None
+        self.from_joint_reasoner = False
 
     def make_bogus_updates(self):
         bogus_updates = {}
-        for target in self.meta_targets:
+        for target in self.dynamic_targets:
             for state in ['True', 'False']:
                 comp_name = ' '.join(target)
                 prob = random.random()
@@ -82,8 +84,8 @@ class Query:
         json_dict = {'evidence': self.evidence,
                      'targets': self.targets,
                      'type': self.type,
-                     'meta_evidence': self.meta_evidence,
-                     'meta_targets': self.meta_targets}
+                     'dynamic_evidence': self.dynamic_evidence,
+                     'dynamic_targets': self.dynamic_targets}
 
         #-- Potentially save out JSON Results
         if self.result is not None:
@@ -382,8 +384,8 @@ class Query:
     def getReport(self):
         string = '---- Query Details -----\n'
         string += 'Demographic Evidence:\n'
-        if self.meta_evidence is not None:
-            for evid in self.meta_evidence:
+        if self.dynamic_evidence is not None:
+            for evid in self.dynamic_evidence:
                 string += '\t{} {} {}\n'.format(evid[0], evid[1], evid[2])
         string += 'Evidence:\n'
         if self.evidence is not None:
