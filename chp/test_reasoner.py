@@ -5,7 +5,7 @@ import logging
 
 from chp_data.bkb_handler import BkbDataHandler
 
-from chp.reasoner_coulomb import ChpDynamicReasoner, ChpJointReasoner
+from chp.reasoner import ChpDynamicReasoner, ChpJointReasoner
 from chp.query import Query
 
 logging.basicConfig(level=logging.INFO)
@@ -35,7 +35,6 @@ class TestJointReasoner(unittest.TestCase):
             dynamic_targets=dynamic_targets
         )
         query =  self.joint_reasoner.run_query(query)
-        print(query.result)
 
     def test_joint_reasoner_one_gene_one_drug(self):
         # Specify evidence
@@ -56,7 +55,6 @@ class TestJointReasoner(unittest.TestCase):
             dynamic_targets=dynamic_targets
         )
         query =  self.joint_reasoner.run_query(query)
-        print(query.result)
 
 class TestDynamicReasoner(unittest.TestCase):
 

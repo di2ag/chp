@@ -36,7 +36,6 @@ class TestDefaultHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
     def test_simple_single_query(self):
         # This is a simple query 
@@ -46,7 +45,6 @@ class TestDefaultHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
     def test_default_batch_query(self):
         # These are non-simple queries
@@ -55,7 +53,6 @@ class TestDefaultHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
     def test_simple_batch_query(self):
         # These are simple queries
@@ -64,7 +61,6 @@ class TestDefaultHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
     def test_mix_batch_query(self):
         # These are mix batch of simple and default queries
@@ -73,7 +69,6 @@ class TestDefaultHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
     def test_mix_batch_reasoner_test_queries(self):
         with open('query_samples/test_reasoner_coulomb_queries.pk', 'rb') as f_:
@@ -83,7 +78,6 @@ class TestDefaultHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
 class TestWildCardHandler(unittest.TestCase):
 
@@ -105,7 +99,6 @@ class TestWildCardHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
     def test_single_drug_wildcard_query(self):
         message = self.drug_queries[0]
@@ -114,7 +107,6 @@ class TestWildCardHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
     def test_batch_gene_wildcard_query(self):
         queries = [message["message"] for message in self.gene_queries]
@@ -122,7 +114,6 @@ class TestWildCardHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
 
     def test_batch_drug_wildcard_query(self):
         queries = [message["message"] for message in self.gene_queries]
@@ -130,4 +121,3 @@ class TestWildCardHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))

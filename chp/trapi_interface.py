@@ -16,12 +16,12 @@ import uuid
 from collections import defaultdict
 
 # Integrators
-from chp.integrator.default_handler import DefaultHandler
+from chp.trapi_handlers import DefaultHandler, WildCardHandler
 #from chp.integrator.exploring_agent import ExploringHandler
 #from chp.integrator.unsecret_agent import UnsecretHandler
 #from chp.integrator.ranking_agent import RankingHandler
 #from chp.integrator.relay9_22 import Relay9_22
-from chp.integrator.wildcard_handler import WildCardHandler
+#from chp.integrator.wildcard_handler import WildCardHandler
 #from chp.integrator.one_hop_handler import OneHopHandler
 
 # Setup logging

@@ -15,63 +15,25 @@ import pickle
 from collections import defaultdict
 import json
 
-from chp.query import Query
-from chp.reasoner_coulomb import ChpDynamicReasoner
-
 from chp_data.bkb_handler import BkbDataHandler
 
-class WildCardHandler:
-    def __init__(self,
-                 query,
-                 hosts_filename=None,
-                 num_processes_per_host=0,
-                 max_results=100,
-                 bkb_handler=None,
-                 dynamic_reasoner=None):
-        """ WildCardHandler is the handler for gene wildcards. That is
-            query graphs (QGs) that consists of 4 nodes and 3 edges. Importantly,
-            the gene node has no curie identifier.
+from chp.query import Query
+from chp.reasoner import ChpDynamicReasoner
 
-            :param query: the query graph sent by the ARA.
-            :type query: dict
-            :param hosts_filename: a filename for a stored QG. Defaults to None
-            :type hosts_filename: str
-            :param num_processes_per_host: Not implemented thouroughly, but would be
-                used for distributed reasoning.
-            :type num_processes_per_host: int
-            :param max_results: specific to 1-hop queries, specifies the number of
-                wildcard genes to return.
-            :type max_results: int
-        """
-        # query graph components
-        self.init_query = query
-        self.max_results = max_results
-        # Instantiate handler is one was not passed
-        if bkb_handler is None:
-            self.bkb_data_handler = BkbDataHandler(
-                bkb_major_version='coulomb',
-                bkb_minor_version='1.0'
-            )
-        else:
-            self.bkb_data_handler = bkb_handler
 
+class WildCardHandlerMixin:
+    def _setup_handler(self):
         # Only do the rest of this if a query is passed
         if self.init_query is not None:
             # Setup queries
             self._setup_queries()
 
             # Instiatate Reasoners
-            if dynamic_reasoner is None:
+            if self.dynamic_reasoner is None:
                 self.dynamic_reasoner = ChpDynamicReasoner(
                     bkb_handler=self.bkb_data_handler,
-                    hosts_filename=hosts_filename,
-                    num_processes_per_host=num_processes_per_host)
-            else:
-                self.dynamic_reasoner = dynamic_reasoner
-
-        # Read in curies
-        with open(self.bkb_data_handler.curies_path, 'r') as f_:
-            self.curies = json.load(f_)
+                    hosts_filename=self.hosts_filename,
+                    num_processes_per_host=self.num_processes_per_host)
 
     def _setup_queries(self):
         if type(self.init_query) == list:
@@ -97,21 +59,6 @@ class WildCardHandler:
             return 'gene'
         else:
             raise ValueError('Did not understand wildcard type {}.'.format(wildcard_type))
-
-    def _setup_single_query(self, query):
-        if 'knowledge_graph' not in query:
-            query["knowledge_graph"] = {
-                "edges": {},
-                "nodes": {},
-            }
-        if 'results' not in query:
-            query["results"] = []
-        return query
-
-    def checkQuery(self):
-        """ Currently not implemented. Would check validity of query.
-        """
-        return True
 
     def _extract_chp_query(self, query, query_type):
         evidence = {}
@@ -230,29 +177,6 @@ class WildCardHandler:
         chp_query.query_id = query["query_id"] if 'query_id' in query else None
         return chp_query
 
-    def build_queries(self):
-        """ Parses over the sent query graph to form a BKB query.
-
-            :return: A internal CHP query.
-            :rtype: Query
-        """
-        self.chp_query_dict = defaultdict(list)
-        for query_type, query in self.query_dict.items():
-            for _query in query:
-                self.chp_query_dict[query_type].append(self._extract_chp_query(_query, query_type))
-        return self.chp_query_dict
-
-    def run_queries(self):
-        """ Runs build BKB query to calculate probability of survival.
-            A probability is returned to specificy survival time w.r.t evidence.
-            Traditional bkb contributions are evaluated and will include contributions
-            for all pieces in the evidence.
-        """
-        self.results = defaultdict(list)
-        for query_type, chp_queries in self.chp_query_dict.items():
-            for chp_query in chp_queries:
-                self.results[query_type].append(self._run_query(chp_query, query_type))
-
     def _run_query(self, chp_query, query_type):
         """ Runs build BKB query to calculate probability of survival.
             A probability is returned to specificy survival time w.r.t a drug.
@@ -300,32 +224,7 @@ class WildCardHandler:
 
         return chp_query
 
-    def construct_trapi_response(self):
-        """ Knowledge graph is a copy of query graph where
-            we add a edge property, 'has_confidence_level' annotated with
-            our determined value. The whole query response is formed and
-            returned. If specified in the QG, contributions will be stored
-            under the KG edge between disease and survival nodes.
-
-            :return: reasoner_std is our API response message combining KG and results.
-            :rtype: dict
-        """
-        responses = defaultdict(list)
-        for query_type, chp_queries in self.results.items():
-            for chp_query in chp_queries:
-                responses[query_type].append(self._construct_trapi_response(chp_query, query_type))
-        return responses
-
     def _construct_trapi_response(self, chp_query, query_type):
-        """ Knowledge Graph (KG) is a copy of the Query graph. However we replace
-            the wildcard gene node with all of the relative contributing genes.
-            Edges are also updated to account for these added genes. Results map
-            New gene nodes to the QG wildcard gene. Additionally the first result returned
-            is the overall probability of survival
-
-            :return: reasoner_std is our API response message combining KG and results.
-            :rtype: dict
-        """
         # Get orginal query
         if len(self.init_query) == 1:
             query = self.init_query[0]
