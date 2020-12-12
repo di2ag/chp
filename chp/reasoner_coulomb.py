@@ -11,7 +11,7 @@ from chp.mixins.chp_joint_reasoner_mixin import ChpJointReasonerMixin
 from chp.mixins.chp_dynamic_reasoner_mixin import ChpDynamicReasonerMixin
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+#logger.setLevel(logging.INFO)
 
 # Base Reasoner Class
 

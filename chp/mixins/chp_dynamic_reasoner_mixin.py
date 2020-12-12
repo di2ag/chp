@@ -7,17 +7,21 @@ from pybkb.python_base.reasoning.reasoning import updating
 from pybkb.python_base.learning.bkb_builder import LinkerBuilder
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+#logger.setLevel(logging.INFO)
 
 class ChpDynamicReasonerMixin:
     def _setup_reasoner(self):
         # Construct linker
         self.linker_builder = LinkerBuilder(self.patient_data)
         logger.info('Constructed Linker Builder from processed patient data.')
-        # Load in prelinked bkb for bkb_data_handler
-        with open(self.bkb_handler.collapsed_bkb_path, 'rb') as f_:
-            self.prelinked_bkb = compress_pickle.load(f_, compression='lz4')
-        logger.info('Loaded in prelinked bkb from: {}'.format(self.bkb_handler.collapsed_bkb_path))
+        # Load in gene prelinked bkb for bkb_data_handler
+        with open(self.bkb_handler.collapsed_gene_bkb_path, 'rb') as f_:
+            self.gene_prelinked_bkb = compress_pickle.load(f_, compression='lz4')
+        logger.info('Loaded in gene prelinked bkb from: {}'.format(self.bkb_handler.collapsed_drug_bkb_path))
+        # Load in drug prelinked bkb for bkb_data_handler
+        with open(self.bkb_handler.collapsed_drug_bkb_path, 'rb') as f_:
+            self.drug_prelinked_bkb = compress_pickle.load(f_, compression='lz4')
+        logger.info('Loaded in drug prelinked bkb from: {}'.format(self.bkb_handler.collapsed_drug_bkb_path))
 
     def _pool_properties(self, query, bkb):
         features_not_to_format = []
@@ -28,6 +32,10 @@ class ChpDynamicReasonerMixin:
         feature_properties.update(query.dynamic_targets)
         for feature, state in query.evidence.items():
             if not self.linker_builder.is_feature_in_bkb(feature, bkb):
+                if feature[0] == '_':
+                    logger.info('Could not find interpolate feature {} in bkb.'.format(feature))
+                    features_not_to_format.append(feature)
+                    continue
                 feature_properties[feature] = {
                     "op": '==',
                     "value": state
@@ -55,9 +63,28 @@ class ChpDynamicReasonerMixin:
                 standard[feature] = '{} {}'.format(prop["op"], prop["value"])
         return standard
 
-    def run_query(self, query):
+    def _check_evidence(self, query, bkb):
+        evidence = {}
+        for feature, state in query.evidence.items():
+            if not self.linker_builder.is_feature_in_bkb(feature, bkb):
+                if feature[0] == '_':
+                    logger.info('Could not find interpolated feature: {} in bkb so we are removing it from evidence.'.format(feature))
+                else:
+                    evidence[feature] = state
+            else:
+                evidence[feature] = state
+        query.evidence = evidence
+        return query
+
+    def run_query(self, query, bkb_type='gene'):
         # Need to make a copy of prelinked bkb
-        bkb = copy.deepcopy(self.prelinked_bkb)
+        if bkb_type == 'gene':
+            bkb = copy.deepcopy(self.gene_prelinked_bkb)
+        elif bkb_type == 'drug':
+            bkb = copy.deepcopy(self.drug_prelinked_bkb)
+        else:
+            raise ValueError('Unrecognized bkb type: {}'.format(bkb_type))
+        query = self._check_evidence(query, bkb)
         # Pool any dynamic evidence and/or targets for linking
         feature_properties, features_not_to_format = self._pool_properties(query, bkb)
         # Link BKB based on dynamic evidence in query

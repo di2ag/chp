@@ -12,9 +12,11 @@ import copy
 import csv
 import sys
 import uuid
+import json
+from collections import defaultdict
 
 from chp.query import Query
-from chp.reasoner_coulomb import DynamicReasoner, JointReasoner
+from chp.reasoner_coulomb import ChpDynamicReasoner, ChpJointReasoner
 
 from chp_data.bkb_handler import BkbDataHandler
 
@@ -34,10 +36,23 @@ class DefaultHandler:
         :type max_results: int
     """
 
-    def __init__(self, query, hosts_filename=None, num_processes_per_host=0):
+    def __init__(self,
+                 query,
+                 hosts_filename=None,
+                 num_processes_per_host=0,
+                 bkb_handler=None,
+                 joint_reasoner=None,
+                 dynamic_reasoner=None):
         # query graph components
         self.init_query = query
-        self.bkb_data_handler = BkbDataHandler(dataset_version='1.3')
+        # Instantiate handler is one was not passed
+        if bkb_handler is None:
+            self.bkb_data_handler = BkbDataHandler(
+                bkb_major_version='coulomb',
+                bkb_minor_version='1.0'
+            )
+        else:
+            self.bkb_data_handler = bkb_handler
 
         # Only do the rest of this if a query is passed
         if self.init_query is not None:
@@ -46,49 +61,30 @@ class DefaultHandler:
 
             # Instiatate Reasoners
             if 'default' in self.query_dict:
-                self.dynamic_reasoner = DynamicReasoner(
-                    bkb_data_handler=self.bkb_data_handler,
-                    hosts_filename=hosts_filename,
-                    num_processes_per_host=num_processes_per_host)
+                if dynamic_reasoner is None:
+                    self.dynamic_reasoner = ChpDynamicReasoner(
+                        bkb_handler=self.bkb_data_handler,
+                        hosts_filename=hosts_filename,
+                        num_processes_per_host=num_processes_per_host)
+                else:
+                    self.dynamic_reasoner = dynamic_reasoner
             if 'simple' in self.query_dict:
-                self.joint_reasoner = JointReasoner(
-                    bkb_data_handler=self.bkb_data_handler,
-                    hosts_filename=hosts_filename,
-                    num_processes_per_host=num_processes_per_host)
-
-                with open(self.bkb_data_handler.patient_data_pk_path, 'rb') as f_:
-                    patient_data = pickle.load(f_)
-                self.joint_reasoner = JointReasoner(dataset=patient_data,
-                                                    discretize=10)
-
-            # Read in curies
-            with open(self.bkb_data_handler.curies_path, 'r') as f_:
-                self.curies = json.load(f_)
-
-            # prepare curie gene dict
-            self.gene_curie_dict = dict()
-            with open(self.bkb_data_handler.gene_curie_path, 'r') as gene_file:
-                reader = csv.reader(gene_file)
-                next(reader)
-                for row in reader:
-                    self.gene_curie_dict[row[1]] = row[0]
-            # prepare curie drug dict
-            self.drug_curie_dict = dict()
-            with open(self.bkb_data_handler.drug_curie_path, 'r') as drug_file:
-                reader = csv.reader(drug_file)
-                next(reader)
-                for row in reader:
-                    self.drug_curie_dict[row[1]] = row[0]
-
-            # default query specification
-            self.target_strategy = 'explicit'
-            self.interpolation = 'standard'
+                if joint_reasoner is None:
+                    self.joint_reasoner = ChpJointReasoner(
+                        bkb_handler=self.bkb_data_handler,
+                        hosts_filename=hosts_filename,
+                        num_processes_per_host=num_processes_per_host)
+                else:
+                    self.joint_reasoner = joint_reasoner
+        # Read in curies
+        with open(self.bkb_data_handler.curies_path, 'r') as f_:
+            self.curies = json.load(f_)
 
     def _setup_queries(self):
         if type(self.init_query) == list:
             self.query_dict = defaultdict(list)
             self.query_map = []
-            for query in self.query:
+            for query in self.init_query:
                 self.query_map.append(query["query_id"])
                 if self._is_simple_query(query):
                     self.query_dict['simple'].append(self._setup_single_query(query))
@@ -97,7 +93,8 @@ class DefaultHandler:
         else:
             if self._is_simple_query(self.init_query):
                 self.query_dict = {"simple": [self._setup_single_query(self.init_query)]}
-            self.query_dict = {"default": [self._setup_single_query(self.init_query)]}
+            else:
+                self.query_dict = {"default": [self._setup_single_query(self.init_query)]}
 
     def _setup_single_query(self, query):
         if 'knowledge_graph' not in query:
@@ -110,7 +107,7 @@ class DefaultHandler:
         return query
 
     def _is_simple_query(self, query):
-        """ Check if this is a one drug, one gene, one outcome standard query.
+        """ Check if this is a {0 or 1} drug, {0 or 1} gene, one outcome standard query.
         """
         _found_outcome = False
         _found_disease = False
@@ -119,8 +116,10 @@ class DefaultHandler:
         for node_key, node in query["query_graph"]["nodes"].items():
             if node["category"] == 'biolink:PhenotypicFeature':
                 # If we've already found the target and there's another phenotypic feature, then this isn't simple.
-                if _found_target:
+                if _found_outcome:
                     return False
+                else:
+                    _found_outcome = True
             if node['category'] == 'biolink:Disease':
                 # If we've already found disease and there's another disease, then this isn't simple.
                 if _found_disease:
@@ -137,32 +136,30 @@ class DefaultHandler:
                     return False
                 else:
                     _found_drug = True
-        if all(_found_disease,
-               _found_drug,
-               _found_gene,
-               _found_outcome):
-            return True
-        else:
-            return False
+        return True
 
     def checkQuery(self):
         """ Currently not implemented. Would check validity of query.
         """
         return True
 
-    def buildQueries(self):
+    def build_queries(self):
         """ Parses over the sent query graph to form a BKB query.
 
             :return: A internal CHP query.
             :rtype: Query
         """
         self.chp_query_dict = defaultdict(list)
-        for query_type, query in self.query_dict:
+        for query_type, query in self.query_dict.items():
             for _query in query:
                 self.chp_query_dict[query_type].append(self._extract_chp_query(_query))
         return self.chp_query_dict
 
     def _extract_chp_query(self, query):
+        evidence = {}
+        targets = []
+        dynamic_evidence = {}
+        dynamic_targets = {}
         # ensure we are using all nodes/edges
         total_nodes = 0
         total_edges = 0
@@ -208,11 +205,13 @@ class DefaultHandler:
         elif total_nodes > 2:
             sys.exit('Too many disease nodes')
         # set BKB target
-        targets.append(('survival_time', qualifier, days))
+        dynamic_targets[node["id"]] = {
+            "op": qualifier,
+            "value": days,
+        }
+        truth_target = (node["id"], '{} {}'.format(qualifier, days))
 
         # get evidence
-        evidence = dict()
-        meta_evidence = list()
         for node_key in query["query_graph"]['nodes'].keys():
             # genes
             node = query["query_graph"]['nodes'][node_key]
@@ -229,11 +228,11 @@ class DefaultHandler:
                     sys.exit('Gene has too many outgoing edges')
                 # check for appropriate gene node curie
                 gene_curie = node['id']
-                if gene_curie in self.gene_curie_dict.keys():
+                if gene_curie in self.curies["gene"]:
                     gene = gene_curie
                 else:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
-                evidence["_mut_" + gene] = 'True'
+                evidence["_" + gene] = 'True'
                 total_nodes += 1
             # drugs
             if node['category'] == 'biolink:Drug':
@@ -249,59 +248,65 @@ class DefaultHandler:
                     sys.exit('Drug has too many outgoing edges')
                 # check for appropriate drug node curie
                 drug_curie = node['id']
-                if drug_curie in self.drug_curie_dict.keys():
+                if drug_curie in self.curies["chemical_substance"]:
                     drug = drug_curie
                 else:
-                    sys.exit('Invalid CHEMBL Identifier. Must be in form CHEMBL:<ID>')
-                meta_evidence.append(('drug_curies', '==', drug))
+                    sys.exit('Invalid CHEMBL Identifier: {}. Must be in form CHEMBL:<ID>'.format(drug_curie))
+                evidence[node["id"]] = 'True'
                 total_nodes += 1
 
         if total_nodes != len(query["query_graph"]['nodes']) or total_edges != len(query["query_graph"]['edges']):
             sys.exit('There are extra components in the provided QG structure')
 
         # produce BKB query
-        if len(meta_evidence) > 0 and len(list(evidence.keys())) > 0:
-            chp_query = Query(evidence=evidence,
-                          targets=[],
-                          meta_evidence=meta_evidence,
-                          meta_targets=targets,
-                          type='updating')
-        elif len(list(evidence.keys())) > 0:
-            chp_query = Query(evidence=evidence,
-                          targets=[],
-                          meta_evidence=None,
-                          meta_targets=targets,
-                          type='updating')
-        elif len(meta_evidence) > 0:
-            chp_query = Query(evidence=None,
-                          targets=[],
-                          meta_evidence=meta_evidence,
-                          meta_targets=targets,
-                          type='updating')
-        else:
-            chp_query = Query(evidence=None,
-                          targets=[],
-                          meta_evidence=None,
-                          meta_targets=targets,
-                          type='updating')
-
+        chp_query = Query(
+            evidence=evidence,
+            targets=targets,
+            dynamic_evidence=dynamic_evidence,
+            dynamic_targets=dynamic_targets,
+            type='updating')
+        # Set some other helpful attributes
+        chp_query.truth_target = truth_target
+        chp_query.query_id = query["query_id"] if 'query_id' in query else None
         return chp_query
 
-    def runQueries(self):
+    def _run_query(self, query_type, chp_query):
+        if query_type == 'simple':
+            chp_query = self.joint_reasoner.run_query(chp_query)
+            # If a probability was found for the target
+            if len(chp_query.result) > 0:
+                # If a probability was found for the truth target
+                if chp_query.truth_target in chp_query.result:
+                    chp_query.truth_prob = max([0, chp_query.result[(chp_query.truth_target)]])
+                else:
+                    chp_query.truth_prob = 0
+            chp_query.report = None
+        else:
+            chp_query = self.dynamic_reasoner.run_query(chp_query)
+            chp_res_dict = chp_query.result.process_updates()
+            chp_query.truth_prob = max([0, chp_res_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
+            chp_query.report = None
+            '''
+            report = chp_query.jsonExplanations(contributions_include_srcs=False,
+                                            contributions_top_n_inodes=10,
+                                            contributions_ignore_prefixes=['_'])
+            chp_query.report = {'patient_analysis': report['Patient Analysis'],
+                           'contribution_analysis': report['Contributions Analysis']}
+            '''
+        return chp_query
+
+    def run_queries(self):
         """ Runs build BKB query to calculate probability of survival.
             A probability is returned to specificy survival time w.r.t evidence.
             Traditional bkb contributions are evaluated and will include contributions
             for all pieces in the evidence.
         """
-        for query_type, chp_query in self.chp_query_dict.items():
-            if query_type == 'simple':
-                self._run_simple_query(chp_query)
+        self.results = defaultdict(list)
+        for query_type, chp_queries in self.chp_query_dict.items():
+            for chp_query in chp_queries:
+                self.results[query_type].append(self._run_query(query_type, chp_query))
 
-        query = self.reasoner.analyze_query(copy.deepcopy(self.chp_query),
-                                            save_dir=None,
-                                            target_strategy=self.target_strategy,
-                                            interpolation=self.interpolation
-                                            )
+        '''
         self.target_info = []
         for update, prob in query.result.updates.items():
             comp_idx, state_idx = update
@@ -338,7 +343,7 @@ class DefaultHandler:
                                         contributions_ignore_prefixes=['_'])
         self.report = {'patient_analysis': report['Patient Analysis'],
                        'contribution_analysis': report['Contributions Analysis']}
-
+        '''
     ##########################################################
     # constructDecoratedKG
     # Input:
@@ -349,7 +354,7 @@ class DefaultHandler:
     # our determined value. The whole query response is formed and
     # returned.
 
-    def constructDecoratedKG(self):
+    def construct_trapi_response(self):
         """ Knowledge graph is a copy of query graph where
             we add a edge property, 'has_confidence_level' annotated with
             our determined value. The whole query response is formed and
@@ -359,44 +364,67 @@ class DefaultHandler:
             :return: reasoner_std is our API response message combining KG and results.
             :rtype: dict
         """
+        responses = defaultdict(list)
+        for query_type, chp_queries in self.results.items():
+            for chp_query in chp_queries:
+                responses[query_type].append(self._construct_trapi_response(chp_query))
+        return responses
 
-        self.kg = copy.deepcopy(self.qg)
+    def _get_curie_name(self, entity_type, curie):
+        return self.curies[entity_type][curie]
+
+    def _construct_trapi_response(self, chp_query):
+        # Get orginal query
+        if len(self.init_query) == 1:
+            query = self.init_query[0]
+            query_id = None
+        else:
+            for _query in self.init_query:
+                if _query["query_id"] == chp_query.query_id:
+                    query = _query
+                    query_id = query["query_id"]
+                    break
+
+        kg = copy.deepcopy(query["query_graph"])
         # update target node info and form edge pair combos for results graph
 
         node_pairs = dict()
-        for node_key in list(self.kg['nodes'].keys())[:]:
-            qg_node_curie = self.kg['nodes'][node_key].pop('id')
-            self.kg['nodes'][qg_node_curie] = self.kg['nodes'].pop(node_key)
+        for node_key in list(kg['nodes'].keys())[:]:
+            qg_node_curie = kg['nodes'][node_key].pop('id')
+            kg['nodes'][qg_node_curie] = kg['nodes'].pop(node_key)
             node_pairs[node_key] = qg_node_curie
-            if self.kg['nodes'][qg_node_curie]['category'] == 'biolink:Gene':
-                self.kg['nodes'][qg_node_curie]['name'] = self.gene_curie_dict[qg_node_curie]
-            elif self.kg['nodes'][qg_node_curie]['category'] == 'biolink:Drug':
-                self.kg['nodes'][qg_node_curie]['name'] = self.drug_curie_dict[qg_node_curie]
+            if kg['nodes'][qg_node_curie]['category'] == 'biolink:Gene':
+                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name('gene', qg_node_curie)
+            elif kg['nodes'][qg_node_curie]['category'] == 'biolink:Drug':
+                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name('chemical_substance', qg_node_curie)
 
         edge_pairs = dict()
         knowledge_edges = 0
-        for edge_key in list(self.kg['edges'].keys())[:]:
+        for edge_key in list(kg['edges'].keys())[:]:
             kg_id = 'kge{}'.format(knowledge_edges)
             knowledge_edges += 1
-            self.kg['edges'][kg_id] = self.kg['edges'].pop(edge_key)
-            self.kg['edges'][kg_id]['subject'] = node_pairs[self.kg['edges'][kg_id]['subject']]
-            self.kg['edges'][kg_id]['object'] = node_pairs[self.kg['edges'][kg_id]['object']]
+            kg['edges'][kg_id] = kg['edges'].pop(edge_key)
+            kg['edges'][kg_id]['subject'] = node_pairs[kg['edges'][kg_id]['subject']]
+            kg['edges'][kg_id]['object'] = node_pairs[kg['edges'][kg_id]['object']]
             edge_pairs[edge_key] = kg_id
-            if self.kg['edges'][kg_id]['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
-                self.kg['edges'][kg_id]['has_confidence_level'] = self.truth_assignment
-                if 'properties' in self.kg['edges'][kg_id].keys() and 'contributions' in self.kg['edges'][kg_id]['properties'].keys() and self.kg['edges'][kg_id]['properties']['contributions'] == True:
-                    self.kg['edges'][kg_id]['properties'] = {'contributions':self.report}
+            if kg['edges'][kg_id]['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
+                kg['edges'][kg_id]['has_confidence_level'] = chp_query.truth_prob
+                if 'properties' in kg['edges'][kg_id].keys() and 'contributions' in kg['edges'][kg_id]['properties'].keys() and kg['edges'][kg_id]['properties']['contributions'] == True:
+                    kg['edges'][kg_id]['properties'] = {'contributions':chp_query.report}
 
-        self.results.append({'edge_bindings':dict(),
-                             'node_bindings':dict()})
+        results = []
+        results.append({
+            'edge_bindings': {},
+            'node_bindings': {},
+        })
         for edge_pair_key in edge_pairs:
-            self.results[0]['edge_bindings'][edge_pair_key] = [{ 'id': edge_pairs[edge_pair_key]}]
+            results[0]['edge_bindings'][edge_pair_key] = [{ 'id': edge_pairs[edge_pair_key]}]
         for node_pair_key in node_pairs:
-            self.results[0]['node_bindings'][node_pair_key] = [{ 'id': node_pairs[node_pair_key]}]
+            results[0]['node_bindings'][node_pair_key] = [{ 'id': node_pairs[node_pair_key]}]
 
         # query response
-        reasoner_std = {'query_graph': self.qg,
-                        'knowledge_graph': self.kg,
-                        'results': self.results}
-        reasoner_std = {'message' : reasoner_std}
-        return reasoner_std
+        trapi_response = {'query_graph': query["query_graph"],
+                        'knowledge_graph': kg,
+                        'results': results}
+        trapi_response = {'message' : trapi_response}
+        return query_id, trapi_response

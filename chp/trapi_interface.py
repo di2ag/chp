@@ -13,19 +13,52 @@ import numpy as np
 import logging
 import csv
 import uuid
+from collections import defaultdict
 
 # Integrators
 from chp.integrator.default_handler import DefaultHandler
-from chp.integrator.exploring_agent import ExploringHandler
-from chp.integrator.unsecret_agent import UnsecretHandler
-from chp.integrator.ranking_agent import RankingHandler
-from chp.integrator.relay9_22 import Relay9_22
+#from chp.integrator.exploring_agent import ExploringHandler
+#from chp.integrator.unsecret_agent import UnsecretHandler
+#from chp.integrator.ranking_agent import RankingHandler
+#from chp.integrator.relay9_22 import Relay9_22
 from chp.integrator.wildcard_handler import WildCardHandler
-from chp.integrator.one_hop_handler import OneHopHandler
+#from chp.integrator.one_hop_handler import OneHopHandler
 
 # Setup logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
+
+# Helper functions
+
+def parse_query_graph(query_graph):
+    """ Will extract the parameters that were used to build the query from the client.
+    """
+    try:
+        parsed = defaultdict(str)
+        for node_id, node in query_graph["nodes"].items():
+            if node["category"] == 'biolink:PhenotypicFeature':
+                parsed["outcome_name"] = node_id
+            elif node["category"] == 'biolink:Drug':
+                parsed["therapeutic"] = node_id
+            elif node["category"] == 'biolink:Gene':
+                if 'genes' in parsed:
+                    parsed["genes"].append(node_id)
+                else:
+                    parsed["genes"] = [node_id]
+            elif node["category"] == 'biolink:Disease':
+                parsed["genes"].append(node_id)
+            else:
+                raise ValueError('Unrecognized category: {}'.format(node["category"]))
+        # Sort the genes
+        parsed["genes"] = sorted(parsed["genes"])
+        # Find the outome op and value
+        for edge_id, edge in query_graph["edges"].items():
+            if edge['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
+                parsed["outcome_op"] = edge["properties"]["qualifier"]
+                parsed["outcome_value"] = edge["properties"]["days"]
+        return parsed
+    except:
+        return None
 
 class TrapiInterface:
     def __init__(self,
@@ -33,15 +66,22 @@ class TrapiInterface:
                  client_id=None,
                  hosts_filename=None,
                  num_processes_per_host=0,
-                 max_results=100):
+                 max_results=100,
+                 bkb_handler=None,
+                 joint_reasoner=None,
+                 dynamic_reasoner=None,
+                ):
         self.client_id = client_id
         self.hosts_filename = hosts_filename
         self.num_processes_per_host = num_processes_per_host
         self.max_results = max_results
+        self.bkb_handler = bkb_handler
+        self.joint_reasoner = joint_reasoner
+        self.dynamic_reasoner = dynamic_reasoner
 
         if query is not None:
             # Analyze queries
-            self.query_dict, self.query_map = self._setup_query()
+            self.query_dict, self.query_map = self._setup_query(query)
 
             # Initialize necessary handlers
             self.handlers = {}
@@ -49,7 +89,7 @@ class TrapiInterface:
                 self.handlers[query_type] = self._get_handler(query_type)
         else:
             # Get default handler for processing curies and predicates requests
-            self.handler = self._get_handler('default')
+            self.handler = self._get_handler(None)
 
     def _setup_query(self, query):
         if type(query) == list:
@@ -58,8 +98,8 @@ class TrapiInterface:
             return query_dict, query_map
         else:
             logger.info('Detected single query.')
-            query_type = self._setup_single_query(query)
-            return {query_type: query}, None
+            query_dict = self._setup_single_query(query)
+            return query_dict, None
 
     def _setup_batch_queries(self, queries):
         query_dict = defaultdict(list)
@@ -71,11 +111,13 @@ class TrapiInterface:
             query_map.append(_id)
             query_type = self._determine_query_type(query)
             query_dict[query_type].append(query)
-        return query_dict
+        return query_dict, query_map
 
     def _setup_single_query(self, query):
         query_type = self._determine_query_type(query)
-        return query_type
+        _id = uuid.uuid4()
+        query["query_id"] = _id
+        return {query_type: [query]}
 
     def _determine_query_type(self, query):
         if self._check_one_hop_query(query):
@@ -88,8 +130,7 @@ class TrapiInterface:
     def get_curies(self):
         """ Returns the available curies and their associated names.
         """
-        with open(self.handler.bkb_data_handler.curies_path, 'r') as curies_file:
-            return json.load(curies_file)
+        return self.handler.curies
 
     def get_predicates(self):
         """ Returns the available predicates and their associated names.
@@ -109,20 +150,31 @@ class TrapiInterface:
 
         Currently only supports single gene wildcard queries.
         """
-        gene_curie_flag = False
+        gene_flag = False
         disease_flag = False
         drug_flag = False
+        wildcard_flag = False
         if query is not None:
             qg = query["query_graph"]
             for _, node in qg["nodes"].items():
-                if "category" in node.keys():
-                    if node["category"] == 'biolink:Gene' and 'id' not in node:
-                        gene_curie_flag = True
+                if "category" in node:
+                    if node["category"] == 'biolink:Gene':
+                        gene_flag = True
+                        if 'id' not in node:
+                            if wildcard_flag is False:
+                                wildcard_flag = True
+                            else:
+                                return False
                     elif node["category"] == 'biolink:Drug':
                         drug_flag = True
+                        if 'id' not in node:
+                            if wildcard_flag is False:
+                                wildcard_flag = True
+                            else:
+                                return False
                     elif node["category"] == 'biolink:Disease':
                         disease_flag = True
-        if gene_curie_flag and disease_flag and drug_flag:
+        if all([gene_flag, disease_flag, drug_flag, wildcard_flag]):
             return True
         else:
             return False
@@ -136,6 +188,7 @@ class TrapiInterface:
         """
         gene_curie_flag = False
         drug_flag = False
+        disease_flag = False
         if query is not None:
             qg = query["query_graph"]
             for _, node in qg["nodes"].items():
@@ -144,7 +197,9 @@ class TrapiInterface:
                         gene_curie_flag = True
                     elif node["category"] == 'biolink:Drug':
                         drug_flag = True
-        if gene_curie_flag and drug_flag:
+                    elif node["category"] == 'biolink:Disease':
+                        disease_flag = True
+        if gene_curie_flag and drug_flag and not disease_flag:
             return True
         else:
             return False
@@ -154,14 +209,19 @@ class TrapiInterface:
             return DefaultHandler(
                 self.query_dict['default'],
                 hosts_filename=self.hosts_filename,
-                num_processes_per_host=self.num_processes_per_host
+                num_processes_per_host=self.num_processes_per_host,
+                bkb_handler=self.bkb_handler,
+                joint_reasoner=self.joint_reasoner,
+                dynamic_reasoner=self.dynamic_reasoner,
             )
         elif query_type == 'wildcard':
             return WildCardHandler(
                 self.query_dict['wildcard'],
                 hosts_filename=self.hosts_filename,
                 num_processes_per_host=self.num_processes_per_host,
-                max_results=self.max_results
+                max_results=self.max_results,
+                bkb_handler=self.bkb_handler,
+                dynamic_reasoner=self.dynamic_reasoner,
             )
         elif query_type == 'onehop':
             return OneHopHandler(
@@ -177,13 +237,14 @@ class TrapiInterface:
 
     def _order_response(self, results):
         _unordered_response = []
-        for query_type, query_type_results in results.items():
-            # If single result just return the response
-            if self.query_map is None:
-                return query_type_results
-            # Else put the results back in the appropriate order
-            _unordered_response.append((self.query_map.index(query_type_results["query_id"]),
-                                        query_type_results))
+        for query_type, reasoner_type_results in results.items():
+            for reasoner_type, query_results in reasoner_type_results.items():
+                for query_id, result in query_results:
+                    # If single result just return the response
+                    if self.query_map is None:
+                        return result
+                    # Else put the results back in the appropriate order
+                    _unordered_response.append((self.query_map.index(query_id), result))
         response = [result for _id, result in sorted(_unordered_response)]
         return response
 
@@ -205,5 +266,5 @@ class TrapiInterface:
         results = {}
         for query_type, handler in self.handlers.items():
             logger.info('Constructing TRAPI response(s) for {} type query(s).'.format(query_type))
-            results[query_type] = handler.construct_decorated_kg()
+            results[query_type] = handler.construct_trapi_response()
         return self._order_response(results)
