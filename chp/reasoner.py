@@ -5,7 +5,7 @@ from pybkb.python_base.reasoning.reasoning import updating
 from pybkb.python_base.reasoning.joint_reasoner import JointReasoner
 from pybkb.python_base.learning.bkb_builder import LinkerBuilder
 
-from chp_data.patient_bkb_builder_coulomb import PatientBkbBuilder
+from chp_data.patient_bkb_builder import PatientBkbBuilder
 
 from chp.mixins.reasoner.chp_joint_reasoner_mixin import ChpJointReasonerMixin
 from chp.mixins.reasoner.chp_dynamic_reasoner_mixin import ChpDynamicReasonerMixin

@@ -3,7 +3,7 @@ import logging
 import pickle
 import json
 
-from trapi_interface import TrapiInterface
+from chp.trapi_interface import TrapiInterface
 
 logging.basicConfig(level=logging.INFO)
 
@@ -116,6 +116,51 @@ class TestWildCardHandler(unittest.TestCase):
         response = interface.construct_trapi_response()
 
     def test_batch_drug_wildcard_query(self):
+        queries = [message["message"] for message in self.gene_queries]
+        interface = TrapiInterface(query=queries, client_id='default', max_results=10)
+        interface.build_chp_queries()
+        interface.run_chp_queries()
+        response = interface.construct_trapi_response()
+
+class TestOneHopHandler(unittest.TestCase):
+
+    def setUp(self):
+        # load in sample query graphs
+        with open('query_samples/random_gene_one_hop_queries.pk', 'rb') as f_:
+            self.gene_queries = pickle.load(f_)
+        with open('query_samples/random_drug_one_hop_queries.pk', 'rb') as f_:
+            self.drug_queries = pickle.load(f_)
+        #for i, q in enumerate(self.queries):
+        #    print(i)
+        #    print(q)
+        #input()
+
+    def test_single_gene_onehop_query(self):
+        message = self.gene_queries[0]
+        query = message["message"]
+        interface = TrapiInterface(query=query, client_id='default', max_results=10)
+        interface.build_chp_queries()
+        interface.run_chp_queries()
+        response = interface.construct_trapi_response()
+        #print(json.dumps(response, indent=2))
+
+    def test_single_drug_onehop_query(self):
+        message = self.drug_queries[0]
+        query = message["message"]
+        interface = TrapiInterface(query=query, client_id='default', max_results=10)
+        interface.build_chp_queries()
+        interface.run_chp_queries()
+        response = interface.construct_trapi_response()
+        print(json.dumps(response, indent=2))
+
+    def test_batch_gene_onehop_query(self):
+        queries = [message["message"] for message in self.gene_queries]
+        interface = TrapiInterface(query=queries, client_id='default', max_results=10)
+        interface.build_chp_queries()
+        interface.run_chp_queries()
+        response = interface.construct_trapi_response()
+
+    def test_batch_drug_onehop_query(self):
         queries = [message["message"] for message in self.gene_queries]
         interface = TrapiInterface(query=queries, client_id='default', max_results=10)
         interface.build_chp_queries()

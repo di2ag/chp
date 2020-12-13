@@ -16,7 +16,7 @@ import uuid
 from collections import defaultdict
 
 # Integrators
-from chp.trapi_handlers import DefaultHandler, WildCardHandler
+from chp.trapi_handlers import DefaultHandler, WildCardHandler, OneHopHandler
 #from chp.integrator.exploring_agent import ExploringHandler
 #from chp.integrator.unsecret_agent import UnsecretHandler
 #from chp.integrator.ranking_agent import RankingHandler
@@ -161,14 +161,14 @@ class TrapiInterface:
                     if node["category"] == 'biolink:Gene':
                         gene_flag = True
                         if 'id' not in node:
-                            if wildcard_flag is False:
+                            if not wildcard_flag:
                                 wildcard_flag = True
                             else:
                                 return False
                     elif node["category"] == 'biolink:Drug':
                         drug_flag = True
                         if 'id' not in node:
-                            if wildcard_flag is False:
+                            if not wildcard_flag:
                                 wildcard_flag = True
                             else:
                                 return False
@@ -186,20 +186,31 @@ class TrapiInterface:
             Wildcard query in which there are at least 3 nodes and it contains the drug and gene node
             as well as a disease node.
         """
-        gene_curie_flag = False
+        gene_flag = False
         drug_flag = False
+        wildcard_flag = False
         disease_flag = False
         if query is not None:
             qg = query["query_graph"]
             for _, node in qg["nodes"].items():
-                if "category" in node.keys():
-                    if node["category"] == 'biolink:Gene' and 'id' not in node:
-                        gene_curie_flag = True
+                if "category" in node:
+                    if node["category"] == 'biolink:Gene':
+                        gene_flag = True
+                        if 'id' not in node:
+                            if not wildcard_flag:
+                                wildcard_flag = True
+                            else:
+                                return False
                     elif node["category"] == 'biolink:Drug':
                         drug_flag = True
+                        if 'id' not in node:
+                            if not wildcard_flag:
+                                wildcard_flag = True
+                            else:
+                                return False
                     elif node["category"] == 'biolink:Disease':
                         disease_flag = True
-        if gene_curie_flag and drug_flag and not disease_flag:
+        if all([gene_flag, drug_flag, wildcard_flag]) and not disease_flag:
             return True
         else:
             return False

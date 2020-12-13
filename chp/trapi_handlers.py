@@ -19,6 +19,7 @@ from chp_data.bkb_handler import BkbDataHandler
 
 from chp.mixins.trapi_handler.default_handler_mixin import DefaultHandlerMixin
 from chp.mixins.trapi_handler.wildcard_handler_mixin import WildCardHandlerMixin
+from chp.mixins.trapi_handler.one_hop_handler_mixin import OneHopHandlerMixin
 
 # Base TRAPI Handler
 
@@ -156,4 +157,7 @@ class DefaultHandler(DefaultHandlerMixin, BaseHandler):
     pass
 
 class WildCardHandler(WildCardHandlerMixin, BaseHandler):
+    pass
+
+class OneHopHandler(OneHopHandlerMixin, BaseHandler):
     pass

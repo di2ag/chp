@@ -163,7 +163,7 @@ class DefaultHandlerMixin:
                     sys.exit('Gene has too many outgoing edges')
                 # check for appropriate gene node curie
                 gene_curie = node['id']
-                if gene_curie in self.curies["gene"]:
+                if gene_curie in self.curies["biolink:Gene"]:
                     gene = gene_curie
                 else:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
@@ -183,7 +183,7 @@ class DefaultHandlerMixin:
                     sys.exit('Drug has too many outgoing edges')
                 # check for appropriate drug node curie
                 drug_curie = node['id']
-                if drug_curie in self.curies["chemical_substance"]:
+                if drug_curie in self.curies["biolink:Drug"]:
                     drug = drug_curie
                 else:
                     sys.exit('Invalid CHEMBL Identifier: {}. Must be in form CHEMBL:<ID>'.format(drug_curie))
@@ -244,9 +244,9 @@ class DefaultHandlerMixin:
             kg['nodes'][qg_node_curie] = kg['nodes'].pop(node_key)
             node_pairs[node_key] = qg_node_curie
             if kg['nodes'][qg_node_curie]['category'] == 'biolink:Gene':
-                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name('gene', qg_node_curie)
+                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name('biolink:Gene', qg_node_curie)
             elif kg['nodes'][qg_node_curie]['category'] == 'biolink:Drug':
-                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name('chemical_substance', qg_node_curie)
+                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name('biolink:Drug', qg_node_curie)
 
         edge_pairs = dict()
         knowledge_edges = 0

@@ -134,7 +134,7 @@ class WildCardHandlerMixin:
                 # check for appropriate gene node curie
                 if query_type != 'gene':
                     gene_curie = node['id']
-                    if gene_curie in self.curies["gene"]:
+                    if gene_curie in self.curies["biolink:Gene"]:
                         gene = gene_curie
                     else:
                         sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
@@ -155,7 +155,7 @@ class WildCardHandlerMixin:
                 # check for appropriate drug node curie
                 if query_type != 'drug':
                     drug_curie = node['id']
-                    if drug_curie in self.curies["chemical_substance"]:
+                    if drug_curie in self.curies["biolink:Drug"]:
                         drug = drug_curie
                     else:
                         sys.exit('Invalid CHEMBL Identifier: {}. Must be in form CHEMBL:<ID>'.format(drug_curie))
@@ -188,7 +188,6 @@ class WildCardHandlerMixin:
         elif query_type == 'drug':
             chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='gene')
         chp_res_dict = chp_query.result.process_updates()
-        print(chp_res_dict)
         #chp_query.result.summary()
         chp_res_contributions = chp_query.result.process_inode_contributions()
         chp_query.truth_prob = max([0, chp_res_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
@@ -246,9 +245,9 @@ class WildCardHandlerMixin:
             if qg_node_curie is not None:
                 kg['nodes'][qg_node_curie] = kg['nodes'].pop(node_key)
                 if kg['nodes'][qg_node_curie]['category'] == 'biolink:Gene':
-                    kg['nodes'][qg_node_curie]['name'] = self.curies["gene"][qg_node_curie]
+                    kg['nodes'][qg_node_curie]['name'] = self.curies["biolink:Gene"][qg_node_curie]
                 elif kg['nodes'][qg_node_curie]['category'] == 'biolink:Drug':
-                    kg['nodes'][qg_node_curie]['name'] = self.curies["chemical_substance"][qg_node_curie]
+                    kg['nodes'][qg_node_curie]['name'] = self.curies["biolink:Drug"][qg_node_curie]
                 node_pairs[node_key] = qg_node_curie
             else:
                 kg["nodes"].pop(node_key)
@@ -295,11 +294,11 @@ class WildCardHandlerMixin:
             for node_id, node in rg["nodes"].items():
                 if node["category"] == 'biolink:Gene' and query_type == 'gene':
                     kg["nodes"][wildcard] = copy.deepcopy(node)
-                    kg["nodes"][wildcard].update({"name": self.curies["gene"][wildcard]})
+                    kg["nodes"][wildcard].update({"name": self.curies["biolink:Gene"][wildcard]})
                     _node_pairs[node_id] = wildcard
                 elif node["category"] == 'biolink:Drug' and query_type == 'drug':
                     kg["nodes"][wildcard] = copy.deepcopy(node)
-                    kg["nodes"][wildcard].update({"name": self.curies["chemical_substance"][wildcard]})
+                    kg["nodes"][wildcard].update({"name": self.curies["biolink:Drug"][wildcard]})
                     _node_pairs[node_id] = wildcard
                 else:
                     _node_pairs[node_id] = node_pairs[node_id]
