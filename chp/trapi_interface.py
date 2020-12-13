@@ -17,16 +17,9 @@ from collections import defaultdict
 
 # Integrators
 from chp.trapi_handlers import DefaultHandler, WildCardHandler, OneHopHandler
-#from chp.integrator.exploring_agent import ExploringHandler
-#from chp.integrator.unsecret_agent import UnsecretHandler
-#from chp.integrator.ranking_agent import RankingHandler
-#from chp.integrator.relay9_22 import Relay9_22
-#from chp.integrator.wildcard_handler import WildCardHandler
-#from chp.integrator.one_hop_handler import OneHopHandler
 
 # Setup logging
 logger = logging.getLogger(__name__)
-#logger.setLevel(logging.DEBUG)
 
 # Helper functions
 
@@ -239,7 +232,8 @@ class TrapiInterface:
                 self.query_dict['onehop'],
                 hosts_filename=self.hosts_filename,
                 num_processes_per_host=self.num_processes_per_host,
-                max_results=self.max_results
+                max_results=self.max_results,
+                dynamic_reasoner=self.dynamic_reasoner,
             )
         elif query_type is None:
             return DefaultHandler(None)

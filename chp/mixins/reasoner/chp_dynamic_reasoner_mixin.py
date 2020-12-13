@@ -7,7 +7,6 @@ from pybkb.python_base.reasoning.reasoning import updating
 from pybkb.python_base.learning.bkb_builder import LinkerBuilder
 
 logger = logging.getLogger(__name__)
-#logger.setLevel(logging.INFO)
 
 class ChpDynamicReasonerMixin:
     def _setup_reasoner(self):
@@ -17,7 +16,7 @@ class ChpDynamicReasonerMixin:
         # Load in gene prelinked bkb for bkb_data_handler
         with open(self.bkb_handler.collapsed_gene_bkb_path, 'rb') as f_:
             self.gene_prelinked_bkb = compress_pickle.load(f_, compression='lz4')
-        logger.info('Loaded in gene prelinked bkb from: {}'.format(self.bkb_handler.collapsed_drug_bkb_path))
+        logger.info('Loaded in gene prelinked bkb from: {}'.format(self.bkb_handler.collapsed_gene_bkb_path))
         # Load in drug prelinked bkb for bkb_data_handler
         with open(self.bkb_handler.collapsed_drug_bkb_path, 'rb') as f_:
             self.drug_prelinked_bkb = compress_pickle.load(f_, compression='lz4')
