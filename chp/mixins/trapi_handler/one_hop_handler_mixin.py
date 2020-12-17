@@ -246,8 +246,8 @@ class OneHopHandlerMixin:
                 # add edge
                 kg['edges']['kge{}'.format(edge_count)] = {
                     "predicate" : 'biolink:ChemicalToGeneAssociation',
-                    "subject" : non_wildcard_curie,
-                    "object" : wildcard,
+                    "subject" : wildcard,
+                    "object" : non_wildcard_curie,
                     "value" : contrib
                 }
             elif query_type == 'drug':
@@ -258,8 +258,8 @@ class OneHopHandlerMixin:
                 # add edge
                 kg['edges']['kge{}'.format(edge_count)] = {
                     "predicate" : 'biolink:ChemicalToGeneAssociation',
-                    "subject" : non_wildcard_curie,
-                    "object" : wildcard,
+                    "subject" : wildcard,
+                    "object" : non_wildcard_curie,
                     "value" : contrib
                 }
             # add to results
