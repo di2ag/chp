@@ -212,13 +212,19 @@ class DefaultHandlerMixin:
             if len(chp_query.result) > 0:
                 # If a probability was found for the truth target
                 if chp_query.truth_target in chp_query.result:
-                    chp_query.truth_prob = max([0, chp_query.result[(chp_query.truth_target)]])
+                    total_unnormalized_prob = 0
+                    for target, contrib in chp_query.result.items():
+                        prob = max(0, contrib)
+                        total_unnormalized_prob += prob
+                    chp_query.truth_prob = max([0, chp_query.result[(chp_query.truth_target)]])/total_unnormalized_prob
                 else:
                     chp_query.truth_prob = 0
+            else:
+                chp_query.truth_prob = -1
             chp_query.report = None
         else:
             chp_query = self.dynamic_reasoner.run_query(chp_query)
-            chp_res_dict = chp_query.result.process_updates()
+            chp_res_dict = chp_query.result.process_updates(normalize=True)
             chp_query.truth_prob = max([0, chp_res_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
             chp_query.report = None
         return chp_query

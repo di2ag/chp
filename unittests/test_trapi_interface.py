@@ -39,12 +39,13 @@ class TestDefaultHandler(unittest.TestCase):
 
     def test_simple_single_query(self):
         # This is a simple query 
-        message = self.queries[0]
+        message = self.queries[1]
         query = message["message"]
         interface = TrapiInterface(query=query, client_id='default')
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
+        #print(json.dumps(response, indent=2))
 
     def test_default_batch_query(self):
         # These are non-simple queries
@@ -151,7 +152,7 @@ class TestOneHopHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(json.dumps(response, indent=2))
+        #print(json.dumps(response, indent=2))
 
     def test_batch_gene_onehop_query(self):
         queries = [message["message"] for message in self.gene_queries]
@@ -166,3 +167,6 @@ class TestOneHopHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
+
+if __name__ == '__main__':
+    unittest.main()
