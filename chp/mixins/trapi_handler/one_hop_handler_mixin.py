@@ -140,9 +140,12 @@ class OneHopHandlerMixin:
         elif query_type == 'drug':
             chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='gene')
         chp_res_dict = chp_query.result.process_updates()
+        chp_res_norm_dict = chp_query.result.process_updates(normalize=True)
         #chp_query.result.summary()
         chp_res_contributions = chp_query.result.process_inode_contributions()
-        chp_query.truth_prob = max([0, chp_res_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
+        chp_query.truth_prob = max([0, chp_res_norm_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
+
+        #print(chp_res_contributions)
 
         # Collect all source inodes and process patient hashes
         patient_contributions = defaultdict(lambda: defaultdict(int))
@@ -154,10 +157,11 @@ class OneHopHandlerMixin:
                     # Split source state name to get patient hashes
                     source_hashes_str = state_name.split('_')[-1]
                     source_hashes = [int(source_hash) for source_hash in source_hashes_str.split(',')]
+                    hash_len = len(source_hashes)
                     # Process patient contributions
                     for _hash in source_hashes:
                         # Normalize to get relative contribution
-                        patient_contributions[target][_hash] += contrib / chp_res_dict[target_comp_name][target_state_name]
+                        patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
 
         # Now iterate through the patient data to translate patient contributions to drug/gene contributions
         wildcard_contributions = defaultdict(lambda: defaultdict(int))
@@ -165,10 +169,21 @@ class OneHopHandlerMixin:
             for patient, contrib in patient_contrib_dict.items():
                 if query_type == 'gene':
                     for gene_curie in self.dynamic_reasoner.raw_patient_data[patient]["gene_curies"]:
-                        wildcard_contributions[target][gene_curie] += contrib
+                        wildcard_contributions[gene_curie][target] += contrib
                 elif query_type == 'drug':
                     for drug_curie in self.dynamic_reasoner.raw_patient_data[patient]["drug_curies"]:
-                        wildcard_contributions[target][drug_curie] += contrib
+                        wildcard_contributions[drug_curie][target] += contrib
+
+        # normalize gene contributions by the target and take relative difference
+        for curie in wildcard_contributions.keys():
+            truth_target_gene_contrib = 0
+            nontruth_target_gene_contrib = 0
+            for target, contrib in wildcard_contributions[curie].items():
+                if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
+                    truth_target_gene_contrib += contrib / chp_res_dict[target[0]][target[1]]
+                else:
+                    nontruth_target_gene_contrib += contrib / chp_res_dict[target[0]][target[1]]
+            wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
 
         chp_query.report = None
         chp_query.wildcard_contributions = wildcard_contributions
@@ -214,9 +229,9 @@ class OneHopHandlerMixin:
 
         # Build relative contribution results and added associated edges into knowledge graph
         unsorted_wildcard_contributions = []
-        for wildcard, contrib in chp_query.wildcard_contributions[chp_query.truth_target].items():
-            unsorted_wildcard_contributions.append((contrib, wildcard))
-        sorted_wildcard_contributions = sorted(unsorted_wildcard_contributions, reverse=True)
+        for wildcard, contrib_dict in chp_query.wildcard_contributions.items():
+            unsorted_wildcard_contributions.append((contrib_dict['relative'], wildcard))
+        sorted_wildcard_contributions = [(contrib,wildcard) for contrib, wildcard in sorted(unsorted_wildcard_contributions, key=lambda x: abs(x[0]), reverse=True)]
 
         # add kg gene nodes and edges
         edge_count = 0
@@ -230,9 +245,9 @@ class OneHopHandlerMixin:
                 }
                 # add edge
                 kg['edges']['kge{}'.format(edge_count)] = {
-                    "predicate" : 'biolink:GeneToChemicalAssociation',
-                    "subject" : wildcard,
-                    "object" : non_wildcard_curie,
+                    "predicate" : 'biolink:ChemicalToGeneAssociation',
+                    "subject" : non_wildcard_curie,
+                    "object" : wildcard,
                     "value" : contrib
                 }
             elif query_type == 'drug':
@@ -243,8 +258,8 @@ class OneHopHandlerMixin:
                 # add edge
                 kg['edges']['kge{}'.format(edge_count)] = {
                     "predicate" : 'biolink:ChemicalToGeneAssociation',
-                    "subject" : wildcard,
-                    "object" : non_wildcard_curie,
+                    "subject" : non_wildcard_curie,
+                    "object" : wildcard,
                     "value" : contrib
                 }
             # add to results
