@@ -17,6 +17,7 @@ from collections import defaultdict
 
 # Integrators
 from chp.trapi_handlers import DefaultHandler, WildCardHandler, OneHopHandler
+from chp_data.trapi_constants import *
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -29,16 +30,16 @@ def parse_query_graph(query_graph):
     try:
         parsed = defaultdict(str)
         for node_id, node in query_graph["nodes"].items():
-            if node["category"] == 'biolink:PhenotypicFeature':
+            if node["category"] == BIOLINK_PHENOTYPIC_FEATURE:
                 parsed["outcome_name"] = node_id
-            elif node["category"] == 'biolink:Drug':
+            elif node["category"] == BIOLINK_DRUG:
                 parsed["therapeutic"] = node_id
-            elif node["category"] == 'biolink:Gene':
+            elif node["category"] == BIOLINK_GENE:
                 if 'genes' in parsed:
                     parsed["genes"].append(node_id)
                 else:
                     parsed["genes"] = [node_id]
-            elif node["category"] == 'biolink:Disease':
+            elif node["category"] == BIOLINK_DISEASE:
                 parsed["genes"].append(node_id)
             else:
                 raise ValueError('Unrecognized category: {}'.format(node["category"]))
@@ -46,7 +47,7 @@ def parse_query_graph(query_graph):
         parsed["genes"] = sorted(parsed["genes"])
         # Find the outome op and value
         for edge_id, edge in query_graph["edges"].items():
-            if edge['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
+            if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
                 parsed["outcome_op"] = edge["properties"]["qualifier"]
                 parsed["outcome_value"] = edge["properties"]["days"]
         return parsed
@@ -151,21 +152,21 @@ class TrapiInterface:
             qg = query["query_graph"]
             for _, node in qg["nodes"].items():
                 if "category" in node:
-                    if node["category"] == 'biolink:Gene':
+                    if node["category"] == BIOLINK_GENE:
                         gene_flag = True
                         if 'id' not in node:
                             if not wildcard_flag:
                                 wildcard_flag = True
                             else:
                                 return False
-                    elif node["category"] == 'biolink:Drug':
+                    elif node["category"] == BIOLINK_DRUG:
                         drug_flag = True
                         if 'id' not in node:
                             if not wildcard_flag:
                                 wildcard_flag = True
                             else:
                                 return False
-                    elif node["category"] == 'biolink:Disease':
+                    elif node["category"] == BIOLINK_DISEASE:
                         disease_flag = True
         if all([gene_flag, disease_flag, drug_flag, wildcard_flag]):
             return True
@@ -187,21 +188,21 @@ class TrapiInterface:
             qg = query["query_graph"]
             for _, node in qg["nodes"].items():
                 if "category" in node:
-                    if node["category"] == 'biolink:Gene':
+                    if node["category"] == BIOLINK_GENE:
                         gene_flag = True
                         if 'id' not in node:
                             if not wildcard_flag:
                                 wildcard_flag = True
                             else:
                                 return False
-                    elif node["category"] == 'biolink:Drug':
+                    elif node["category"] == BIOLINK_DRUG:
                         drug_flag = True
                         if 'id' not in node:
                             if not wildcard_flag:
                                 wildcard_flag = True
                             else:
                                 return False
-                    elif node["category"] == 'biolink:Disease':
+                    elif node["category"] == BIOLINK_DISEASE:
                         disease_flag = True
         if all([gene_flag, drug_flag, wildcard_flag]) and not disease_flag:
             return True

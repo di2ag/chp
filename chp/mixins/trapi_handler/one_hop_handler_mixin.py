@@ -14,6 +14,8 @@ import sys
 import pickle
 from collections import defaultdict
 
+from chp_data.trapi_constants import *
+
 from chp.query import Query
 from chp.reasoner import ChpDynamicReasoner
 from chp_data.bkb_handler import BkbDataHandler
@@ -71,9 +73,9 @@ class OneHopHandlerMixin:
                     wildcard_type = node['category']
                 else:
                     sys.exit('You can only have one contribution target. Make sure to leave only one node with a black curie.')
-        if wildcard_type == 'biolink:Drug':
+        if wildcard_type == BIOLINK_DRUG:
             return 'drug'
-        elif wildcard_type == 'biolink:Gene':
+        elif wildcard_type == BIOLINK_GENE:
             return 'gene'
         else:
             raise ValueError('Did not understand wildcard type {}.'.format(wildcard_type))
@@ -100,17 +102,17 @@ class OneHopHandlerMixin:
 
         # Get non-wildcard node
         if query_type == 'gene':
-            if query["query_graph"]['nodes'][subject]['category'] != 'biolink:Gene':
-                sys.exit('Subject node must be \'category\' biolink:Gene')
+            if query["query_graph"]['nodes'][subject]['category'] != BIOLINK_GENE:
+                sys.exit('Subject node must be \'category\' {}'.format(BIOLINK_GENE))
             drug_curie = query["query_graph"]['nodes'][obj]['id']
-            if drug_curie not in self.curies["biolink:Drug"]:
+            if drug_curie not in self.curies[BIOLINK_DRUG]:
                 sys.exit('Invalid CHEMBL Identifier. Must be CHEMBL:<ID>')
             evidence['_{}'.format(drug_curie)] = 'True'
         elif query_type == 'drug':
-            if query["query_graph"]['nodes'][subject]['category'] != 'biolink:Drug':
-                sys.exit('Subject node must be \'category\' biolink:Drug')
+            if query["query_graph"]['nodes'][subject]['category'] != BIOLINK_DRUG:
+                sys.exit('Subject node must be \'category\' {}'.format(BIOLINK_DRUG))
             gene_curie = query["query_graph"]['nodes'][obj]['id']
-            if gene_curie not in self.curies["biolink:Gene"]:
+            if gene_curie not in self.curies[BIOLINK_GENE]:
                 sys.exit('Invalid ENSEMBL Identifier. Must be ENSEMBL:<ID>')
             evidence['_{}'.format(gene_curie)] = 'True'
 
@@ -219,9 +221,9 @@ class OneHopHandlerMixin:
         non_wildcard_curie = kg['nodes'][obj].pop('id')
         kg['nodes'][non_wildcard_curie] = kg['nodes'].pop(obj)
         if query_type == 'gene':
-            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name('biolink:Drug', non_wildcard_curie)
+            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name(BIOLINK_DRUG, non_wildcard_curie)
         elif query_type == 'drug':
-            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name('biolink:Gene', non_wildcard_curie)
+            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name(BIOLINK_GENE, non_wildcard_curie)
         node_bindings[obj] = non_wildcard_curie
 
         # remove wildcard gene node from kg
@@ -240,24 +242,24 @@ class OneHopHandlerMixin:
         for contrib, wildcard in sorted_wildcard_contributions[:self.max_results]:
             if query_type == 'gene':
                 kg['nodes'][wildcard] = {
-                    "name" : self._get_curie_name('biolink:Gene', wildcard),
-                    "category" : 'biolink:Gene'
+                    "name" : self._get_curie_name(BIOLINK_GENE, wildcard),
+                    "category" : BIOLINK_GENE
                 }
                 # add edge
                 kg['edges']['kge{}'.format(edge_count)] = {
-                    "predicate" : 'biolink:ChemicalToGeneAssociation',
+                    "predicate" : BIOLINK_CHEMICAL_TO_GENE_PREDICATE,
                     "subject" : wildcard,
                     "object" : non_wildcard_curie,
                     "value" : contrib
                 }
             elif query_type == 'drug':
                 kg['nodes'][wildcard] = {
-                    "name" : self._get_curie_name('biolink:Drug', wildcard),
-                    "category" : 'biolink:Drug'
+                    "name" : self._get_curie_name(BIOLINK_DRUG, wildcard),
+                    "category" : BIOLINK_DRUG
                 }
                 # add edge
                 kg['edges']['kge{}'.format(edge_count)] = {
-                    "predicate" : 'biolink:ChemicalToGeneAssociation',
+                    "predicate" : BIOLINK_CHEMICAL_TO_GENE_PREDICATE,
                     "subject" : wildcard,
                     "object" : non_wildcard_curie,
                     "value" : contrib
