@@ -261,9 +261,9 @@ class WildCardHandlerMixin:
             if qg_node_curie is not None:
                 kg['nodes'][qg_node_curie] = kg['nodes'].pop(node_key)
                 if kg['nodes'][qg_node_curie]['category'] == BIOLINK_GENE:
-                    kg['nodes'][qg_node_curie]['name'] = self.curies["biolink:Gene"][qg_node_curie]
+                    kg['nodes'][qg_node_curie]['name'] = self.curies["biolink:Gene"][qg_node_curie][0]
                 elif kg['nodes'][qg_node_curie]['category'] == BIOLINK_DRUG:
-                    kg['nodes'][qg_node_curie]['name'] = self.curies["biolink:Drug"][qg_node_curie]
+                    kg['nodes'][qg_node_curie]['name'] = self.curies["biolink:Drug"][qg_node_curie][0]
                 node_pairs[node_key] = qg_node_curie
             else:
                 kg["nodes"].pop(node_key)
@@ -284,9 +284,11 @@ class WildCardHandlerMixin:
                 kg['edges'][kg_id]['object'] = node_pairs[kg['edges'][kg_id]['object']]
                 edge_pairs[edge_key] = kg_id
                 if kg['edges'][kg_id]['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
-                    kg['edges'][kg_id]['has_confidence_level'] = chp_query.truth_prob
-                    if 'properties' in kg['edges'][kg_id].keys() and 'contributions' in kg['edges'][kg_id]['properties'].keys() and kg['edges'][kg_id]['properties']['contributions'] == True:
-                        kg['edges'][kg_id]['Description'] = chp_query.report
+                    if 'properties' in kg['edges'][kg_id].keys():
+                        kg['edges'][kg_id].pop('properties')
+                    kg['edges'][kg_id]['attributes'] = [{'name':'Probability of Survival',
+                                                         'type':BIOLINK_PROBABILITY,
+                                                         'value':chp_query.truth_prob}]
 
         # Put first result of standard prob query of only curie nodes (i.e. no wildcard nodes where used as evidence)
         results = []
@@ -311,11 +313,11 @@ class WildCardHandlerMixin:
             for node_id, node in rg["nodes"].items():
                 if node["category"] == BIOLINK_GENE and query_type == 'gene':
                     kg["nodes"][wildcard] = copy.deepcopy(node)
-                    kg["nodes"][wildcard].update({"name": self.curies[BIOLINK_GENE][wildcard]})
+                    kg["nodes"][wildcard].update({"name": self.curies[BIOLINK_GENE][wildcard][0]})
                     _node_pairs[node_id] = wildcard
                 elif node["category"] == BIOLINK_DRUG and query_type == 'drug':
                     kg["nodes"][wildcard] = copy.deepcopy(node)
-                    kg["nodes"][wildcard].update({"name": self.curies[BIOLINK_DRUG][wildcard]})
+                    kg["nodes"][wildcard].update({"name": self.curies[BIOLINK_DRUG][wildcard][0]})
                     _node_pairs[node_id] = wildcard
                 else:
                     _node_pairs[node_id] = node_pairs[node_id]
@@ -327,7 +329,10 @@ class WildCardHandlerMixin:
                     kg["edges"][kg_edge_id] = copy.deepcopy(edge)
                     kg["edges"][kg_edge_id]["subject"] = _node_pairs[kg["edges"][kg_edge_id]["subject"]]
                     kg["edges"][kg_edge_id]["object"] = _node_pairs[kg["edges"][kg_edge_id]["object"]]
-                    kg["edges"][kg_edge_id]["value"] = contrib
+                    #kg["edges"][kg_edge_id]["value"] = contrib
+                    kg["edges"][kg_edge_id]["attributes"] = [{'name':'Contribution',
+                                                              'type':BIOLINK_CONTRIBUTION,
+                                                              'value':contrib}]
                     _edge_pairs[edge_id] = kg_edge_id
                 elif query_type == 'drug'  and edge["predicate"] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE:
                     knowledge_edges += 1
@@ -335,7 +340,10 @@ class WildCardHandlerMixin:
                     kg["edges"][kg_edge_id] = copy.deepcopy(edge)
                     kg["edges"][kg_edge_id]["subject"] = _node_pairs[kg["edges"][kg_edge_id]["subject"]]
                     kg["edges"][kg_edge_id]["object"] = _node_pairs[kg["edges"][kg_edge_id]["object"]]
-                    kg["edges"][kg_edge_id]["value"] = contrib
+                    #kg["edges"][kg_edge_id]["value"] = contrib
+                    kg["edges"][kg_edge_id]["attributes"] = [{'name':'Contribution',
+                                                              'type':BIOLINK_CONTRIBUTION,
+                                                              'value':contrib}]
                     _edge_pairs[edge_id] = kg_edge_id
                 else:
                     _edge_pairs[edge_id] = edge_pairs[edge_id]
