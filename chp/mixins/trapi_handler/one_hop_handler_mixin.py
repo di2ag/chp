@@ -221,9 +221,9 @@ class OneHopHandlerMixin:
         non_wildcard_curie = kg['nodes'][obj].pop('id')
         kg['nodes'][non_wildcard_curie] = kg['nodes'].pop(obj)
         if query_type == 'gene':
-            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name(BIOLINK_DRUG, non_wildcard_curie)
+            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name(BIOLINK_DRUG, non_wildcard_curie)[0]
         elif query_type == 'drug':
-            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name(BIOLINK_GENE, non_wildcard_curie)
+            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name(BIOLINK_GENE, non_wildcard_curie)[0]
         node_bindings[obj] = non_wildcard_curie
 
         # remove wildcard gene node from kg
@@ -242,7 +242,7 @@ class OneHopHandlerMixin:
         for contrib, wildcard in sorted_wildcard_contributions[:self.max_results]:
             if query_type == 'gene':
                 kg['nodes'][wildcard] = {
-                    "name" : self._get_curie_name(BIOLINK_GENE, wildcard),
+                    "name" : self._get_curie_name(BIOLINK_GENE, wildcard)[0],
                     "category" : BIOLINK_GENE
                 }
                 # add edge
@@ -250,11 +250,13 @@ class OneHopHandlerMixin:
                     "predicate" : BIOLINK_CHEMICAL_TO_GENE_PREDICATE,
                     "subject" : wildcard,
                     "object" : non_wildcard_curie,
-                    "value" : contrib
+                    "attributes":[{'name':'Contribution',
+                                   'type':BIOLINK_CONTRIBUTION,
+                                   'value':contrib}]
                 }
             elif query_type == 'drug':
                 kg['nodes'][wildcard] = {
-                    "name" : self._get_curie_name(BIOLINK_DRUG, wildcard),
+                    "name" : self._get_curie_name(BIOLINK_DRUG, wildcard)[0],
                     "category" : BIOLINK_DRUG
                 }
                 # add edge
@@ -262,7 +264,9 @@ class OneHopHandlerMixin:
                     "predicate" : BIOLINK_CHEMICAL_TO_GENE_PREDICATE,
                     "subject" : wildcard,
                     "object" : non_wildcard_curie,
-                    "value" : contrib
+                    "attributes":[{'name':'Contribution',
+                                   'type':BIOLINK_CONTRIBUTION,
+                                   'value':contrib}]
                 }
             # add to results
             node_binding = {obj : [{'id': non_wildcard_curie}],

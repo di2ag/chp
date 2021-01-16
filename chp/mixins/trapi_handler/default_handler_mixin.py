@@ -251,9 +251,9 @@ class DefaultHandlerMixin:
             kg['nodes'][qg_node_curie] = kg['nodes'].pop(node_key)
             node_pairs[node_key] = qg_node_curie
             if kg['nodes'][qg_node_curie]['category'] == BIOLINK_GENE:
-                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name(BIOLINK_GENE, qg_node_curie)
+                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name(BIOLINK_GENE, qg_node_curie)[0]
             elif kg['nodes'][qg_node_curie]['category'] == BIOLINK_DRUG:
-                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name(BIOLINK_DRUG, qg_node_curie)
+                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name(BIOLINK_DRUG, qg_node_curie)[0]
 
         edge_pairs = dict()
         knowledge_edges = 0
@@ -265,9 +265,11 @@ class DefaultHandlerMixin:
             kg['edges'][kg_id]['object'] = node_pairs[kg['edges'][kg_id]['object']]
             edge_pairs[edge_key] = kg_id
             if kg['edges'][kg_id]['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
-                kg['edges'][kg_id]['has_confidence_level'] = chp_query.truth_prob
-                if 'properties' in kg['edges'][kg_id].keys() and 'contributions' in kg['edges'][kg_id]['properties'].keys() and kg['edges'][kg_id]['properties']['contributions'] == True:
-                    kg['edges'][kg_id]['properties'] = {'contributions':chp_query.report}
+                if 'properties' in kg['edges'][kg_id].keys():
+                    kg['edges'][kg_id].pop('properties')
+                kg['edges'][kg_id]['attributes'] = [{'name':'Probability of Survival',
+                                                     'type':BIOLINK_PROBABILITY,
+                                                     'value':chp_query.truth_prob}]
 
         results = []
         results.append({
