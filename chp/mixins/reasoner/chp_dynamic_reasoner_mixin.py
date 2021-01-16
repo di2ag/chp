@@ -13,14 +13,22 @@ class ChpDynamicReasonerMixin:
         # Construct linker
         self.linker_builder = LinkerBuilder(self.patient_data)
         logger.info('Constructed Linker Builder from processed patient data.')
-        # Load in gene prelinked bkb for bkb_data_handler
-        with open(self.bkb_handler.collapsed_gene_bkb_path, 'rb') as f_:
-            self.gene_prelinked_bkb = compress_pickle.load(f_, compression='lz4')
-        logger.info('Loaded in gene prelinked bkb from: {}'.format(self.bkb_handler.collapsed_gene_bkb_path))
-        # Load in drug prelinked bkb for bkb_data_handler
-        with open(self.bkb_handler.collapsed_drug_bkb_path, 'rb') as f_:
-            self.drug_prelinked_bkb = compress_pickle.load(f_, compression='lz4')
-        logger.info('Loaded in drug prelinked bkb from: {}'.format(self.bkb_handler.collapsed_drug_bkb_path))
+        # Load in gene prelinked bkb for bkb_data_handler or appropriate override
+        if self.gene_prelinked_bkb_override is None:
+            with open(self.bkb_handler.collapsed_gene_bkb_path, 'rb') as f_:
+                self.gene_prelinked_bkb = compress_pickle.load(f_, compression='lz4')
+            logger.info('Loaded in gene prelinked bkb from: {}'.format(self.bkb_handler.collapsed_gene_bkb_path))
+        else:
+            self.gene_prelinked_bkb = self.gene_prelinked_bkb_override
+            logger.info('Loaded override gene prelinked bkb.')
+        # Load in drug prelinked bkb for bkb_data_handler or appropriate override
+        if self.drug_prelinked_bkb_override is None:
+            with open(self.bkb_handler.collapsed_drug_bkb_path, 'rb') as f_:
+                self.drug_prelinked_bkb = compress_pickle.load(f_, compression='lz4')
+            logger.info('Loaded in drug prelinked bkb from: {}'.format(self.bkb_handler.collapsed_drug_bkb_path))
+        else:
+            self.drug_prelinked_bkb = self.drug_prelinked_bkb_override
+            logger.info('Loaded override drug prelinked bkb.')
 
     def _pool_properties(self, query, bkb):
         features_not_to_format = []
@@ -28,7 +36,8 @@ class ChpDynamicReasonerMixin:
             feature_properties = {}
         else:
             feature_properties = copy.deepcopy(query.dynamic_evidence)
-        feature_properties.update(query.dynamic_targets)
+        if query.dynamic_targets is not None:
+            feature_properties.update(query.dynamic_targets)
         for feature, state in query.evidence.items():
             if not self.linker_builder.is_feature_in_bkb(feature, bkb):
                 if feature[0] == '_':
@@ -95,7 +104,8 @@ class ChpDynamicReasonerMixin:
             targets = []
         else:
             targets = copy.copy(query.targets)
-        targets += [target_feature for target_feature in query.dynamic_targets]
+        if query.dynamic_targets is not None:
+            targets += [target_feature for target_feature in query.dynamic_targets]
         # Run update
         start_time = time.time()
         res = updating(bkb,
