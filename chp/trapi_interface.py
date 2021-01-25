@@ -168,7 +168,7 @@ class TrapiInterface:
                                 return False
                     elif node["category"] == BIOLINK_DISEASE:
                         disease_flag = True
-        if all([gene_flag, disease_flag, drug_flag, wildcard_flag]):
+        if (gene_flag or drug_flag) and all([disease_flag, wildcard_flag]):
             return True
         else:
             return False
