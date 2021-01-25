@@ -16,6 +16,7 @@ import json
 from collections import defaultdict
 
 from chp_data.bkb_handler import BkbDataHandler
+from chp_data.trapi_constants import *
 
 from chp.query import Query
 from chp.reasoner import ChpDynamicReasoner, ChpJointReasoner
@@ -66,24 +67,24 @@ class DefaultHandlerMixin:
         _found_gene = False
         _found_drug = False
         for node_key, node in query["query_graph"]["nodes"].items():
-            if node["category"] == 'biolink:PhenotypicFeature':
+            if node["category"] == BIOLINK_PHENOTYPIC_FEATURE:
                 # If we've already found the target and there's another phenotypic feature, then this isn't simple.
                 if _found_outcome:
                     return False
                 else:
                     _found_outcome = True
-            if node['category'] == 'biolink:Disease':
+            if node['category'] == BIOLINK_DISEASE:
                 # If we've already found disease and there's another disease, then this isn't simple.
                 if _found_disease:
                     return False
                 else:
                     _found_disease = True
-            if node["category"] == 'biolink:Gene':
+            if node["category"] == BIOLINK_GENE:
                 if _found_gene:
                     return False
                 else:
                     _found_gene = True
-            if node['category'] == 'biolink:Drug':
+            if node['category'] == BIOLINK_DRUG:
                 if _found_drug:
                     return False
                 else:
@@ -104,7 +105,7 @@ class DefaultHandlerMixin:
         acceptable_target_curies = ['EFO:0000714']
         for node_key in query["query_graph"]['nodes'].keys():
             node = query["query_graph"]['nodes'][node_key]
-            if node['category'] == 'biolink:PhenotypicFeature' and node['id'] in acceptable_target_curies:
+            if node['category'] == BIOLINK_PHENOTYPIC_FEATURE and node['id'] in acceptable_target_curies:
                 target_id = node_key
                 total_nodes += 1
         if total_nodes == 0:
@@ -117,11 +118,11 @@ class DefaultHandlerMixin:
         acceptable_disease_curies = ['MONDO:0007254']
         for node_key in query["query_graph"]['nodes'].keys():
             node = query["query_graph"]['nodes'][node_key]
-            if node['category'] == 'biolink:Disease' and node['id'] in acceptable_disease_curies:
+            if node['category'] == BIOLINK_DISEASE and node['id'] in acceptable_disease_curies:
                 disease_id = node_key
                 for edge_key in query["query_graph"]['edges'].keys():
                     edge = query["query_graph"]['edges'][edge_key]
-                    if edge['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation' and edge['subject'] == disease_id and edge['object'] == target_id:
+                    if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE and edge['subject'] == disease_id and edge['object'] == target_id:
                         if 'properties' in edge.keys():
                             days = edge['properties']['days']
                             qualifier = edge['properties']['qualifier']
@@ -150,40 +151,40 @@ class DefaultHandlerMixin:
         for node_key in query["query_graph"]['nodes'].keys():
             # genes
             node = query["query_graph"]['nodes'][node_key]
-            if node['category'] == 'biolink:Gene':
+            if node['category'] == BIOLINK_GENE:
                 # check for appropriate gene node structure
                 gene_id = node_key
                 for edge_key in query["query_graph"]['edges'].keys():
                     edge = query["query_graph"]['edges'][edge_key]
-                    if edge['predicate'] == 'biolink:GeneToDiseaseAssociation' and edge['subject'] == gene_id and edge['object'] == disease_id:
+                    if edge['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE and edge['subject'] == gene_id and edge['object'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
-                    sys.exit('Gene and disease edge not found. Edge type must be \'biolink:GeneToDiseaseAssociation\'')
+                    sys.exit("Gene and disease edge not found. Edge type must be '{}'".format(BIOLINK_GENE_TO_DISEASE_PREDICATE))
                 elif total_edges > total_nodes:
                     sys.exit('Gene has too many outgoing edges')
                 # check for appropriate gene node curie
                 gene_curie = node['id']
-                if gene_curie in self.curies["biolink:Gene"]:
+                if gene_curie in self.curies[BIOLINK_GENE]:
                     gene = gene_curie
                 else:
                     sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
                 evidence["_" + gene] = 'True'
                 total_nodes += 1
             # drugs
-            if node['category'] == 'biolink:Drug':
+            if node['category'] == BIOLINK_DRUG:
                 # check for appropriate drug node structure
                 drug_id = node_key
                 for edge_key in query["query_graph"]['edges'].keys():
                     edge = query["query_graph"]['edges'][edge_key]
-                    if edge['predicate'] == 'biolink:ChemicalToDiseaseOrPhenotypicFeatureAssociation' and edge['subject'] == drug_id and edge['object'] == disease_id:
+                    if edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE and edge['subject'] == drug_id and edge['object'] == disease_id:
                         total_edges += 1
                 if total_edges == total_nodes - 1:
-                    sys.exit('Drug and disease edge not found. Edge type must be \'biolink:ChemicalToDiseaseOrPhenotypicFeatureAssociation\'')
+                    sys.exit("Drug and disease edge not found. Edge type must be '{}'".format(BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE))
                 elif total_edges > total_nodes:
                     sys.exit('Drug has too many outgoing edges')
                 # check for appropriate drug node curie
                 drug_curie = node['id']
-                if drug_curie in self.curies["biolink:Drug"]:
+                if drug_curie in self.curies[BIOLINK_DRUG]:
                     drug = drug_curie
                 else:
                     sys.exit('Invalid CHEMBL Identifier: {}. Must be in form CHEMBL:<ID>'.format(drug_curie))
@@ -249,10 +250,10 @@ class DefaultHandlerMixin:
             qg_node_curie = kg['nodes'][node_key].pop('id')
             kg['nodes'][qg_node_curie] = kg['nodes'].pop(node_key)
             node_pairs[node_key] = qg_node_curie
-            if kg['nodes'][qg_node_curie]['category'] == 'biolink:Gene':
-                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name('biolink:Gene', qg_node_curie)
-            elif kg['nodes'][qg_node_curie]['category'] == 'biolink:Drug':
-                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name('biolink:Drug', qg_node_curie)
+            if kg['nodes'][qg_node_curie]['category'] == BIOLINK_GENE:
+                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name(BIOLINK_GENE, qg_node_curie)[0]
+            elif kg['nodes'][qg_node_curie]['category'] == BIOLINK_DRUG:
+                kg['nodes'][qg_node_curie]['name'] = self._get_curie_name(BIOLINK_DRUG, qg_node_curie)[0]
 
         edge_pairs = dict()
         knowledge_edges = 0
@@ -263,10 +264,12 @@ class DefaultHandlerMixin:
             kg['edges'][kg_id]['subject'] = node_pairs[kg['edges'][kg_id]['subject']]
             kg['edges'][kg_id]['object'] = node_pairs[kg['edges'][kg_id]['object']]
             edge_pairs[edge_key] = kg_id
-            if kg['edges'][kg_id]['predicate'] == 'biolink:DiseaseToPhenotypicFeatureAssociation':
-                kg['edges'][kg_id]['has_confidence_level'] = chp_query.truth_prob
-                if 'properties' in kg['edges'][kg_id].keys() and 'contributions' in kg['edges'][kg_id]['properties'].keys() and kg['edges'][kg_id]['properties']['contributions'] == True:
-                    kg['edges'][kg_id]['properties'] = {'contributions':chp_query.report}
+            if kg['edges'][kg_id]['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
+                if 'properties' in kg['edges'][kg_id].keys():
+                    kg['edges'][kg_id].pop('properties')
+                kg['edges'][kg_id]['attributes'] = [{'name':'Probability of Survival',
+                                                     'type':BIOLINK_PROBABILITY,
+                                                     'value':chp_query.truth_prob}]
 
         results = []
         results.append({
