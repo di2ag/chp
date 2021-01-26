@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def parse_query_graph(query_graph):
     """ Will extract the parameters that were used to build the query from the client.
     """
-    #try:
+    try:
         parsed = defaultdict(str)
         for node_id, node in query_graph["nodes"].items():
             if node["category"] == BIOLINK_PHENOTYPIC_FEATURE:
