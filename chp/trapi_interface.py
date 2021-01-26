@@ -44,7 +44,8 @@ def parse_query_graph(query_graph):
             else:
                 raise ValueError('Unrecognized category: {}'.format(node["category"]))
         # Sort the genes
-        parsed["genes"] = sorted(parsed["genes"])
+        if 'genes' in parsed:
+            parsed["genes"] = sorted(parsed["genes"])
         # Find the outome op and value
         for edge_id, edge in query_graph["edges"].items():
             if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
