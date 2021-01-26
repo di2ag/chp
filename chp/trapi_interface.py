@@ -48,8 +48,13 @@ def parse_query_graph(query_graph):
         # Find the outome op and value
         for edge_id, edge in query_graph["edges"].items():
             if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
-                parsed["outcome_op"] = edge["properties"]["qualifier"]
-                parsed["outcome_value"] = edge["properties"]["days"]
+                if 'properties' in edge.keys():
+                    parsed["outcome_op"] = edge["properties"]["qualifier"]
+                    parsed["outcome_value"] = edge["properties"]["days"]
+                # default
+                else:
+                    parsed["outcome_op"] = ">="
+                    parsed["outcome_value"] = 970
         return parsed
     except:
         return None
