@@ -28,37 +28,37 @@ def parse_query_graph(query_graph):
     """ Will extract the parameters that were used to build the query from the client.
     """
     #try:
-    parsed = defaultdict(str)
-    for node_id, node in query_graph["nodes"].items():
-        if node["category"] == BIOLINK_PHENOTYPIC_FEATURE:
-            parsed["outcome_name"] = node_id
-        elif node["category"] == BIOLINK_DRUG:
-            parsed["therapeutic"] = node_id
-        elif node["category"] == BIOLINK_GENE:
-            if 'genes' in parsed:
-                parsed["genes"].append(node_id)
+        parsed = defaultdict(str)
+        for node_id, node in query_graph["nodes"].items():
+            if node["category"] == BIOLINK_PHENOTYPIC_FEATURE:
+                parsed["outcome_name"] = node_id
+            elif node["category"] == BIOLINK_DRUG:
+                parsed["therapeutic"] = node_id
+            elif node["category"] == BIOLINK_GENE:
+                if 'genes' in parsed:
+                    parsed["genes"].append(node_id)
+                else:
+                    parsed["genes"] = [node_id]
+            elif node["category"] == BIOLINK_DISEASE:
+                parsed["disease"] = node_id
             else:
-                parsed["genes"] = [node_id]
-        elif node["category"] == BIOLINK_DISEASE:
-            parsed["genes"].append(node_id)
-        else:
-            raise ValueError('Unrecognized category: {}'.format(node["category"]))
-    # Sort the genes
-    if 'genes' in parsed:
-        parsed["genes"] = sorted(parsed["genes"])
-    # Find the outome op and value
-    for edge_id, edge in query_graph["edges"].items():
-        if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
-            if 'properties' in edge.keys():
-                parsed["outcome_op"] = edge["properties"]["qualifier"]
-                parsed["outcome_value"] = edge["properties"]["days"]
-            # default
-            else:
-                parsed["outcome_op"] = ">="
-                parsed["outcome_value"] = 970
-    return parsed
-    #except:
-    #    return None
+                raise ValueError('Unrecognized category: {}'.format(node["category"]))
+        # Sort the genes
+        if 'genes' in parsed:
+            parsed["genes"] = sorted(parsed["genes"])
+        # Find the outome op and value
+        for edge_id, edge in query_graph["edges"].items():
+            if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
+                if 'properties' in edge.keys():
+                    parsed["outcome_op"] = edge["properties"]["qualifier"]
+                    parsed["outcome_value"] = edge["properties"]["days"]
+                # default
+                else:
+                    parsed["outcome_op"] = ">="
+                    parsed["outcome_value"] = 970
+        return parsed
+    except:
+        return None
 
 class TrapiInterface:
     def __init__(self,
