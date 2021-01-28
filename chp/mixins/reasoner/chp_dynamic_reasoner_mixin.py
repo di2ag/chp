@@ -120,4 +120,5 @@ class ChpDynamicReasonerMixin:
         # Update query with results
         query.result = res
         query.compute_time = compute_time
+        query.bkb = linked_bkb
         return query

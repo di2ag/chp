@@ -34,7 +34,6 @@ if args.dir is None:
 else:
     os.system("ln -s {} {}".format(os.path.join(WORKING_DIR, 'submodules/chp/chp'), LINK_PATH))
 
-input()
 print('Now running PyBKB setup...')
 #-- Run setup for PyBKB
 os.system("cd submodules/PyBKB; python3 setup_for_development.py --env {} --no_cpp --no_copy".format(args.env))

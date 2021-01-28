@@ -28,7 +28,10 @@ with open(bkb_handler.patient_data_pk_path, 'rb') as f_:
 
 # Setup Discretization Scheme
 discretization_scheme = {
-    "EFO:0000714": 5
+    "EFO:0000714": {
+        "nbins": 5,
+        "criteria": 'equal_frequency'
+        }
 }
 
 # Setup BKB builder
@@ -36,14 +39,14 @@ builder = PatientBkbBuilder(
     patient_data,
     bkb_handler,
     discretization_scheme=discretization_scheme,
-    num_genes=None,
-    num_drugs=None,
+    num_genes=5,
+    num_drugs=2,
 )
 
 
 # Set build option: gene or drug
 BUILD = 'gene'
-RESET = False
+RESET = True
 
 if os.path.exists('collapsed_{}.bkb'.format(BUILD)) and not RESET:
     logger.info('Using saved collapsed bkb found in current directory,')
@@ -86,7 +89,7 @@ dynamic_reasoner = ChpDynamicReasoner(bkb_handler=bkb_handler,
                                       gene_prelinked_bkb_override=collapsed_bkb)
 
 # Query run function to be used with multiprocessing
-def worker_fn(gene, drug):
+def worker_fn(gene, drug, print_bkb=False, print_inf=False):
     evidence = {
         gene: 'True',
         drug: 'True'
@@ -97,6 +100,17 @@ def worker_fn(gene, drug):
     )
     # Run query(s)
     _query =  dynamic_reasoner.run_query(_query)
+
+    if print_bkb:
+        _query.bkb.makeGraph()
+    if print_inf:
+        updates = _query.result.process_updates()
+        for target_comp, state_prob in updates.items():
+            for target_state in state_prob:
+                print(target_comp, target_state)
+                for idx in range(_query.result.number_of_inferences(target_comp, target_state)):
+                    inf = _query.result.get_inference(target_comp, target_state, idx)
+                    _query.result.graph_inference(inf)
 
     # Print/Collect results
     return {(gene, drug): _query.result.process_updates()}
@@ -139,8 +153,18 @@ def main():
     q_listener.stop()
     return result
 
+def bkb_debug():
+    for gene in top_genes:
+        for drug in top_drugs:
+            print(gene)
+            print(drug)
+            res = worker_fn(gene, drug, print_bkb=False, print_inf=True)
+            input('Continue?')
+
 start_time = time.time()
 result_list = main()
+bkb_debug()
+
 # Process result
 res = {}
 for _res in result_list:
