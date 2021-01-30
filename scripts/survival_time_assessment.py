@@ -27,10 +27,11 @@ with open(bkb_handler.patient_data_pk_path, 'rb') as f_:
     patient_data = pickle.load(f_)
 
 # Setup Discretization Scheme
+CRITERIA = 'linspace'
 discretization_scheme = {
     "EFO:0000714": {
         "nbins": 5,
-        "criteria": 'equal_frequency'
+        "criteria": CRITERIA
         }
 }
 
@@ -39,8 +40,8 @@ builder = PatientBkbBuilder(
     patient_data,
     bkb_handler,
     discretization_scheme=discretization_scheme,
-    num_genes=5,
-    num_drugs=2,
+    num_genes=None,
+    num_drugs=None,
 )
 
 
@@ -163,7 +164,7 @@ def bkb_debug():
 
 start_time = time.time()
 result_list = main()
-bkb_debug()
+#bkb_debug()
 
 # Process result
 res = {}
@@ -193,5 +194,5 @@ for i, gene in enumerate(top_genes):
         #print(_query.result.process_updates())
 '''
 logger.info('Total Multiprocessing time: {}'.format(time.time() - start_time))
-with open('results-{}.pk'.format(time.time()), 'wb') as f_:
+with open('results-{}-{}.pk'.format(CRITERIA, time.time()), 'wb') as f_:
     pickle.dump(res, f_)
