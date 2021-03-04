@@ -53,8 +53,6 @@ class WildCardHandlerMixin:
             if 'id' not in node:
                 if wildcard_type is None:
                     wildcard_type = node['category']
-                else:
-                    sys.exit('You can only have one contribution target. Make sure to leave only one node with a black curie.')
         if wildcard_type == BIOLINK_DRUG:
             return 'drug'
         elif wildcard_type == BIOLINK_GENE:
@@ -87,8 +85,6 @@ class WildCardHandlerMixin:
             #acceptable_target_curies_print = ','.join(acceptable_target_curies)
             #sys.exit("Survival Node not found. Node category must be '{}' and id must be in: {}".format(BIOLINK_PHENOTYPIC_FEATURE,
             #                                                                                            acceptable_target_curies_print))
-        elif total_nodes > 1:
-            sys.exit('Too many target nodes')
 
         # get disease node info and ensure only 1 disease:
         acceptable_disease_curies = ['MONDO:0007254']
@@ -106,8 +102,6 @@ class WildCardHandlerMixin:
                             days = 970
                             qualifier = '>='
                         total_edges += 1
-                if total_edges > 1:
-                    sys.exit('Disease has too many outgoing edges')
                 total_nodes += 1
 
         if self.implicit_survival_node:
@@ -115,12 +109,6 @@ class WildCardHandlerMixin:
             qualifier = '>='
             total_edges += 1
 
-        if total_nodes  == 1:
-            acceptable_disease_curies_print = ','.join(acceptable_disease_curies)
-            sys.exit("Disease node not found. Node type must be '{}' and curie must be in: {}".format(BIOLINK_DISEASE,
-                                                                                                      acceptable_disease_curies_print))
-        elif total_nodes > 2:
-            sys.exit('Too many disease nodes')
         # set BKB target
         dynamic_targets['EFO:0000714'] = {
             "op": qualifier,
@@ -139,17 +127,11 @@ class WildCardHandlerMixin:
                     edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE and edge['subject'] == gene_id and edge['object'] == disease_id:
                         total_edges += 1
-                if total_edges == total_nodes - 1:
-                    sys.exit("Gene and disease edge not found. Edge type must be '{}'".format(BIOLINK_GENE_TO_DISEASE_PREDICATE))
-                elif total_edges > total_nodes:
-                    sys.exit('Gene has too many outgoing edges')
                 # check for appropriate gene node curie
                 if query_type != 'gene':
                     gene_curie = node['id']
                     if gene_curie in self.curies[BIOLINK_GENE]:
                         gene = gene_curie
-                    else:
-                        sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
                     evidence["_" + gene] = 'True'
                 total_nodes += 1
             # drugs
@@ -160,17 +142,11 @@ class WildCardHandlerMixin:
                     edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE and edge['subject'] == drug_id and edge['object'] == disease_id:
                         total_edges += 1
-                if total_edges == total_nodes - 1:
-                    sys.exit("Drug and disease edge not found. Edge type must be '{}'".format(BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE))
-                elif total_edges > total_nodes:
-                    sys.exit('Drug has too many outgoing edges')
                 # check for appropriate drug node curie
                 if query_type != 'drug':
                     drug_curie = node['id']
                     if drug_curie in self.curies[BIOLINK_DRUG]:
                         drug = drug_curie
-                    else:
-                        sys.exit('Invalid CHEMBL Identifier: {}. Must be in form CHEMBL:<ID>'.format(drug_curie))
                     evidence['_' + drug] = 'True'
                 total_nodes += 1
 

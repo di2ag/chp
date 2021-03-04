@@ -29,6 +29,11 @@ class testDefaultHandler(unittest.TestCase):
         7. Test with no target (should crash)
         8. Test with no disease
         9. Test default survival
+       10. Test illegal gene to disease
+       11. Test illegal drug to disease
+       12. Test illegal disease to phenotype
+       13. Test illegal edge from gene to drug
+       14. Test unknown edge
     """
 
     def test_negative(self):
@@ -395,45 +400,38 @@ class testDefaultHandler(unittest.TestCase):
     def test_no_target(self):
         """ Test with no target (should crash)
         """
-        with self.assertRaises(SystemExit) as se:
+        # empty response
+        reasoner_std = { "query_graph": dict()
+                       }
 
-            # empty response
-            reasoner_std = { "query_graph": dict()
-                           }
-
-            # empty query graph
-            reasoner_std["query_graph"] = { "edges": dict(),
-                                            "nodes": dict()
-                                          }
-
-            handler = TrapiInterface(query=reasoner_std)
-            queries = handler.build_chp_queries()
-
-        self.assertEqual(se.exception.code, 'Survival Node not found. Node category must be \'biolink:PhenotypicFeature\' and id must be in: EFO:0000714')
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": dict(),
+                                        "nodes": dict()
+                                      }
+        handler = TrapiInterface(query=reasoner_std)
+        queries = handler.build_chp_queries()
+        print(handler.error_msg)
 
     def test_no_disease(self):
         """ Test with no disease
         """
-        with self.assertRaises(SystemExit) as se:
+        # empty response
+        reasoner_std = { "query_graph": dict()
+                       }
 
-            # empty response
-            reasoner_std = { "query_graph": dict()
-                           }
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": dict(),
+                                        "nodes": dict()
+                                      }
 
-            # empty query graph
-            reasoner_std["query_graph"] = { "edges": dict(),
-                                            "nodes": dict()
-                                          }
-
-            # add target survival node
-            phenotype = ('Survival_Time', 'EFO:0000714')
-            reasoner_std['query_graph']['nodes']['n2'] = { 'category': BIOLINK_PHENOTYPIC_FEATURE,
-                                                           'id': '{}'.format(phenotype[1]),
-                                                         }
-            handler = TrapiInterface(query=reasoner_std)
-            queries = handler.build_chp_queries()
-
-        self.assertEqual(se.exception.code, 'Disease node not found. Node type must be \'biolink:Disease\' and curie must be in: MONDO:0007254')
+        # add target survival node
+        phenotype = ('Survival_Time', 'EFO:0000714')
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': BIOLINK_PHENOTYPIC_FEATURE,
+                                                       'id': '{}'.format(phenotype[1]),
+                                                     }
+        handler = TrapiInterface(query=reasoner_std)
+        queries = handler.build_chp_queries()
+        print(handler.error_msg)
 
     def test_default_survival(self):
         """ Test default survival
@@ -490,6 +488,254 @@ class testDefaultHandler(unittest.TestCase):
             if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
                 p_survival = edge['attributes'][0]['value']
         print("probability of survival:",p_survival)
+
+    def test_illegal_gene_to_disease(self):
+        """ backwards gene to disease edge. Should return appropriate error message
+        """
+
+        # empty response
+        reasoner_std = { "query_graph": dict()
+                       }
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": dict(),
+                                        "nodes": dict()
+                                      }
+
+        # add in evidence gene
+        gene1 = ('RAF1', 'ENSEMBL:ENSG00000132155')
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':BIOLINK_GENE,
+                                                       'id':'{}'.format(gene1[1])
+                                                     }
+        # add in disease node
+        disease = ('Breast_Cancer', 'MONDO:0007254')
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category':BIOLINK_DISEASE,
+                                                       'id':'{}'.format(disease[1])
+                                                     }
+        # add target survival node
+        phenotype = ('Survival_Time', 'EFO:0000714')
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': BIOLINK_PHENOTYPIC_FEATURE,
+                                                       'id': '{}'.format(phenotype[1]),
+                                                     }
+        # link genes/drugs to disease
+        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':BIOLINK_GENE_TO_DISEASE_PREDICATE,
+                                                       'subject': 'n1',
+                                                       'object': 'n0'
+                                                     }
+        # link disease to target
+        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n1',
+                                                       'object': 'n2',
+                                                       'properties': { 'qualifier':'>=',
+                                                                       'days':970
+                                                                     }
+                                                     }
+
+        # test input is TRAPI compliant
+        validate_Message(reasoner_std) # doesn't return True/False for some reason... Will just present exception if not compliant
+
+        handler = TrapiInterface(query=reasoner_std)
+        queries = handler.build_chp_queries()
+        self.assertEqual('Default type detected. Gene to disease edge (edge id: e0) malformed.', handler.error_msg)
+
+    def test_illegal_drug_to_disease(self):
+        """ drug to disease edge is backwards. Should return appropriate error message.
+        """
+        # empty response
+        reasoner_std = { "query_graph": dict()
+                       }
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": dict(),
+                                        "nodes": dict()
+                                      }
+
+        # add in evidence drug
+        drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':BIOLINK_DRUG,
+                                                       'id':'{}'.format(drug[1])
+                                                     }
+         # add in disease node
+        disease = ('Breast_Cancer', 'MONDO:0007254')
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category':BIOLINK_DISEASE,
+                                                       'id':'{}'.format(disease[1])
+                                                     }
+        # add target survival node
+        phenotype = ('Survival_Time', 'EFO:0000714')
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': BIOLINK_PHENOTYPIC_FEATURE,
+                                                       'id': '{}'.format(phenotype[1]),
+                                                     }
+        # link genes/drugs to disease
+        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n1',
+                                                       'object': 'n0'
+                                                     }
+
+        # link disease to target
+        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n1',
+                                                       'object': 'n2',
+                                                       'properties': { 'qualifier':'>=',
+                                                                       'days':970
+                                                                     }
+                                                     }
+        # test input is TRAPI compliant
+        validate_Message(reasoner_std) # doesn't return True/False for some reason... Will just present exception if not compliant
+
+        handler = TrapiInterface(query=reasoner_std)
+        queries = handler.build_chp_queries()
+        self.assertEqual('Default type detected. Chemical to disease edge (edge id: e0) malformed.', handler.error_msg)
+
+    def test_illegal_disease_to_phenotype(self):
+        """ disease to phenotype edge is backwards. Should return appropriate error message.
+        """
+        # empty response
+        reasoner_std = { "query_graph": dict()
+                       }
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": dict(),
+                                        "nodes": dict()
+                                      }
+
+        # add in evidence drug
+        drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':BIOLINK_DRUG,
+                                                       'id':'{}'.format(drug[1])
+                                                     }
+         # add in disease node
+        disease = ('Breast_Cancer', 'MONDO:0007254')
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category':BIOLINK_DISEASE,
+                                                       'id':'{}'.format(disease[1])
+                                                     }
+        # add target survival node
+        phenotype = ('Survival_Time', 'EFO:0000714')
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': BIOLINK_PHENOTYPIC_FEATURE,
+                                                       'id': '{}'.format(phenotype[1]),
+                                                     }
+        # link genes/drugs to disease
+        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n0',
+                                                       'object': 'n1'
+                                                     }
+
+        # link disease to target
+        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n2',
+                                                       'object': 'n1',
+                                                       'properties': { 'qualifier':'>=',
+                                                                       'days':970
+                                                                     }
+                                                     }
+        # test input is TRAPI compliant
+        validate_Message(reasoner_std) # doesn't return True/False for some reason... Will just present exception if not compliant
+
+        handler = TrapiInterface(query=reasoner_std)
+        queries = handler.build_chp_queries()
+        self.assertEqual('Default type detected. Disease to phenotype edge (edge id: e1) malformed.', handler.error_msg)
+
+    def test_illegal_edge(self):
+        """ uses gene to drug edge that is incompatible with this query type. Should return appropriate error message.
+        """
+        # empty response
+        reasoner_std = { "query_graph": dict()
+                       }
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": dict(),
+                                        "nodes": dict()
+                                      }
+
+        # add in evidence drug
+        drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':BIOLINK_DRUG,
+                                                       'id':'{}'.format(drug[1])
+                                                     }
+         # add in disease node
+        disease = ('Breast_Cancer', 'MONDO:0007254')
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category':BIOLINK_DISEASE,
+                                                       'id':'{}'.format(disease[1])
+                                                     }
+        # add target survival node
+        phenotype = ('Survival_Time', 'EFO:0000714')
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': BIOLINK_PHENOTYPIC_FEATURE,
+                                                       'id': '{}'.format(phenotype[1]),
+                                                     }
+        # link genes/drugs to disease
+        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n0',
+                                                       'object': 'n1'
+                                                     }
+
+        # link disease to target
+        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n1',
+                                                       'object': 'n2',
+                                                       'properties': { 'qualifier':'>=',
+                                                                       'days':970
+                                                                     }
+                                                     }
+
+        reasoner_std['query_graph']['edges']['e2'] = { 'predicate':BIOLINK_CHEMICAL_TO_GENE_PREDICATE,
+                                                       'subject': 'n0',
+                                                       'object': 'n1'
+                                                     }
+
+        # test input is TRAPI compliant
+        validate_Message(reasoner_std) # doesn't return True/False for some reason... Will just present exception if not compliant
+
+        handler = TrapiInterface(query=reasoner_std)
+        queries = handler.build_chp_queries()
+        self.assertEqual('Default type detected. Received edge between gene and chemical (edge id: e2). This edge is incompatible with default type.', handler.error_msg)
+
+    def test_unknown_edge(self):
+        """ tests unknown edge. Should return appropriate error message.
+        """
+         # empty response
+        reasoner_std = { "query_graph": dict()
+                       }
+        # empty query graph
+        reasoner_std["query_graph"] = { "edges": dict(),
+                                        "nodes": dict()
+                                      }
+
+        # add in evidence drug
+        drug = ('CYCLOPHOSPHAMIDE', 'CHEMBL:CHEMBL88')
+        reasoner_std['query_graph']['nodes']['n0'] = { 'category':BIOLINK_DRUG,
+                                                       'id':'{}'.format(drug[1])
+                                                     }
+         # add in disease node
+        disease = ('Breast_Cancer', 'MONDO:0007254')
+        reasoner_std['query_graph']['nodes']['n1'] = { 'category':BIOLINK_DISEASE,
+                                                       'id':'{}'.format(disease[1])
+                                                     }
+        # add target survival node
+        phenotype = ('Survival_Time', 'EFO:0000714')
+        reasoner_std['query_graph']['nodes']['n2'] = { 'category': BIOLINK_PHENOTYPIC_FEATURE,
+                                                       'id': '{}'.format(phenotype[1]),
+                                                     }
+        # link genes/drugs to disease
+        reasoner_std['query_graph']['edges']['e0'] = { 'predicate':BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n0',
+                                                       'object': 'n1'
+                                                     }
+
+        # link disease to target
+        reasoner_std['query_graph']['edges']['e1'] = { 'predicate':BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE,
+                                                       'subject': 'n1',
+                                                       'object': 'n2',
+                                                       'properties': { 'qualifier':'>=',
+                                                                       'days':970
+                                                                     }
+                                                     }
+
+        reasoner_std['query_graph']['edges']['e2'] = { 'predicate':'biolink:unknown',
+                                                       'subject': 'n0',
+                                                       'object': 'n1'
+                                                     }
+
+        # test input is TRAPI compliant
+        validate_Message(reasoner_std) # doesn't return True/False for some reason... Will just present exception if not compliant
+
+        handler = TrapiInterface(query=reasoner_std)
+        queries = handler.build_chp_queries()
+        self.assertEqual('Default type detected. Unknown predicate type for edge (edge id: e2).', handler.error_msg)
 
 if __name__ == '__main__':
     unittest.main()

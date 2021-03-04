@@ -102,27 +102,22 @@ class DefaultHandlerMixin:
 
         # get phenotype node
         targets = list()
-        acceptable_target_curies = ['EFO:0000714']
         for node_key in query["query_graph"]['nodes'].keys():
             node = query["query_graph"]['nodes'][node_key]
-            if node['category'] == BIOLINK_PHENOTYPIC_FEATURE and node['id'] in acceptable_target_curies:
+            if node['category'] == BIOLINK_PHENOTYPIC_FEATURE:
                 target_id = node_key
                 total_nodes += 1
-        if total_nodes == 0:
-            acceptable_target_curies_print = ','.join(acceptable_target_curies)
-            sys.exit('Survival Node not found. Node category must be \'biolink:PhenotypicFeature\' and id must be in: ' + acceptable_target_curies_print)
-        elif total_nodes > 1:
-            sys.exit('Too many target nodes')
 
+        qualifier_found = False
         # get disease node info and ensure only 1 disease:
-        acceptable_disease_curies = ['MONDO:0007254']
         for node_key in query["query_graph"]['nodes'].keys():
             node = query["query_graph"]['nodes'][node_key]
-            if node['category'] == BIOLINK_DISEASE and node['id'] in acceptable_disease_curies:
+            if node['category'] == BIOLINK_DISEASE:
                 disease_id = node_key
                 for edge_key in query["query_graph"]['edges'].keys():
                     edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE and edge['subject'] == disease_id and edge['object'] == target_id:
+                        qualifier_found = True
                         if 'properties' in edge.keys():
                             days = edge['properties']['days']
                             qualifier = edge['properties']['qualifier']
@@ -130,16 +125,7 @@ class DefaultHandlerMixin:
                             days = 970
                             qualifier = '>='
                         total_edges += 1
-                if total_edges == 0:
-                    sys.exit('Disease and target edge not found. Edge type must be \'biolink:DiseaseToPhenotypicFeatureAssociation\'')
-                elif total_edges > 1:
-                    sys.exit('Disease has too many outgoing edges')
                 total_nodes += 1
-        if total_nodes  == 1:
-            acceptable_disease_curies_print = ','.join(acceptable_disease_curies)
-            sys.exit('Disease node not found. Node type must be \'biolink:Disease\' and curie must be in: ' + acceptable_disease_curies_print)
-        elif total_nodes > 2:
-            sys.exit('Too many disease nodes')
         # set BKB target
         dynamic_targets[node["id"]] = {
             "op": qualifier,
@@ -158,16 +144,9 @@ class DefaultHandlerMixin:
                     edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE and edge['subject'] == gene_id and edge['object'] == disease_id:
                         total_edges += 1
-                if total_edges == total_nodes - 1:
-                    sys.exit("Gene and disease edge not found. Edge type must be '{}'".format(BIOLINK_GENE_TO_DISEASE_PREDICATE))
-                elif total_edges > total_nodes:
-                    sys.exit('Gene has too many outgoing edges')
                 # check for appropriate gene node curie
                 gene_curie = node['id']
-                if gene_curie in self.curies[BIOLINK_GENE]:
-                    gene = gene_curie
-                else:
-                    sys.exit('Invalid ENSEMBL Identifier. Must be in form ENSEMBL:<ID>.')
+                gene = gene_curie
                 evidence["_" + gene] = 'True'
                 total_nodes += 1
             # drugs
@@ -178,21 +157,11 @@ class DefaultHandlerMixin:
                     edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE and edge['subject'] == drug_id and edge['object'] == disease_id:
                         total_edges += 1
-                if total_edges == total_nodes - 1:
-                    sys.exit("Drug and disease edge not found. Edge type must be '{}'".format(BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE))
-                elif total_edges > total_nodes:
-                    sys.exit('Drug has too many outgoing edges')
                 # check for appropriate drug node curie
                 drug_curie = node['id']
-                if drug_curie in self.curies[BIOLINK_DRUG]:
-                    drug = drug_curie
-                else:
-                    sys.exit('Invalid CHEMBL Identifier: {}. Must be in form CHEMBL:<ID>'.format(drug_curie))
+                drug = drug_curie
                 evidence[node["id"]] = 'True'
                 total_nodes += 1
-
-        if total_nodes != len(query["query_graph"]['nodes']) or total_edges != len(query["query_graph"]['edges']):
-            sys.exit('There are extra components in the provided QG structure')
 
         # produce BKB query
         chp_query = Query(

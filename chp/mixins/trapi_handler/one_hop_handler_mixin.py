@@ -71,8 +71,6 @@ class OneHopHandlerMixin:
             if 'id' not in node:
                 if wildcard_type is None:
                     wildcard_type = node['category']
-                else:
-                    sys.exit('You can only have one contribution target. Make sure to leave only one node with a black curie.')
         if wildcard_type == BIOLINK_DRUG:
             return 'drug'
         elif wildcard_type == BIOLINK_GENE:
@@ -89,31 +87,18 @@ class OneHopHandlerMixin:
         evidence = {}
         dynamic_targets = {}
 
-        if len(query["query_graph"]['nodes']) > 2 or len(query["query_graph"]['edges']) > 1:
-            sys.exit('1 hop quries can only have 2 nodes and 1 edge')
-
         # check edge for source and target
         edge_key = list(query["query_graph"]["edges"].keys())[0]
         edge = query["query_graph"]['edges'][edge_key]
-        if 'subject' not in edge.keys() or 'object' not in edge.keys():
-            sys.exit('Edge must have both a \'subject\' and and \'object\' key')
         subject = edge['subject']
         obj = edge['object']
 
         # Get non-wildcard node
         if query_type == 'gene':
-            if query["query_graph"]['nodes'][subject]['category'] != BIOLINK_GENE:
-                sys.exit('Subject node must be \'category\' {}'.format(BIOLINK_GENE))
             drug_curie = query["query_graph"]['nodes'][obj]['id']
-            if drug_curie not in self.curies[BIOLINK_DRUG]:
-                sys.exit('Invalid CHEMBL Identifier. Must be CHEMBL:<ID>')
             evidence['_{}'.format(drug_curie)] = 'True'
         elif query_type == 'drug':
-            if query["query_graph"]['nodes'][subject]['category'] != BIOLINK_DRUG:
-                sys.exit('Subject node must be \'category\' {}'.format(BIOLINK_DRUG))
             gene_curie = query["query_graph"]['nodes'][obj]['id']
-            if gene_curie not in self.curies[BIOLINK_GENE]:
-                sys.exit('Invalid ENSEMBL Identifier. Must be ENSEMBL:<ID>')
             evidence['_{}'.format(gene_curie)] = 'True'
 
         # default survival time
