@@ -108,7 +108,6 @@ class DefaultHandlerMixin:
                 target_id = node_key
                 total_nodes += 1
 
-        qualifier_found = False
         # get disease node info and ensure only 1 disease:
         for node_key in query["query_graph"]['nodes'].keys():
             node = query["query_graph"]['nodes'][node_key]
@@ -117,7 +116,6 @@ class DefaultHandlerMixin:
                 for edge_key in query["query_graph"]['edges'].keys():
                     edge = query["query_graph"]['edges'][edge_key]
                     if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE and edge['subject'] == disease_id and edge['object'] == target_id:
-                        qualifier_found = True
                         if 'properties' in edge.keys():
                             days = edge['properties']['days']
                             qualifier = edge['properties']['qualifier']
