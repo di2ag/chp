@@ -132,6 +132,7 @@ class TrapiInterface:
             :type query: dict
             :returns: a query type or None if there is a failure in matching query type
             :rtype: string or None
+        """
 
         gene_nodes = []
         disease_nodes = []
