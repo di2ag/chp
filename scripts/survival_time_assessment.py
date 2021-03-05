@@ -47,7 +47,7 @@ builder = PatientBkbBuilder(
 
 # Set build option: gene or drug
 BUILD = 'gene'
-RESET = True
+RESET = False
 
 if os.path.exists('collapsed_{}.bkb'.format(BUILD)) and not RESET:
     logger.info('Using saved collapsed bkb found in current directory,')
@@ -83,6 +83,9 @@ targets = ["EFO:0000714"]
 # Run top N frequently mutated genes.
 top_genes = ['_{}'.format(gene_curie) for _, gene_curie in sorted([(count, gene_curie) for gene_curie, count in builder.all_gene_counts.items()], reverse=True)[:1000]]
 top_drugs = ['{}'.format(drug_curie) for _, drug_curie in sorted([(count, drug_curie) for drug_curie, count in builder.all_drug_counts.items()], reverse=True)[:10]]
+
+with open('top_gene_drugs.pk', 'wb') as f_:
+    pickle.dump((top_genes, top_drugs), f_)
 
 # Set up Reasoner
 dynamic_reasoner = ChpDynamicReasoner(bkb_handler=bkb_handler,
