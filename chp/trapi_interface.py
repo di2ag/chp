@@ -40,16 +40,22 @@ def parse_query_graph(query_graph):
                 else:
                     parsed["genes"] = [node_id]
             elif node["category"] == BIOLINK_DISEASE:
-                parsed["genes"].append(node_id)
+                parsed["disease"] = node_id
             else:
                 raise ValueError('Unrecognized category: {}'.format(node["category"]))
         # Sort the genes
-        parsed["genes"] = sorted(parsed["genes"])
+        if 'genes' in parsed:
+            parsed["genes"] = sorted(parsed["genes"])
         # Find the outome op and value
         for edge_id, edge in query_graph["edges"].items():
             if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
-                parsed["outcome_op"] = edge["properties"]["qualifier"]
-                parsed["outcome_value"] = edge["properties"]["days"]
+                if 'properties' in edge.keys():
+                    parsed["outcome_op"] = edge["properties"]["qualifier"]
+                    parsed["outcome_value"] = edge["properties"]["days"]
+                # default
+                else:
+                    parsed["outcome_op"] = ">="
+                    parsed["outcome_value"] = 970
         return parsed
     except:
         return None
@@ -168,7 +174,7 @@ class TrapiInterface:
                                 return False
                     elif node["category"] == BIOLINK_DISEASE:
                         disease_flag = True
-        if all([gene_flag, disease_flag, drug_flag, wildcard_flag]):
+        if (gene_flag or drug_flag) and all([disease_flag, wildcard_flag]):
             return True
         else:
             return False
