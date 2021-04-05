@@ -17,6 +17,7 @@ from collections import defaultdict
 
 # Integrators
 from chp.trapi_handlers import DefaultHandler, WildCardHandler, OneHopHandler
+from chp.errors import *
 from chp_data.trapi_constants import *
 
 # Setup logging
@@ -79,8 +80,6 @@ class TrapiInterface:
         self.joint_reasoner = joint_reasoner
         self.dynamic_reasoner = dynamic_reasoner
 
-        self.error_msg = None
-
         # Get default handler for processing curies and predicates requests
         self.handler = self._get_handler(None)
         self.curies = self.handler.curies
@@ -110,15 +109,15 @@ class TrapiInterface:
         query_map = []
         for query in queries:
             # Set a query ID for later reordering to match batch sequence
+            query_type, query = self._determine_query_type(query)
             _id = uuid.uuid4()
             query["query_id"] = _id
             query_map.append(_id)
-            query_type = self._determine_query_type(query)
             query_dict[query_type].append(query)
         return query_dict, query_map
 
     def _setup_single_query(self, query):
-        query_type = self._determine_query_type(query)
+        query_type, query = self._determine_query_type(query)
         _id = uuid.uuid4()
         query["query_id"] = _id
         return {query_type: [query]}
@@ -152,50 +151,65 @@ class TrapiInterface:
                             wildcard_node_count += 1
                             wildcard_node = node_id
                         else:
-                            if node['id'] not in self.curies[BIOLINK_GENE]:
-                                self.error_msg = 'Unidentified gene curie: {}'.format(node['id'])
-                                return False
+                            if isinstance(node['id'], list):
+                                found_curie = None
+                                for curie in node['id']:
+                                    if curie in self.curies[BIOLINK_GENE]:
+                                        found_curie = curie
+                                        query["query_graph"]["nodes"][node_id]['id'] = found_curie
+                                if found_curie is None:
+                                    raise(UnidentifiedGeneCurie(node['id']))
+                            elif node['id'] not in self.curies[BIOLINK_GENE]:
+                                raise(UnidentifiedGeneCurie(node['id']))
                     elif node["category"] == BIOLINK_DRUG:
                         drug_nodes.append(node_id)
                         if 'id' not in node:
                             wildcard_node_count += 1
                             wildcard_node = node_id
                         else:
-                            if node['id'] not in self.curies[BIOLINK_DRUG]:
-                                self.error_msg = 'Unidentified chemical curie: {}'.format(node['id'])
-                                return False
+                            if isinstance(node['id'], list):
+                                found_curie = None
+                                for curie in node['id']:
+                                    if curie in self.curies[BIOLINK_DRUG]:
+                                        found_curie = curie
+                                        query["query_graph"]["nodes"][node_id]['id'] = found_curie
+                                if found_curie is None:
+                                    raise(UnidentifiedDrugCurie(node['id']))
+                            elif node['id'] not in self.curies[BIOLINK_DRUG]:
+                                raise(UnidentifiedDrugCurie(node['id']))
                     elif node["category"] == BIOLINK_DISEASE:
                         disease_nodes.append(node_id)
                     elif node["category"] == BIOLINK_PHENOTYPIC_FEATURE:
                         phenotype_nodes.append(node_id)
+                        if isinstance(node['id'], list):
+                                found_curie = None
+                                for curie in node['id']:
+                                    if curie in self.curies[BIOLINK_PHENOTYPIC_FEATURE]:
+                                        found_curie = curie
+                                        query["query_graph"]["nodes"][node_id]['id'] = found_curie
+                                if found_curie is None:
+                                    raise(UnidentifiedPhenotypeCurie(node['id']))
                         if node['id'] not in self.curies[BIOLINK_PHENOTYPIC_FEATURE]:
-                                self.error_msg = 'Unidentified phenotypic feature curie: {}'.format(node['id'])
-                                return False
+                                raise(UnidentifiedPhenotypeCurie(node['id']))
 
         if wildcard_node_count > 1:
-            self.error_msg = 'Can only have 1 node for contributions.'
-            return None
+            raise(TooManyContributionNodes)
         if len(disease_nodes) > 1:
-            self.error_msg = 'Can only have 1 node for disease.'
-            return None
+            raise(TooManyDiseaseNodes)
         if len(phenotype_nodes) > 1:
-            self.error_msg = 'Can only have up to a single node for phenotype.'
-            return None
+            raise(TooManyPhenotypeNodes)
 
         if wildcard_node_count == 0 and len(phenotype_nodes) == 1 and len(disease_nodes) == 1:
             if self._check_default_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
-                return 'default'
+                return 'default', query
         elif len(disease_nodes) == 1 and wildcard_node_count == 1:
             if self._check_wildcard_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
-                return 'wildcard'
+                return 'wildcard', query
         elif len(disease_nodes) == 0 and wildcard_node_count == 1:
             if self._check_one_hop_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
-                return 'onehop'
-            print(self.error_msg)
+                return 'onehop', query
         else:
-            if self.error_msg is None:
-                self.error_msg = 'Unidentified query type. Please see https://github.com/di2ag/chp_client for details on our query types'
-            return None
+            raise(UnidentifiedQueryType)
 
     def get_curies(self):
         """ Returns the available curies and their associated names.
@@ -217,48 +231,38 @@ class TrapiInterface:
                 subject = edge['subject']
                 object = edge['object']
                 if subject not in gene_nodes or object not in disease_nodes:
-                    self.error_msg = 'Wildcard type detected. Gene to disease edge (edge id: {}) malformed.'.format(edge_id)
-                    return False
+                    raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
             elif edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE:
                 subject = edge['subject']
                 object = edge['object']
                 if subject not in drug_nodes or object not in disease_nodes:
-                    self.error_msg = 'Wildcard type detected. Chemical to disease edge (edge id: {}) malformed.'.format(edge_id)
-                    return False
+                    raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
             elif edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
                 subject = edge['subject']
                 object = edge['object']
                 if subject not in disease_nodes and object not in phenotype_nodes:
-                    self.error_msg = 'Wildcard type detected. Disease to phenotype edge (edge id: {}) malformed.'.format(edge_id)
-                    return False
+                    raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
             elif edge['predicate'] == BIOLINK_CHEMICAL_TO_GENE_PREDICATE:
-                self.error_msg = 'Wildcard type detected. Received edge between gene and chemical (edge id: {}). This edge is incompatible with this wildcard type.'.format(edge_id)
-                return False
+                raise(IncompatibleWildcardEdge(edge_id))
             else:
-                self.error_msg = 'Wildcard type detected. Unknown predicate type for edge (edge id: {}).'.format(edge_id)
-                return False
+                raise(UnexpectedEdgeType(edge_id))
         return True
 
     def _check_one_hop_query(self, query, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
         for edge_id, edge in query['edges'].items():
             if edge['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE:
-                self.error_msg = 'Gene-chemical onehop detected. Received edge between gene and disease (edge id: {}). This edge is incompatible with this wildcard type.'.format(edge_id)
-                return False
+                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
             elif edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE:
-                self.error_msg = 'Gene-chemical onehop detected. Received edge between chemical and disease (edge id: {}). This edge is incompatible with this wildcard type.'.format(edge_id)
-                return False
+                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
             elif edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
-                self.error_msg = 'Gene-chemical onehop detected. Received edge between disease and phenotype (edge id: {}). This edge is incompatible with this wildcard type.'.format(edge_id)
-                return False
+                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
             elif edge['predicate'] == BIOLINK_CHEMICAL_TO_GENE_PREDICATE:
                 subject = edge['subject']
                 object = edge['object']
                 if object == wildcard_node:
-                     self.error_msg = 'Gene-chemical onehop detected. Gene to chemical edge (edge id: {}) malformed.'.format(edge_id)
-                     return False
+                     raise(MalformedSubjectObjectOnDrugGene(edge_id))
             else:
-                self.error_msg = 'Gene-chemical onehop detected. Unknown predicate type for edge (edge id: {}).'.format(edge_id)
-                return False
+                raise(UnexpectedEdgeType(edge_id))
         return True
 
     def _check_default_query(self, query, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
@@ -267,26 +271,21 @@ class TrapiInterface:
                 subject = edge['subject']
                 object = edge['object']
                 if subject not in gene_nodes or object not in disease_nodes:
-                    self.error_msg = 'Default type detected. Gene to disease edge (edge id: {}) malformed.'.format(edge_id)
-                    return False
+                    raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
             elif edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE:
                 subject = edge['subject']
                 object = edge['object']
                 if subject not in drug_nodes or object not in disease_nodes:
-                    self.error_msg = 'Default type detected. Chemical to disease edge (edge id: {}) malformed.'.format(edge_id)
-                    return False
+                    raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
             elif edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
                 subject = edge['subject']
                 object = edge['object']
                 if subject not in disease_nodes and object not in phenotype_nodes:
-                    self.error_msg = 'Default type detected. Disease to phenotype edge (edge id: {}) malformed.'.format(edge_id)
-                    return False
+                    raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
             elif edge['predicate'] == BIOLINK_CHEMICAL_TO_GENE_PREDICATE:
-                self.error_msg = 'Default type detected. Received edge between gene and chemical (edge id: {}). This edge is incompatible with default type.'.format(edge_id)
-                return False
+                raise(IncompatibleDefaultEdge(edge_id))
             else:
-                self.error_msg = 'Default type detected. Unknown predicate type for edge (edge id: {}).'.format(edge_id)
-                return False
+                raise(UnexpectedEdgeType(edge_id))
         return True
 
     def _get_handler(self, query_type):
@@ -335,13 +334,11 @@ class TrapiInterface:
         return response
 
     def build_chp_queries(self):
-        if self.error_msg is None:
-            built_chp_queries = {}
-            for query_type, handler in self.handlers.items():
-                logger.info('Building queries for {} type query(s).'.format(query_type))
-                built_chp_queries[query_type] = handler.build_queries()
-            return built_chp_queries
-        return self.error_msg
+        built_chp_queries = {}
+        for query_type, handler in self.handlers.items():
+            logger.info('Building queries for {} type query(s).'.format(query_type))
+            built_chp_queries[query_type] = handler.build_queries()
+        return built_chp_queries
 
     def run_chp_queries(self):
         ran_chp_queries = {}
