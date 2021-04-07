@@ -166,3 +166,6 @@ class TestDynamicReasoner(unittest.TestCase):
         )
         query =  self.dynamic_reasoner.run_query(query, bkb_type='drug')
         query.result.summary(include_contributions=False)
+
+if __name__ == '__main__':
+    unittest.main()

@@ -17,6 +17,7 @@ from collections import defaultdict
 
 # Integrators
 from chp.trapi_handlers import DefaultHandler, WildCardHandler, OneHopHandler
+from chp.errors import *
 from chp_data.trapi_constants import *
 
 # Setup logging
@@ -79,6 +80,10 @@ class TrapiInterface:
         self.joint_reasoner = joint_reasoner
         self.dynamic_reasoner = dynamic_reasoner
 
+        # Get default handler for processing curies and predicates requests
+        self.handler = self._get_handler(None)
+        self.curies = self.handler.curies
+
         if query is not None:
             # Analyze queries
             self.query_dict, self.query_map = self._setup_query(query)
@@ -87,9 +92,7 @@ class TrapiInterface:
             self.handlers = {}
             for query_type in self.query_dict:
                 self.handlers[query_type] = self._get_handler(query_type)
-        else:
-            # Get default handler for processing curies and predicates requests
-            self.handler = self._get_handler(None)
+
 
     def _setup_query(self, query):
         if type(query) == list:
@@ -106,26 +109,107 @@ class TrapiInterface:
         query_map = []
         for query in queries:
             # Set a query ID for later reordering to match batch sequence
+            query_type, query = self._determine_query_type(query)
             _id = uuid.uuid4()
             query["query_id"] = _id
             query_map.append(_id)
-            query_type = self._determine_query_type(query)
             query_dict[query_type].append(query)
         return query_dict, query_map
 
     def _setup_single_query(self, query):
-        query_type = self._determine_query_type(query)
+        query_type, query = self._determine_query_type(query)
         _id = uuid.uuid4()
         query["query_id"] = _id
         return {query_type: [query]}
 
     def _determine_query_type(self, query):
-        if self._check_one_hop_query(query):
-            return 'onehop'
-        elif self._check_wildcard_query(query):
-            return 'wildcard'
+        """ checks for query types. First checks node requirements to check for query type,
+            then checks structures under the assumption of query type. Also updates error
+            message for return to user
+
+            :param query: single query or list of queries
+            :type query: dict
+            :returns: a query type or None if there is a failure in matching query type
+            :rtype: string or None
+        """
+
+        gene_nodes = []
+        disease_nodes = []
+        drug_nodes = []
+        phenotype_nodes = []
+        wildcard_node_count = 0
+        wildcard_node = None
+
+        # check node criteria
+        if query is not None:
+            qg = query["query_graph"]
+            for node_id, node in qg["nodes"].items():
+                if "category" in node:
+                    if node["category"] == BIOLINK_GENE:
+                        gene_nodes.append(node_id)
+                        if 'id' not in node:
+                            wildcard_node_count += 1
+                            wildcard_node = node_id
+                        else:
+                            if isinstance(node['id'], list):
+                                found_curie = None
+                                for curie in node['id']:
+                                    if curie in self.curies[BIOLINK_GENE]:
+                                        found_curie = curie
+                                        query["query_graph"]["nodes"][node_id]['id'] = found_curie
+                                if found_curie is None:
+                                    raise(UnidentifiedGeneCurie(node['id']))
+                            elif node['id'] not in self.curies[BIOLINK_GENE]:
+                                raise(UnidentifiedGeneCurie(node['id']))
+                    elif node["category"] == BIOLINK_DRUG:
+                        drug_nodes.append(node_id)
+                        if 'id' not in node:
+                            wildcard_node_count += 1
+                            wildcard_node = node_id
+                        else:
+                            if isinstance(node['id'], list):
+                                found_curie = None
+                                for curie in node['id']:
+                                    if curie in self.curies[BIOLINK_DRUG]:
+                                        found_curie = curie
+                                        query["query_graph"]["nodes"][node_id]['id'] = found_curie
+                                if found_curie is None:
+                                    raise(UnidentifiedDrugCurie(node['id']))
+                            elif node['id'] not in self.curies[BIOLINK_DRUG]:
+                                raise(UnidentifiedDrugCurie(node['id']))
+                    elif node["category"] == BIOLINK_DISEASE:
+                        disease_nodes.append(node_id)
+                    elif node["category"] == BIOLINK_PHENOTYPIC_FEATURE:
+                        phenotype_nodes.append(node_id)
+                        if isinstance(node['id'], list):
+                                found_curie = None
+                                for curie in node['id']:
+                                    if curie in self.curies[BIOLINK_PHENOTYPIC_FEATURE]:
+                                        found_curie = curie
+                                        query["query_graph"]["nodes"][node_id]['id'] = found_curie
+                                if found_curie is None:
+                                    raise(UnidentifiedPhenotypeCurie(node['id']))
+                        if node['id'] not in self.curies[BIOLINK_PHENOTYPIC_FEATURE]:
+                                raise(UnidentifiedPhenotypeCurie(node['id']))
+
+        if wildcard_node_count > 1:
+            raise(TooManyContributionNodes)
+        if len(disease_nodes) > 1:
+            raise(TooManyDiseaseNodes)
+        if len(phenotype_nodes) > 1:
+            raise(TooManyPhenotypeNodes)
+
+        if wildcard_node_count == 0 and len(phenotype_nodes) == 1 and len(disease_nodes) == 1:
+            if self._check_default_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
+                return 'default', query
+        elif len(disease_nodes) == 1 and wildcard_node_count == 1:
+            if self._check_wildcard_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
+                return 'wildcard', query
+        elif len(disease_nodes) == 0 and wildcard_node_count == 1:
+            if self._check_one_hop_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
+                return 'onehop', query
         else:
-            return 'default'
+            raise(UnidentifiedQueryType)
 
     def get_curies(self):
         """ Returns the available curies and their associated names.
@@ -141,79 +225,68 @@ class TrapiInterface:
     def checkQuery(self):
         return True
 
-    def _check_wildcard_query(self, query):
-        """ Checks if the query graph has a wildcard (no curie specified) for a given node,
-            a disease node and a drug node. For a wildcard query there must be at least those
-            three node types and the gene node must not have a curie identifier. This is opposed
-            to the one-hop handler in which there will only be a drug node and a gene node
-            with no curie.
+    def _check_wildcard_query(self, query, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
+        for edge_id, edge in query['edges'].items():
+            if edge['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE:
+                subject = edge['subject']
+                object = edge['object']
+                if subject not in gene_nodes or object not in disease_nodes:
+                    raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+            elif edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE:
+                subject = edge['subject']
+                object = edge['object']
+                if subject not in drug_nodes or object not in disease_nodes:
+                    raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+            elif edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
+                subject = edge['subject']
+                object = edge['object']
+                if subject not in disease_nodes and object not in phenotype_nodes:
+                    raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
+            elif edge['predicate'] == BIOLINK_CHEMICAL_TO_GENE_PREDICATE:
+                raise(IncompatibleWildcardEdge(edge_id))
+            else:
+                raise(UnexpectedEdgeType(edge_id))
+        return True
 
-        Currently only supports single gene wildcard queries.
-        """
-        gene_flag = False
-        disease_flag = False
-        drug_flag = False
-        wildcard_flag = False
-        if query is not None:
-            qg = query["query_graph"]
-            for _, node in qg["nodes"].items():
-                if "category" in node:
-                    if node["category"] == BIOLINK_GENE:
-                        gene_flag = True
-                        if 'id' not in node:
-                            if not wildcard_flag:
-                                wildcard_flag = True
-                            else:
-                                return False
-                    elif node["category"] == BIOLINK_DRUG:
-                        drug_flag = True
-                        if 'id' not in node:
-                            if not wildcard_flag:
-                                wildcard_flag = True
-                            else:
-                                return False
-                    elif node["category"] == BIOLINK_DISEASE:
-                        disease_flag = True
-        if (gene_flag or drug_flag) and all([disease_flag, wildcard_flag]):
-            return True
-        else:
-            return False
+    def _check_one_hop_query(self, query, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
+        for edge_id, edge in query['edges'].items():
+            if edge['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE:
+                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
+            elif edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE:
+                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
+            elif edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
+                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
+            elif edge['predicate'] == BIOLINK_CHEMICAL_TO_GENE_PREDICATE:
+                subject = edge['subject']
+                object = edge['object']
+                if object == wildcard_node:
+                     raise(MalformedSubjectObjectOnDrugGene(edge_id))
+            else:
+                raise(UnexpectedEdgeType(edge_id))
+        return True
 
-    def _check_one_hop_query(self, query):
-        """ Checks if the query graph is specified for a one-hop specific query. This consists of
-            a drug node and a gene node with no curie identifier. For the one-hop query there must
-            be those two node types and the gene node must have no curie. This is opposed to the
-            Wildcard query in which there are at least 3 nodes and it contains the drug and gene node
-            as well as a disease node.
-        """
-        gene_flag = False
-        drug_flag = False
-        wildcard_flag = False
-        disease_flag = False
-        if query is not None:
-            qg = query["query_graph"]
-            for _, node in qg["nodes"].items():
-                if "category" in node:
-                    if node["category"] == BIOLINK_GENE:
-                        gene_flag = True
-                        if 'id' not in node:
-                            if not wildcard_flag:
-                                wildcard_flag = True
-                            else:
-                                return False
-                    elif node["category"] == BIOLINK_DRUG:
-                        drug_flag = True
-                        if 'id' not in node:
-                            if not wildcard_flag:
-                                wildcard_flag = True
-                            else:
-                                return False
-                    elif node["category"] == BIOLINK_DISEASE:
-                        disease_flag = True
-        if all([gene_flag, drug_flag, wildcard_flag]) and not disease_flag:
-            return True
-        else:
-            return False
+    def _check_default_query(self, query, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
+        for edge_id, edge in query['edges'].items():
+            if edge['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE:
+                subject = edge['subject']
+                object = edge['object']
+                if subject not in gene_nodes or object not in disease_nodes:
+                    raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+            elif edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE:
+                subject = edge['subject']
+                object = edge['object']
+                if subject not in drug_nodes or object not in disease_nodes:
+                    raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+            elif edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
+                subject = edge['subject']
+                object = edge['object']
+                if subject not in disease_nodes and object not in phenotype_nodes:
+                    raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
+            elif edge['predicate'] == BIOLINK_CHEMICAL_TO_GENE_PREDICATE:
+                raise(IncompatibleDefaultEdge(edge_id))
+            else:
+                raise(UnexpectedEdgeType(edge_id))
+        return True
 
     def _get_handler(self, query_type):
         if query_type == 'default':

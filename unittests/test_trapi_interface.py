@@ -4,6 +4,7 @@ import pickle
 import json
 
 from chp.trapi_interface import TrapiInterface
+from chp.errors import *
 
 logging.basicConfig(level=logging.INFO)
 
@@ -13,10 +14,6 @@ class TestDefaultHandler(unittest.TestCase):
         # load in sample query graphs
         with open('query_samples/random_queries.pk', 'rb') as f_:
             self.queries = pickle.load(f_)
-        #for i, q in enumerate(self.queries):
-        #    print(i)
-        #    print(q)
-        #input()
 
     def test_curies(self):
         interface = TrapiInterface()
@@ -131,10 +128,6 @@ class TestOneHopHandler(unittest.TestCase):
             self.gene_queries = pickle.load(f_)
         with open('query_samples/random_drug_one_hop_queries.pk', 'rb') as f_:
             self.drug_queries = pickle.load(f_)
-        #for i, q in enumerate(self.queries):
-        #    print(i)
-        #    print(q)
-        #input()
 
     def test_single_gene_onehop_query(self):
         message = self.gene_queries[0]
@@ -167,6 +160,136 @@ class TestOneHopHandler(unittest.TestCase):
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
+
+class TestHandlerErrors(unittest.TestCase):
+
+    def test_more_than_one_contribution(self):
+        with open('query_samples/error_samples/test_more_than_one_contribution.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(TooManyContributionNodes) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_more_than_one_disease(self):
+        with open('query_samples/error_samples/test_more_than_one_disease.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(TooManyDiseaseNodes) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_more_than_one_phenotype(self):
+        with open('query_samples/error_samples/test_more_than_one_phenotype.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(TooManyPhenotypeNodes) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_more_than_one_disease(self):
+        with open('query_samples/error_samples/test_more_than_one_disease.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(TooManyDiseaseNodes) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_no_disease(self):
+        with open('query_samples/error_samples/test_no_disease.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(UnidentifiedQueryType) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_no_target(self):
+        with open('query_samples/error_samples/test_no_target.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(UnidentifiedQueryType) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_drug_to_disease_default(self):
+        with open('query_samples/error_samples/test_illegal_drug_to_disease_default.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(MalformedSubjectObjectOnDrugToDisease) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_gene_to_disease_default(self):
+        with open('query_samples/error_samples/test_illegal_gene_to_disease_default.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(MalformedSubjectObjectOnGeneToDisease) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_disease_to_phenotype_default(self):
+        with open('query_samples/error_samples/test_illegal_disease_to_phenotype_default.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(MalformedSubjectObjectOnDiseaseToPhenotype) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_edge_default(self):
+        with open('query_samples/error_samples/test_illegal_edge_default.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(IncompatibleDefaultEdge) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_unknown_edge_default(self):
+        with open('query_samples/error_samples/test_unknown_edge_default.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(UnexpectedEdgeType) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_gene_to_disease_wildcard(self):
+        with open('query_samples/error_samples/test_illegal_gene_to_disease_wildcard.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(MalformedSubjectObjectOnGeneToDisease) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_drug_to_disease_wildcard(self):
+        with open('query_samples/error_samples/test_illegal_drug_to_disease_wildcard.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(MalformedSubjectObjectOnDrugToDisease) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_disease_to_phenotype_wildcard(self):
+        with open('query_samples/error_samples/test_illegal_disease_to_phenotype_wildcard.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(MalformedSubjectObjectOnDiseaseToPhenotype) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_edge_wildcard(self):
+        with open('query_samples/error_samples/test_illegal_edge_wildcard.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(IncompatibleWildcardEdge) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_unknown_edge_wildcard(self):
+        with open('query_samples/error_samples/test_unknown_edge_wildcard.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(UnexpectedEdgeType) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_drug_to_disease_one_hop(self):
+        with open('query_samples/error_samples/test_illegal_drug_to_disease_one_hop.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(IncompatibleDrugGeneOneHopEdge) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_gene_to_drug_one_hop(self):
+        with open('query_samples/error_samples/test_illegal_gene_to_drug_one_hop.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(IncompatibleDrugGeneOneHopEdge) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_illegal_disease_to_phenotype_one_hop(self):
+        with open('query_samples/error_samples/test_illegal_disease_to_phenotype_one_hop.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(IncompatibleDrugGeneOneHopEdge) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_backwards_contribution_node_one_hop(self):
+        with open('query_samples/error_samples/test_backwards_contribution_node_one_hop.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(MalformedSubjectObjectOnDrugGene) as context:
+            interface = TrapiInterface(query=query)
+
+    def test_unknown_edge_one_hop(self):
+        with open('query_samples/error_samples/test_unknown_edge_one_hop.pk', 'rb') as f_:
+            query = pickle.load(f_)
+        with self.assertRaises(UnexpectedEdgeType) as context:
+            interface = TrapiInterface(query=query)
+
+
 
 if __name__ == '__main__':
     unittest.main()
