@@ -26,8 +26,19 @@ bkb_handler = BkbDataHandler()
 with open(bkb_handler.patient_data_pk_path, 'rb') as f_:
     patient_data = pickle.load(f_)
 
+# Filter out patients with MX staging.
+_patient_data = {}
+for pat, feature_dict in patient_data.items():
+    if feature_dict['path_m'] == 'MX':
+        print('True')
+        continue
+    _patient_data[pat] = feature_dict
+
+patient_data = _patient_data
+
 # Setup Discretization Scheme
-CRITERIA = 'linspace'
+#CRITERIA = 'linspace'
+CRITERIA = 'equal_frequency'
 discretization_scheme = {
     "EFO:0000714": {
         "nbins": 5,
@@ -47,7 +58,7 @@ builder = PatientBkbBuilder(
 
 # Set build option: gene or drug
 BUILD = 'gene'
-RESET = False
+RESET = True
 
 if os.path.exists('collapsed_{}.bkb'.format(BUILD)) and not RESET:
     logger.info('Using saved collapsed bkb found in current directory,')
