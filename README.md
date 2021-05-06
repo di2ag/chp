@@ -20,7 +20,7 @@ Our CHP Client repository: https://github.com/di2ag/chp_client
 
 Our NCATS Wiki Page: https://github.com/NCATSTranslator/Translator-All/wiki/Connections-Hypothesis-Provider
 
-Contacts
+## Contacts
 Dr. Eugene Santos (PI): Eugene.Santos.Jr@dartmouth.edu
 
 Joseph Gormley (Co-PI): jgormley@tuftsmedicalcenter.org
