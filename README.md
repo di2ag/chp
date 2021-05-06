@@ -15,8 +15,13 @@ We encourage anyone looking for tooling/instructions, to interface with our API,
 # Terms and Definitions
 The greater NCATS consortium uses a series of terms (that we have adopted) to convey meaning quickly. A link to those terms and their definitions are available here: https://docs.google.com/spreadsheets/d/1C8hKXacxtQC5UzXI4opQs1r4pBJ_5hqgXrZH_raYQ4w/edit#gid=1581951609
 We extend this list local to our KP (Look, here is an NCATS term right here!) with the following terms: 
+
 •	Connections Hypothesis Provider – CHP
+
 •	The Cancer Genome Atlas – TCGA
+
+• Genomic Data Commons - GDC
+
 •	Bayesian Knowledge Base – BKB
 
 # Smart API
