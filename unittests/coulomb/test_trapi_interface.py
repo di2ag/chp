@@ -2,9 +2,6 @@ import unittest
 import logging
 import pickle
 import json
-import copy
-
-from trapi_model import Query
 
 from chp.trapi_interface import TrapiInterface
 from chp.errors import *
@@ -17,12 +14,6 @@ class TestDefaultHandler(unittest.TestCase):
         # load in sample query graphs
         with open('query_samples/random_queries.pk', 'rb') as f_:
             self.queries = pickle.load(f_)
-        with open('query_samples/random_batch_queries.pk', 'rb') as f_:
-            self.batch_queries = pickle.load(f_)
-        #for query in self.batch_queries:
-        #    q = Query.load('1.0', None, query=query)
-        #    print(q)
-        #    input()
 
     def test_curies(self):
         interface = TrapiInterface()
@@ -35,59 +26,56 @@ class TestDefaultHandler(unittest.TestCase):
         self.assertIsInstance(predicates, dict)
 
     def test_default_single_query(self):
-        # This is a non-simple query
-        query = Query.load('1.0', None, query=self.queries[3])
-        #print(json.dumps(self.queries[3], indent=2))
-        #print(json.dumps(query.to_dict(), indent=2))
-        interface = TrapiInterface(query=query)
+        # This is a non-simple query 
+        message = self.queries[3]
+        query = message["message"]
+        interface = TrapiInterface(query=query, client_id='default')
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-       # print(json.dumps(response.to_dict(), indent=2))
-        
 
     def test_simple_single_query(self):
         # This is a simple query 
-        query = Query.load('1.0', None, query=self.queries[1])
-        interface = TrapiInterface(query=query)
+        message = self.queries[1]
+        query = message["message"]
+        interface = TrapiInterface(query=query, client_id='default')
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        #print('<<<<<<<')
-        #print(response)
-        
+        #print(json.dumps(response, indent=2))
+
     def test_default_batch_query(self):
         # These are non-simple queries
-        query = Query.load('1.0', None, query=self.batch_queries[1])
-        interface = TrapiInterface(query=query)
+        queries = [message["message"] for message in self.queries[2:8]]
+        interface = TrapiInterface(query=queries, client_id='default')
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
 
     def test_simple_batch_query(self):
         # These are simple queries
-        query = Query.load('1.0', None, query=self.batch_queries[0])
-        interface = TrapiInterface(query=query)
+        queries = [message["message"] for message in self.queries[:2]]
+        interface = TrapiInterface(query=queries, client_id='default')
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
 
-    #def test_mix_batch_query(self):
-    #    # These are mix batch of simple and default queries
-    #    queries = [message["message"] for message in self.queries]
-    #    interface = TrapiInterface(query=queries, client_id='default')
-    #    interface.build_chp_queries()
-    #    interface.run_chp_queries()
-    #    response = interface.construct_trapi_response()
+    def test_mix_batch_query(self):
+        # These are mix batch of simple and default queries
+        queries = [message["message"] for message in self.queries]
+        interface = TrapiInterface(query=queries, client_id='default')
+        interface.build_chp_queries()
+        interface.run_chp_queries()
+        response = interface.construct_trapi_response()
 
-    #def test_mix_batch_reasoner_test_queries(self):
-    #    with open('query_samples/test_reasoner_coulomb_queries.pk', 'rb') as f_:
-    #        _queries = pickle.load(f_)
-    #    queries = [message["message"] for message in _queries]
-    #    interface = TrapiInterface(query=queries, client_id='default')
-    #    interface.build_chp_queries()
-    #    interface.run_chp_queries()
-    #    response = interface.construct_trapi_response()
+    def test_mix_batch_reasoner_test_queries(self):
+        with open('query_samples/test_reasoner_coulomb_queries.pk', 'rb') as f_:
+            _queries = pickle.load(f_)
+        queries = [message["message"] for message in _queries]
+        interface = TrapiInterface(query=queries, client_id='default')
+        interface.build_chp_queries()
+        interface.run_chp_queries()
+        response = interface.construct_trapi_response()
 
 class TestWildCardHandler(unittest.TestCase):
 
@@ -95,48 +83,42 @@ class TestWildCardHandler(unittest.TestCase):
         # load in sample query graphs
         with open('query_samples/random_gene_wildcard_queries.pk', 'rb') as f_:
             self.gene_queries = pickle.load(f_)
-        with open('query_samples/random_gene_wildcard_batch_queries.pk', 'rb') as f_:
-            self.gene_batch_queries = pickle.load(f_)
         with open('query_samples/random_drug_wildcard_queries.pk', 'rb') as f_:
             self.drug_queries = pickle.load(f_)
-        with open('query_samples/random_drug_wildcard_batch_queries.pk', 'rb') as f_:
-            self.drug_batch_queries = pickle.load(f_)
         #for i, q in enumerate(self.queries):
         #    print(i)
         #    print(q)
         #input()
 
     def test_single_gene_wildcard_query(self):
-        query = Query.load('1.0', None, query=self.gene_queries[0])
-        interface = TrapiInterface(query=query)
+        message = self.gene_queries[0]
+        query = message["message"]
+        interface = TrapiInterface(query=query, client_id='default', max_results=10)
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(response)
 
     def test_single_drug_wildcard_query(self):
-        query = Query.load('1.0', None, query=self.drug_queries[0])
-        interface = TrapiInterface(query=query)
+        message = self.drug_queries[0]
+        query = message["message"]
+        interface = TrapiInterface(query=query, client_id='default', max_results=10)
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(response)
 
     def test_batch_gene_wildcard_query(self):
-        query = Query.load('1.0', None, query=self.gene_batch_queries[0])
-        interface = TrapiInterface(query=query)
+        queries = [message["message"] for message in self.gene_queries]
+        interface = TrapiInterface(query=queries, client_id='default', max_results=10)
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(response)
 
     def test_batch_drug_wildcard_query(self):
-        query = Query.load('1.0', None, query=self.drug_batch_queries[0])
-        interface = TrapiInterface(query=query)
+        queries = [message["message"] for message in self.gene_queries]
+        interface = TrapiInterface(query=queries, client_id='default', max_results=10)
         interface.build_chp_queries()
         interface.run_chp_queries()
         response = interface.construct_trapi_response()
-        print(response)
 
 class TestOneHopHandler(unittest.TestCase):
 
