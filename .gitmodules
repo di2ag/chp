@@ -4,3 +4,6 @@
 [submodule "submodules/ChpData"]
 	path = submodules/ChpData
 	url = git@intuition.thayer.dartmouth.edu:/home/public/git/projects/ChpData
+[submodule "submodules/reasoner-validator"]
+	path = submodules/reasoner-validator
+	url = https://github.com/di2ag/reasoner-validator.git
