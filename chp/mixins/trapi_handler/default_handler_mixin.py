@@ -10,6 +10,7 @@
 
 import copy
 import csv
+import logging
 import sys
 import uuid
 import json
@@ -22,6 +23,8 @@ from chp_data.bkb_handler import BkbDataHandler
 from chp.query import Query
 from chp.reasoner import ChpDynamicReasoner, ChpJointReasoner
 
+# Setup logging
+logger = logging.getLogger(__name__)
 
 class DefaultHandlerMixin:
     def _setup_handler(self):
@@ -112,7 +115,6 @@ class DefaultHandlerMixin:
                 for edge_key in query_graph.edges.keys():
                     edge = query_graph.edges[edge_key]
                     if edge.predicates[0] == BiolinkEntity(BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True) and edge.subject == disease_id and edge.object == target_id:
-                        print('Fuck you')
                         survival_time_constraint = edge.find_constraint(name='survival_time')
                         if survival_time_constraint is not None:
                             survival_value = survival_time_constraint.value
@@ -162,10 +164,6 @@ class DefaultHandlerMixin:
                 total_nodes += 1
 
         # produce BKB query
-        print(evidence)
-        print(targets)
-        print(dynamic_evidence)
-        print(dynamic_targets)
         chp_query = Query(
             evidence=evidence,
             targets=targets,
@@ -195,9 +193,7 @@ class DefaultHandlerMixin:
             chp_query.report = None
         else:
             chp_query = self.dynamic_reasoner.run_query(chp_query)
-            print(chp_query.result.updates)
             chp_res_dict = chp_query.result.process_updates(normalize=True)
-            print(chp_res_dict)
             try:
                 chp_query.truth_prob = max([0, chp_res_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
             except KeyError:
@@ -215,10 +211,24 @@ class DefaultHandlerMixin:
         kg = message.knowledge_graph
         node_bindings = {}
         for qnode_key, qnode in qg.nodes.items():
-            knode_key = kg.add_node(
-                    qnode.ids[0],
-                    qnode.categories[0].get_curie(),
-                    )
+            if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE):
+                knode_key = kg.add_node(
+                        qnode.ids[0],
+                        self.curies[BIOLINK_GENE][qnode.ids[0]][0],
+                        qnode.categories[0].get_curie(),
+                        )
+            elif qnode.categories[0] == BiolinkEntity(BIOLINK_DRUG):
+                knode_key = kg.add_node(
+                        qnode.ids[0],
+                        self.curies[BIOLINK_DRUG][qnode.ids[0]][0],
+                        qnode.categories[0].get_curie(),
+                        )
+            else:
+                knode_key = kg.add_node(
+                        qnode.ids[0],
+                        qnode.ids[0],
+                        qnode.categories[0].get_curie(),
+                        )
             node_bindings[qnode_key] = [knode_key]
 
         edge_bindings = {}
@@ -237,7 +247,6 @@ class DefaultHandlerMixin:
                         value=chp_query.truth_prob,
                         value_type_id=BiolinkEntity(BIOLINK_PROBABILITY, is_slot=True).get_curie(),
                         )
-        print(json.dumps(node_bindings, indent=2))
         # Proces results
         message.results.add_result(
                 node_bindings,

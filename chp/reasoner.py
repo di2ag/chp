@@ -70,11 +70,8 @@ class BaseReasoner:
             logger.info('Constructed Patient Bkb Builder.')
         # For readability
         self.patient_data = self.patient_bkb_builder.patient_data
-        #print(self.patient_data[-4883971258789181850])
-        #print(self.raw_patient_data[-4883971258789181850])
         features = self.patient_data[list(self.patient_data.keys())[0]].keys()
         non_gene_features = [feature for feature in features if 'ENSEMBL' not in feature]
-        #print(non_gene_features)
 
         # Setup reasoner mixin
         self._setup_reasoner()

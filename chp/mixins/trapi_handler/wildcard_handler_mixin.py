@@ -23,6 +23,8 @@ from chp.query import Query
 from chp.reasoner import ChpDynamicReasoner
 from pybkb.python_base.utils import get_operator, get_opposite_operator
 
+# Setup logging
+logger = logging.getLogger(__name__)
 
 class WildCardHandlerMixin:
     def _setup_handler(self):
@@ -368,14 +370,19 @@ class WildCardHandlerMixin:
             _node_bindings = {}
             _edge_bindings = {}
             # Process node bindings
+            bad_wildcard = False
             for qnode_id, qnode in qg.nodes.items():
                 if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE) and query_type == 'gene':
-                    knode_id = kg.add_node(
-                            wildcard,
-                            self.curies[BIOLINK_GENE][wildcard][0],
-                            qnode.categories[0].get_curie(),
-                            )
-                    _node_bindings[qnode_id] = [knode_id]
+                    try:
+                        knode_id = kg.add_node(
+                                wildcard,
+                                self.curies[BIOLINK_GENE][wildcard][0],
+                                qnode.categories[0].get_curie(),
+                                )
+                        _node_bindings[qnode_id] = [knode_id]
+                    except KeyError:
+                        logger.info("Couldn't find {} in curies[{}]".format(wildcard, BIOLINK_GENE))
+                        bad_wildcard = True
                 elif qnode.categories[0] == BiolinkEntity(BIOLINK_DRUG) and query_type == 'drug':
                     knode_id = kg.add_node(
                             wildcard,
@@ -385,6 +392,8 @@ class WildCardHandlerMixin:
                     _node_bindings[qnode_id] = [knode_id]
                 else:
                     _node_bindings[qnode_id] = node_bindings[qnode_id]
+            if bad_wildcard:
+                continue
             # Process edge bindings
             for qedge_id, qedge in qg.edges.items():
                 subject_node = qedge.subject

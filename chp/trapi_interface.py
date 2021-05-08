@@ -87,8 +87,6 @@ class TrapiInterface:
             # Check if batch query
             if query.is_batch_query():
                 self.queries = query.expand_batch_query()
-                #print(json.dumps([q.to_dict() for q in self.queries], indent=2))
-                #input()
                 logger.info('Detected batch queries,')
             else:
                 logger.info('Detected single query.')
@@ -135,7 +133,6 @@ class TrapiInterface:
             phenotype_nodes = []
             wildcard_node_count = 0
             wildcard_node = None
-            print(self.curies.keys())
 
             if message is not None:
                 qg = message.query_graph
@@ -144,7 +141,6 @@ class TrapiInterface:
                         if node.categories[0] == BiolinkEntity(BIOLINK_GENE):
                             gene_nodes.append(node_id)
                             if node.ids is None:
-                                print(node.ids)
                                 wildcard_node_count += 1
                                 wildcard_node = node_id
                             else:
@@ -158,7 +154,6 @@ class TrapiInterface:
                         elif node.categories[0] == BiolinkEntity(BIOLINK_DRUG):
                             drug_nodes.append(node_id)
                             if node.ids is None:
-                                print(node.ids)
                                 wildcard_node_count += 1
                                 wildcard_node = node_id
                             else:
@@ -187,12 +182,6 @@ class TrapiInterface:
                 raise(TooManyDiseaseNodes)
             if len(phenotype_nodes) > 1:
                 raise(TooManyPhenotypeNodes)
-            print(gene_nodes)
-            print(disease_nodes)
-            print(drug_nodes)
-            print(phenotype_nodes)
-            print(wildcard_node_count)
-            print(wildcard_node)
 
             if wildcard_node_count == 0 and len(phenotype_nodes) == 1 and len(disease_nodes) == 1:
                 if self._check_default_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
@@ -222,7 +211,6 @@ class TrapiInterface:
         return True
 
     def _check_wildcard_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
-        print(query_graph)
         for edge_id, edge in query_graph.edges.items():
             if edge.predicates[0] == BiolinkEntity(BIOLINK_GENE_TO_DISEASE_PREDICATE, is_slot=True):
                 if edge.subject not in gene_nodes or edge.object not in disease_nodes:
@@ -270,7 +258,6 @@ class TrapiInterface:
             elif edge.predicates[0] == BiolinkEntity(BIOLINK_CHEMICAL_TO_GENE_PREDICATE, is_slot=True):
                 raise(IncompatibleDefaultEdge(edge_id))
             else:
-                print(edge.predicates[0].get_curie())
                 raise(UnexpectedEdgeType(edge_id))
         return True
 
@@ -341,8 +328,6 @@ class TrapiInterface:
         for message_type, handler in self.handlers.items():
             logger.info('Constructing TRAPI response(s) for {} type message(s).'.format(message_type))
             handler_response_query = handler.construct_trapi_response()
-            print('>>>>>>>>>>>>>>')
-            print(json.dumps(handler_response_query.to_dict(), indent=2))
             # Merge the messages
             response_query.message.update(
                     handler_response_query.message.knowledge_graph,

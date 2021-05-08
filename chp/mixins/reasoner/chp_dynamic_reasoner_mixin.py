@@ -95,11 +95,8 @@ class ChpDynamicReasonerMixin:
         query = self._check_evidence(query, bkb)
         # Pool any dynamic evidence and/or targets for linking
         feature_properties, features_not_to_format = self._pool_properties(query, bkb)
-        print(feature_properties)
         # Link BKB based on dynamic evidence in query
         linked_bkb = self.linker_builder.link(feature_properties, bkb)
-        idx = linked_bkb.getComponentIndex('EFO:0000714')
-        print('>>>>', linked_bkb.getNumberComponentINodes(idx))
         # Update reasoning evidence with the dynamic evidence
         evidence = self._format_evidence(query, features_not_to_format)
         # Update reasoning targets with the dynamic targets
@@ -109,7 +106,6 @@ class ChpDynamicReasonerMixin:
             targets = copy.copy(query.targets)
         if query.dynamic_targets is not None:
             targets += [target_feature for target_feature in query.dynamic_targets]
-        print(targets)
         # Run update
         start_time = time.time()
         res = updating(bkb,

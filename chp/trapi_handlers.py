@@ -58,7 +58,7 @@ class BaseHandler:
             self.bkb_data_handler = BkbDataHandler(
                 bkb_major_version='darwin',
                 bkb_minor_version='1.0',
-                disease='tcga_brca',
+                disease='tcga',
             )
         else:
             self.bkb_data_handler = bkb_handler
@@ -135,7 +135,6 @@ class BaseHandler:
         return response_query
 
     def merge_messages(self, responses):
-        #print(json.dumps(self.query.to_dict(), indent=2))
         new_query = self.query.get_copy()
         master_message = new_query.message
         for _, responses in responses.items():

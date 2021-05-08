@@ -14,11 +14,16 @@ import sys
 import pickle
 from collections import defaultdict
 
-from chp_data.trapi_constants import *
+from trapi_model.constants import *
+from trapi_model.base import BiolinkEntity
 
 from chp.query import Query
-from chp.reasoner import ChpDynamicReasoner
+from chp.reasoner import ChpDynamicReasoner, ChpJointReasoner
 from chp_data.bkb_handler import BkbDataHandler
+from pybkb.python_base.utils import get_operator, get_opposite_operator
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Default functions
 def get_default_predicate_proxy():
@@ -70,16 +75,21 @@ class OneHopHandlerMixin:
                     bkb_handler=self.bkb_data_handler,
                     hosts_filename=self.hosts_filename,
                     num_processes_per_host=self.num_processes_per_host)
+            if self.joint_reasoner is None:
+                self.joint_reasoner = ChpJointReasoner(
+                    bkb_handler=self.bkb_data_handler,
+                    hosts_filename=self.hosts_filename,
+                    num_processes_per_host=self.num_processes_per_host)
 
     def _setup_messages(self):
-        self.messages_dict = defaultdict(list)
+        self.message_dict = defaultdict(list)
         for message in self.messages:
-            self.query_dict[self._get_onehop_type(message)].append(self._setup_single_message(message))
+            self.message_dict[self._get_onehop_type(message)].append(message)
 
     def _get_onehop_type(self, message):
         wildcard_type = None
         for node_id, node in message.query_graph.nodes.items():
-            if node.ids[0] is None:
+            if node.ids is None:
                 if wildcard_type is None:
                     wildcard_type = node.categories[0]
         # If standard onehop query
@@ -100,13 +110,13 @@ class OneHopHandlerMixin:
     @staticmethod
     def _process_predicate_proxy(qedge):
         dynamic_targets = {}
-        predicate_proxy_constraint = qedge.find_constraint('CHP:PredicateProxy')
+        predicate_proxy_constraint = qedge.find_constraint('predicate_proxy')
         if predicate_proxy_constraint is None:
             predicate_proxy = get_default_predicate_proxy()
             proxy_constraint = qedge.find_constraint(predicate_proxy)
         else:
-            predicate_proxy = predicate_proxy_constraint.value
-            proxy_constraint = None
+            predicate_proxy = predicate_proxy_constraint.value[0]
+            proxy_constraint = qedge.find_constraint(predicate_proxy)
         if proxy_constraint is None:
             proxy_operator = get_default_operator(predicate_proxy)
             proxy_value = get_default_value(predicate_proxy)
@@ -123,7 +133,7 @@ class OneHopHandlerMixin:
     @staticmethod
     def _process_predicate_context(qedge):
         evidence = {}
-        predicate_context_constraint = qedge.find_constraint('CHP:PredicateContext')
+        predicate_context_constraint = qedge.find_constraint('predicate_context')
         if predicate_context_constraint is not None:
             for context in predicate_context_constraint.value:
                 context_curie = BiolinkEntity(context)
@@ -133,9 +143,9 @@ class OneHopHandlerMixin:
                 if context_curie == BiolinkEntity(BIOLINK_GENE) or context_curie == BiolinkEntity(BIOLINK_DRUG):
                     if type(context_constraint.value) is list:
                         for _curie in context_constraint.value:
-                            evidence['_{}'.format(context_constraint.value)] = 'true'
+                            evidence['_{}'.format(_curie)] = 'True'
                     else:
-                        evidence['_{}'.format(context_constraint.value)] = 'true'
+                        evidence['_{}'.format(context_constraint.value)] = 'True'
                 else:
                     raise ValueError('Unsupported context type: {}'.format(context_curie))
         return evidence
@@ -164,6 +174,9 @@ class OneHopHandlerMixin:
         dynamic_targets = self._process_predicate_proxy(qedge)
         # Process predicate context
         evidence.update(self._process_predicate_context(qedge))
+        #TODO: Probably need a more robust solution for when no context is provided in wildcard queries and you need it.
+        #if len(evidence) == 0:
+        #    raise ValueError('Did not supply context with a query that required context.')
 
         target = list(dynamic_targets.keys())[0]
         truth_target = (target, '{} {}'.format(dynamic_targets[target]["op"], dynamic_targets[target]["value"]))
@@ -183,62 +196,141 @@ class OneHopHandlerMixin:
             Contributions for each gene are calculuated and classified under
             their true/false target assignments.
         """
-        if query_type == 'gene':
-            chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='drug')
-        elif query_type == 'drug' or query_type == 'standard':
-            chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='gene')
-        chp_res_dict = chp_query.result.process_updates()
-        chp_res_norm_dict = chp_query.result.process_updates(normalize=True)
-        #chp_query.result.summary()
-        chp_res_contributions = chp_query.result.process_inode_contributions()
-        chp_query.truth_prob = max([0, chp_res_norm_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
-
-        #print(chp_res_contributions)
-        if query_type != 'standard':
-            # Collect all source inodes and process patient hashes
-            patient_contributions = defaultdict(lambda: defaultdict(int))
-            for target, contrib_dict in chp_res_contributions.items():
-                target_comp_name, target_state_name = target
-                for inode, contrib in contrib_dict.items():
-                    comp_name, state_name = inode
-                    if '_Source_' in comp_name:
-                        # Split source state name to get patient hashes
-                        source_hashes_str = state_name.split('_')[-1]
-                        source_hashes = [int(source_hash) for source_hash in source_hashes_str.split(',')]
-                        hash_len = len(source_hashes)
-                        # Process patient contributions
-                        for _hash in source_hashes:
-                            # Normalize to get relative contribution
-                            patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
-
-            # Now iterate through the patient data to translate patient contributions to drug/gene contributions
-            wildcard_contributions = defaultdict(lambda: defaultdict(int))
-            for target, patient_contrib_dict in patient_contributions.items():
-                for patient, contrib in patient_contrib_dict.items():
-                    if query_type == 'gene':
-                        for gene_curie in self.dynamic_reasoner.raw_patient_data[patient]["gene_curies"]:
-                            wildcard_contributions[gene_curie][target] += contrib
-                    elif query_type == 'drug':
-                        for drug_curie in self.dynamic_reasoner.raw_patient_data[patient]["drug_curies"]:
-                            wildcard_contributions[drug_curie][target] += contrib
-
-            # normalize gene contributions by the target and take relative difference
-            for curie in wildcard_contributions.keys():
-                truth_target_gene_contrib = 0
-                nontruth_target_gene_contrib = 0
-                for target, contrib in wildcard_contributions[curie].items():
-                    if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
-                        truth_target_gene_contrib += contrib / chp_res_dict[target[0]][target[1]]
-                    else:
-                        nontruth_target_gene_contrib += contrib / chp_res_dict[target[0]][target[1]]
-                wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
-
+        if query_type == 'standard':
+            chp_query = self.joint_reasoner.run_query(chp_query)
+            # If a probability was found for the target
+            if len(chp_query.result) > 0:
+                # If a probability was found for the truth target
+                if chp_query.truth_target in chp_query.result:
+                    total_unnormalized_prob = 0
+                    for target, contrib in chp_query.result.items():
+                        prob = max(0, contrib)
+                        total_unnormalized_prob += prob
+                    chp_query.truth_prob = max([0, chp_query.result[(chp_query.truth_target)]])/total_unnormalized_prob
+                else:
+                    chp_query.truth_prob = 0
+            else:
+                chp_query.truth_prob = -1
             chp_query.report = None
-            chp_query.wildcard_contributions = wildcard_contributions
+            return chp_query
+        else:
+            # Do this if a disease node is present
+            if len(chp_query.evidence) == 0:
+                # probability of survival
+                chp_query = self.joint_reasoner.run_query(chp_query)
+                if len(chp_query.result) > 0:
+                    # If a probability was found for the truth target
+                    if chp_query.truth_target in chp_query.result:
+                        total_unnormalized_prob = 0
+                        for target, contrib in chp_query.result.items():
+                            prob = max(0, contrib)
+                            total_unnormalized_prob += prob
+                        chp_query.truth_prob = max([0, chp_query.result[(chp_query.truth_target)]])/total_unnormalized_prob
+                    else:
+                        chp_query.truth_prob = 0
+                else:
+                    chp_query.truth_prob = -1
+                
+                # patient_contributions
+                num_all = len(self.joint_reasoner.patient_data)
+                num_matched = chp_query.truth_prob * num_all
+                patient_contributions = defaultdict(lambda: defaultdict(int))
+                for patient, feature_dict in self.joint_reasoner.patient_data.items():
+                    for predicate_proxy, proxy_info in chp_query.dynamic_targets.items():
+                        proxy_op = get_operator(proxy_info["op"])
+                        proxy_opp_op = get_opposite_operator(proxy_info["op"])
+                        proxy_value = proxy_info["value"]
+                        if proxy_op(feature_dict[predicate_proxy], proxy_value):
+                            if num_matched == 0:
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op, proxy_value))][patient] = 0
+                            else:
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op, proxy_value))][patient] = chp_query.truth_prob/num_matched
+                        else:
+                            if num_matched == 0:
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/num_matched
+                            else:
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/(num_all-num_matched)
+
+                '''
+                num_survived = 0
+                num_all = len(self.dynamic_reasoner.raw_patient_data.keys())
+                str_op = chp_query.dynamic_targets['EFO:0000714']['op']
+                opp_op = get_opposite_operator(str_op)
+                op = get_operator(str_op)
+                days = chp_query.dynamic_targets['EFO:0000714']['value']
+                for patient, pat_dict in self.dynamic_reasoner.raw_patient_data.items():
+                    if op(pat_dict['survival_time'], days):
+                        num_survived += 1
+                chp_query.truth_prob = num_survived/num_all
+                # patient_contributions
+                patient_contributions = defaultdict(lambda: defaultdict(int))
+                for patient, pat_dict in self.dynamic_reasoner.raw_patient_data.items():
+                    if op(pat_dict['survival_time'], days):
+                        if num_survived == 0:
+                            patient_contributions[('EFO:0000714', '{} {}'.format(str_op, days))][patient] = 0
+                        else:
+                            patient_contributions[('EFO:0000714', '{} {}'.format(str_op, days))][patient] = chp_query.truth_prob/num_survived
+                    else:
+                        if num_survived == 0:
+                            patient_contributions[('EFO:0000714', '{} {}'.format(opp_op, days))][patient] = (1-chp_query.truth_prob)/num_all
+                        else:
+                            patient_contributions[('EFO:0000714', '{} {}'.format(opp_op, days))][patient] = (1-chp_query.truth_prob)/(num_all-num_survived)
+                '''
+            else:
+                if query_type == 'gene':
+                    chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='drug')
+                elif query_type == 'drug':
+                    chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='gene')
+                chp_res_dict = chp_query.result.process_updates()
+                chp_res_norm_dict = chp_query.result.process_updates(normalize=True)
+                #chp_query.result.summary()
+                chp_res_contributions = chp_query.result.process_inode_contributions()
+                chp_query.truth_prob = max([0, chp_res_norm_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
+
+                # Collect all source inodes and process patient hashes
+                patient_contributions = defaultdict(lambda: defaultdict(int))
+                for target, contrib_dict in chp_res_contributions.items():
+                    target_comp_name, target_state_name = target
+                    for inode, contrib in contrib_dict.items():
+                        comp_name, state_name = inode
+                        if '_Source_' in comp_name:
+                            # Split source state name to get patient hashes
+                            source_hashes_str = state_name.split('_')[-1]
+                            source_hashes = [int(source_hash) for source_hash in source_hashes_str.split(',')]
+                            hash_len = len(source_hashes)
+                            # Process patient contributions
+                            for _hash in source_hashes:
+                                # Normalize to get relative contribution
+                                patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
+
+        # Now iterate through the patient data to translate patient contributions to drug/gene contributions
+        wildcard_contributions = defaultdict(lambda: defaultdict(int))
+        for target, patient_contrib_dict in patient_contributions.items():
+            for patient, contrib in patient_contrib_dict.items():
+                if query_type == 'gene':
+                    for gene_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["gene_curies"]:
+                        wildcard_contributions[gene_curie][target] += contrib
+                elif query_type == 'drug':
+                    for drug_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["drug_curies"]:
+                        wildcard_contributions[drug_curie][target] += contrib
+        
+        # normalize gene contributions by the target and take relative difference
+        for curie in wildcard_contributions.keys():
+            truth_target_gene_contrib = 0
+            nontruth_target_gene_contrib = 0
+            for target, contrib in wildcard_contributions[curie].items():
+                if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
+                    truth_target_gene_contrib += contrib / chp_query.truth_prob
+                else:
+                    nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
+            wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
+        
+        chp_query.report = None
+        chp_query.wildcard_contributions = wildcard_contributions
 
         return chp_query
 
-    def _construct_trapi_response(self, chp_query, message, query_type):
+    def _construct_trapi_message(self, chp_query, message, query_type):
         
         qg = message.query_graph
         kg = message.knowledge_graph
@@ -248,7 +340,7 @@ class OneHopHandlerMixin:
         
         # Process nodes
         for qnode_id, qnode in qg.nodes.items():
-            if qnode.ids[0] is not None:
+            if qnode.ids is not None:
                 if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE):
                     knode_key = kg.add_node(
                             qnode.ids[0],
@@ -262,12 +354,13 @@ class OneHopHandlerMixin:
                             qnode.categories[0].get_curie(),
                             )
                 elif qnode.categories[0] == BiolinkEntity(BIOLINK_DISEASE):
+                    #TODO: Add diseases to curies and fix name hack below.
                     knode_key = kg.add_node(
                             qnode.ids[0],
-                            self.curies[BIOLINK_DISEASE][qnode.ids[0]][0],
+                            qnode.ids[0], #TODO: Once curies is fixed, make this a name.
                             qnode.categories[0].get_curie(),
                             )
-                node_binding[qnode_id] = [kedge_key]
+                node_bindings[qnode_id] = [knode_key]
             else:
                 wildcard_node = qnode
         if query_type == 'standard':
@@ -304,14 +397,19 @@ class OneHopHandlerMixin:
                 _node_bindings = {}
                 _edge_bindings = {}
                 # Process node bindings
+                bad_wildcard = False
                 for qnode_id, qnode in qg.nodes.items():
                     if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE) and query_type == 'gene':
-                        knode_id = kg.add_node(
-                                wildcard,
-                                self.curies[BIOLINK_GENE][wildcard][0],
-                                qnode.categories[0].get_curie(),
-                                )
-                        _node_bindings[qnode_id] = [knode_id]
+                        try:
+                            knode_id = kg.add_node(
+                                    wildcard,
+                                    self.curies[BIOLINK_GENE][wildcard][0],
+                                    qnode.categories[0].get_curie(),
+                                    )
+                            _node_bindings[qnode_id] = [knode_id]
+                        except KeyError:
+                            logger.info("Couldn't find {} in curies[{}]".format(wildcard, BIOLINK_GENE))
+                            bad_wildcard = True
                     elif qnode.categories[0] == BiolinkEntity(BIOLINK_DRUG) and query_type == 'drug':
                         knode_id = kg.add_node(
                                 wildcard,
@@ -321,6 +419,8 @@ class OneHopHandlerMixin:
                         _node_bindings[qnode_id] = [knode_id]
                     else:
                         _node_bindings[qnode_id] = node_bindings[qnode_id]
+                if bad_wildcard:
+                    continue
                 # Process edge bindings
                 for qedge_id, qedge in qg.edges.items():
                     kedge_id = kg.add_edge(
@@ -340,4 +440,5 @@ class OneHopHandlerMixin:
                         _node_bindings,
                         _edge_bindings,
                         )
+        
         return message
