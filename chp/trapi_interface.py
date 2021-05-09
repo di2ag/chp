@@ -15,8 +15,8 @@ import csv
 import uuid
 from collections import defaultdict
 
-from trapi_model.base import BiolinkEntity
-from trapi_model.constants import *
+from trapi_model.biolink.constants import *
+#from trapi_model.constants import *
 from chp.trapi_handlers import DefaultHandler, WildCardHandler, OneHopHandler
 from chp.errors import *
 
@@ -138,7 +138,7 @@ class TrapiInterface:
                 qg = message.query_graph
                 for node_id, node in qg.nodes.items():
                     if node.categories is not None:
-                        if node.categories[0] == BiolinkEntity(BIOLINK_GENE):
+                        if node.categories[0] == BIOLINK_GENE_ENTITY:
                             gene_nodes.append(node_id)
                             if node.ids is None:
                                 wildcard_node_count += 1
@@ -146,12 +146,12 @@ class TrapiInterface:
                             else:
                                 found_curie = None
                                 for curie in node.ids:
-                                    if curie in self.curies[BIOLINK_GENE]:
+                                    if curie in self.curies[BIOLINK_GENE_ENTITY.get_curie()]:
                                         found_curie = curie
                                         qg.nodes[node_id].set_ids(found_curie)
                                 if found_curie is None:
                                     raise(UnidentifiedGeneCurie(node.ids))
-                        elif node.categories[0] == BiolinkEntity(BIOLINK_DRUG):
+                        elif node.categories[0] == BIOLINK_DRUG_ENTITY:
                             drug_nodes.append(node_id)
                             if node.ids is None:
                                 wildcard_node_count += 1
@@ -159,18 +159,18 @@ class TrapiInterface:
                             else:
                                 found_curie = None
                                 for curie in node.ids:
-                                    if curie in self.curies[BIOLINK_DRUG]:
+                                    if curie in self.curies[BIOLINK_DRUG_ENTITY.get_curie()]:
                                         found_curie = curie
                                         qg.nodes[node_id].set_ids(found_curie)
                                 if found_curie is None:
                                     raise(UnidentifiedDrugCurie(node.ids))
-                        elif node.categories[0] == BiolinkEntity(BIOLINK_DISEASE):
+                        elif node.categories[0] == BIOLINK_DISEASE_ENTITY:
                             disease_nodes.append(node_id)
-                        elif node.categories[0] == BiolinkEntity(BIOLINK_PHENOTYPIC_FEATURE):
+                        elif node.categories[0] == BIOLINK_PHENOTYPIC_FEATURE_ENTITY:
                             phenotype_nodes.append(node_id)
                             found_curie = None
                             for curie in node.ids:
-                                if curie in self.curies[BIOLINK_PHENOTYPIC_FEATURE]:
+                                if curie in self.curies[BIOLINK_PHENOTYPIC_FEATURE_ENTITY.get_curie()]:
                                     found_curie = curie
                                     qg.nodes[node_id].set_ids(found_curie)
                             if found_curie is None:
@@ -210,18 +210,27 @@ class TrapiInterface:
     def checkQuery(self):
         return True
 
+    @staticmethod
+    def check_predicate_support(predicate1, predicate2, support_inverse=True):
+        if predicate1 == predicate2:
+            return True
+        elif support_inverse is True and predicate2.get_inverse() is not None:
+            if predicate1 == predicate2.get_inverse():
+                return True
+        return False
+
     def _check_wildcard_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
         for edge_id, edge in query_graph.edges.items():
-            if edge.predicates[0] == BiolinkEntity(BIOLINK_GENE_TO_DISEASE_PREDICATE, is_slot=True):
+            if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
                 if edge.subject not in gene_nodes or edge.object not in disease_nodes:
                     raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
-            elif edge.predicates[0] == BiolinkEntity(BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True):
+            elif self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY):
                 if edge.subject not in drug_nodes or edge.object not in disease_nodes:
                     raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
-            elif edge.predicates[0] == BiolinkEntity(BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True):
+            elif self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY):
                 if edge.subject not in disease_nodes and edge.object not in phenotype_nodes:
                     raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
-            elif edge.predicates[0] == BiolinkEntity(BIOLINK_CHEMICAL_TO_GENE_PREDICATE, is_slot=True):
+            elif self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY):
                 raise(IncompatibleWildcardEdge(edge_id))
             else:
                 raise(UnexpectedEdgeType(edge_id))
@@ -229,13 +238,13 @@ class TrapiInterface:
 
     def _check_one_hop_query(self, query, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
         for edge_id, edge in query['edges'].items():
-            if edge['predicate'] == BiolinkEntity(BIOLINK_GENE_TO_DISEASE_PREDICATE, is_slot=True):
+            if edge['predicate'] == BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY:
                 raise(IncompatibleDrugGeneOneHopEdge(edge_id))
-            elif edge['predicate'] == BiolinkEntity(BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True):
+            elif edge['predicate'] == BIOLINK_TREATS_ENTITY:
                 raise(IncompatibleDrugGeneOneHopEdge(edge_id))
-            elif edge['predicate'] == BiolinkEntity(BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True):
+            elif edge['predicate'] == BIOLINK_HAS_PHENOTYPE:
                 raise(IncompatibleDrugGeneOneHopEdge(edge_id))
-            elif edge['predicate'] == BiolinkEntity(BIOLINK_CHEMICAL_TO_GENE_PREDICATE, is_slot=True):
+            elif edge['predicate'] == BIOLINK_INTERACTS_WITH_ENTITY:
                 subject = edge['subject']
                 object = edge['object']
                 if object == wildcard_node:
@@ -246,16 +255,16 @@ class TrapiInterface:
 
     def _check_default_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
         for edge_id, edge in query_graph.edges.items():
-            if edge.predicates[0] == BiolinkEntity(BIOLINK_GENE_TO_DISEASE_PREDICATE, is_slot=True):
+            if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
                 if edge.subject not in gene_nodes or edge.object not in disease_nodes:
                     raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
-            elif edge.predicates[0] == BiolinkEntity(BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True):
+            elif self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY):
                 if edge.subject not in drug_nodes or edge.object not in disease_nodes:
                     raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
-            elif edge.predicates[0] == BiolinkEntity(BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True):
+            elif self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY):
                 if edge.subject not in disease_nodes and edge.object not in phenotype_nodes:
                     raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
-            elif edge.predicates[0] == BiolinkEntity(BIOLINK_CHEMICAL_TO_GENE_PREDICATE, is_slot=True):
+            elif self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY):
                 raise(IncompatibleDefaultEdge(edge_id))
             else:
                 raise(UnexpectedEdgeType(edge_id))

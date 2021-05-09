@@ -16,8 +16,7 @@ import uuid
 import json
 from collections import defaultdict
 
-from trapi_model.base import BiolinkEntity
-from trapi_model.constants import *
+from trapi_model.biolink.constants import *
 from chp_data.bkb_handler import BkbDataHandler
 
 from chp.query import Query
@@ -64,24 +63,24 @@ class DefaultHandlerMixin:
         _found_drug = False
         query_graph = message.query_graph
         for node_key, node in query_graph.nodes.items():
-            if node.categories[0] == BiolinkEntity(BIOLINK_PHENOTYPIC_FEATURE):
+            if node.categories[0] == BIOLINK_PHENOTYPIC_FEATURE_ENTITY:
                 # If we've already found the target and there's another phenotypic feature, then this isn't simple.
                 if _found_outcome:
                     return False
                 else:
                     _found_outcome = True
-            if node.categories[0] == BiolinkEntity(BIOLINK_DISEASE):
+            if node.categories[0] == BIOLINK_DISEASE_ENTITY:
                 # If we've already found disease and there's another disease, then this isn't simple.
                 if _found_disease:
                     return False
                 else:
                     _found_disease = True
-            if node.categories[0] == BiolinkEntity(BIOLINK_GENE):
+            if node.categories[0] == BIOLINK_GENE_ENTITY:
                 if _found_gene:
                     return False
                 else:
                     _found_gene = True
-            if node.categories[0] == BiolinkEntity(BIOLINK_DRUG):
+            if node.categories[0] == BIOLINK_DRUG_ENTITY:
                 if _found_drug:
                     return False
                 else:
@@ -103,18 +102,18 @@ class DefaultHandlerMixin:
         targets = list()
         for node_key in query_graph.nodes.keys():
             node = query_graph.nodes[node_key]
-            if node.categories[0] == BiolinkEntity(BIOLINK_PHENOTYPIC_FEATURE):
+            if node.categories[0] == BIOLINK_PHENOTYPIC_FEATURE_ENTITY:
                 target_id = node_key
                 total_nodes += 1
 
         # get disease node info and ensure only 1 disease:
         for node_key in query_graph.nodes.keys():
             node = query_graph.nodes[node_key]
-            if node.categories[0] == BiolinkEntity(BIOLINK_DISEASE):
+            if node.categories[0] == BIOLINK_DISEASE_ENTITY:
                 disease_id = node_key
                 for edge_key in query_graph.edges.keys():
                     edge = query_graph.edges[edge_key]
-                    if edge.predicates[0] == BiolinkEntity(BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True) and edge.subject == disease_id and edge.object == target_id:
+                    if self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY) and edge.subject == disease_id and edge.object == target_id:
                         survival_time_constraint = edge.find_constraint(name='survival_time')
                         if survival_time_constraint is not None:
                             survival_value = survival_time_constraint.value
@@ -137,12 +136,12 @@ class DefaultHandlerMixin:
         for node_key in query_graph.nodes.keys():
             # genes
             node = query_graph.nodes[node_key]
-            if node.categories[0] == BiolinkEntity(BIOLINK_GENE):
+            if node.categories[0] == BIOLINK_GENE_ENTITY:
                 # check for appropriate gene node structure
                 gene_id = node_key
                 for edge_key in query_graph.edges.keys():
                     edge = query_graph.edges[edge_key]
-                    if edge.predicates[0] == BiolinkEntity(BIOLINK_GENE_TO_DISEASE_PREDICATE, is_slot=True) and edge.subject == gene_id and edge.object == disease_id:
+                    if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY) and edge.subject == gene_id and edge.object == disease_id:
                         total_edges += 1
                 # check for appropriate gene node curie
                 gene_curie = node.ids[0]
@@ -150,12 +149,12 @@ class DefaultHandlerMixin:
                 evidence["_" + gene] = 'True'
                 total_nodes += 1
             # drugs
-            if node.categories[0] == BiolinkEntity(BIOLINK_DRUG):
+            if node.categories[0] == BIOLINK_DRUG_ENTITY:
                 # check for appropriate drug node structure
                 drug_id = node_key
                 for edge_key in query_graph.edges.keys():
                     edge = query_graph.edges[edge_key]
-                    if edge.predicates[0] == BiolinkEntity(BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True) and edge.subject == drug_id and edge.object == disease_id:
+                    if self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY) and edge.subject == drug_id and edge.object == disease_id:
                         total_edges += 1
                 # check for appropriate drug node curie
                 drug_curie = node.ids[0]
@@ -211,16 +210,16 @@ class DefaultHandlerMixin:
         kg = message.knowledge_graph
         node_bindings = {}
         for qnode_key, qnode in qg.nodes.items():
-            if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE):
+            if qnode.categories[0] == BIOLINK_GENE_ENTITY:
                 knode_key = kg.add_node(
                         qnode.ids[0],
-                        self.curies[BIOLINK_GENE][qnode.ids[0]][0],
+                        self.curies[BIOLINK_GENE_ENTITY.get_curie()][qnode.ids[0]][0],
                         qnode.categories[0].get_curie(),
                         )
-            elif qnode.categories[0] == BiolinkEntity(BIOLINK_DRUG):
+            elif qnode.categories[0] == BIOLINK_DRUG_ENTITY:
                 knode_key = kg.add_node(
                         qnode.ids[0],
-                        self.curies[BIOLINK_DRUG][qnode.ids[0]][0],
+                        self.curies[BIOLINK_DRUG_ENTITY.get_curie()][qnode.ids[0]][0],
                         qnode.categories[0].get_curie(),
                         )
             else:
@@ -241,11 +240,11 @@ class DefaultHandlerMixin:
                     )
             edge_bindings[qedge_key] = [kedge_key]
             # Add Attribute
-            if qedge.predicates[0] == BiolinkEntity(BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True):
+            if self.check_predicate_support(qedge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY):
                 kg.edges[kedge_key].add_attribute(
                         attribute_type_id='Probability of Survival',
                         value=chp_query.truth_prob,
-                        value_type_id=BiolinkEntity(BIOLINK_PROBABILITY, is_slot=True).get_curie(),
+                        value_type_id=BIOLINK_HAS_CONFIDENCE_LEVEL_ENTITY.get_curie(),
                         )
         # Proces results
         message.results.add_result(

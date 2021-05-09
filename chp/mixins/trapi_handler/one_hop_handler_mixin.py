@@ -14,8 +14,7 @@ import sys
 import pickle
 from collections import defaultdict
 
-from trapi_model.constants import *
-from trapi_model.base import BiolinkEntity
+from trapi_model.biolink.constants import *
 
 from chp.query import Query
 from chp.reasoner import ChpDynamicReasoner, ChpJointReasoner
@@ -95,9 +94,9 @@ class OneHopHandlerMixin:
         # If standard onehop query
         if wildcard_type is None:
             return 'standard'
-        elif wildcard_type == BiolinkEntity(BIOLINK_DRUG):
+        elif wildcard_type == BIOLINK_DRUG_ENTITY:
             return 'drug'
-        elif wildcard_type == BiolinkEntity(BIOLINK_GENE):
+        elif wildcard_type == BIOLINK_GENE_ENTITY:
             return 'gene'
         else:
             raise ValueError('Did not understand wildcard type {}.'.format(wildcard_type))
@@ -136,11 +135,11 @@ class OneHopHandlerMixin:
         predicate_context_constraint = qedge.find_constraint('predicate_context')
         if predicate_context_constraint is not None:
             for context in predicate_context_constraint.value:
-                context_curie = BiolinkEntity(context)
+                context_curie = get_biolink_entity(context)
                 context_constraint = qedge.find_constraint(context)
                 if context_constraint is None:
                     raise ValueError('Provided no context details for {}'.format(context))
-                if context_curie == BiolinkEntity(BIOLINK_GENE) or context_curie == BiolinkEntity(BIOLINK_DRUG):
+                if context_curie == BIOLINK_GENE_ENTITY or context_curie == BIOLINK_DRUG_ENTITY:
                     if type(context_constraint.value) is list:
                         for _curie in context_constraint.value:
                             evidence['_{}'.format(_curie)] = 'True'
@@ -157,15 +156,15 @@ class OneHopHandlerMixin:
         if message_type == 'standard':
             # Setup gene and drug evidence
             for qnode_id, qnode in message.query_graph.nodes.items():
-                if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE) or qnode.categories[0] == BiolinkEntity(BIOLINK_DRUG):
+                if qnode.categories[0] == BIOLINK_GENE_ENTITY or qnode.categories[0] == BIOLINK_DRUG_ENTITY:
                     evidence['_{}'.format(qnode.ids[0])] = 'True'
         elif message_type == 'gene':
             for qnode_id, qnode in message.query_graph.nodes.items():
-                if qnode.categories[0] == BiolinkEntity(BIOLINK_DRUG):
+                if qnode.categories[0] == BIOLINK_DRUG_ENTITY:
                     evidence['_{}'.format(qnode.ids[0])] = 'True'
         elif message_type == 'drug':
             for qnode_id, qnode in message.query_graph.nodes.items():
-                if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE):
+                if qnode.categories[0] == BIOLINK_GENE_ENTITY:
                     evidence['_{}'.format(qnode.ids[0])] = 'True'
         # Grab edge
         for qedge_id, qedge in message.query_graph.edges.items():
@@ -341,19 +340,19 @@ class OneHopHandlerMixin:
         # Process nodes
         for qnode_id, qnode in qg.nodes.items():
             if qnode.ids is not None:
-                if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE):
+                if qnode.categories[0] == BIOLINK_GENE_ENTITY:
                     knode_key = kg.add_node(
                             qnode.ids[0],
-                            self.curies[BIOLINK_GENE][qnode.ids[0]][0],
+                            self.curies[BIOLINK_GENE_ENTITY.get_curie()][qnode.ids[0]][0],
                             qnode.categories[0].get_curie(),
                             )
-                elif qnode.categories[0] == BiolinkEntity(BIOLINK_DRUG):
+                elif qnode.categories[0] == BIOLINK_DRUG_ENTITY:
                     knode_key = kg.add_node(
                             qnode.ids[0],
-                            self.curies[BIOLINK_DRUG][qnode.ids[0]][0],
+                            self.curies[BIOLINK_DRUG_ENTITY.get_curie()][qnode.ids[0]][0],
                             qnode.categories[0].get_curie(),
                             )
-                elif qnode.categories[0] == BiolinkEntity(BIOLINK_DISEASE):
+                elif qnode.categories[0] == BIOLINK_DISEASE_ENTITY:
                     #TODO: Add diseases to curies and fix name hack below.
                     knode_key = kg.add_node(
                             qnode.ids[0],
@@ -376,7 +375,7 @@ class OneHopHandlerMixin:
                 kg.edges[kedge_key].add_attribute(
                         attribute_type_id='Probability of Survival',
                         value=chp_query.truth_prob,
-                        value_type_id=BiolinkEntity(BIOLINK_PROBABILITY, is_slot=True).get_curie(),
+                        value_type_id=BIOLINK_HAS_CONFIDENCE_LEVEL_ENTITY.get_curie(),
                         )
             message.results.add_result(
                     node_bindings,
@@ -399,21 +398,21 @@ class OneHopHandlerMixin:
                 # Process node bindings
                 bad_wildcard = False
                 for qnode_id, qnode in qg.nodes.items():
-                    if qnode.categories[0] == BiolinkEntity(BIOLINK_GENE) and query_type == 'gene':
+                    if qnode.categories[0] == BIOLINK_GENE_ENTITY and query_type == 'gene':
                         try:
                             knode_id = kg.add_node(
                                     wildcard,
-                                    self.curies[BIOLINK_GENE][wildcard][0],
+                                    self.curies[BIOLINK_GENE_ENTITY.get_curie()][wildcard][0],
                                     qnode.categories[0].get_curie(),
                                     )
                             _node_bindings[qnode_id] = [knode_id]
                         except KeyError:
                             logger.info("Couldn't find {} in curies[{}]".format(wildcard, BIOLINK_GENE))
                             bad_wildcard = True
-                    elif qnode.categories[0] == BiolinkEntity(BIOLINK_DRUG) and query_type == 'drug':
+                    elif qnode.categories[0] == BIOLINK_DRUG_ENTITY and query_type == 'drug':
                         knode_id = kg.add_node(
                                 wildcard,
-                                self.curies[BIOLINK_DRUG][wildcard][0],
+                                self.curies[BIOLINK_DRUG.get_curie()][wildcard][0],
                                 qnode.categories[0].get_curie(),
                                 )
                         _node_bindings[qnode_id] = [knode_id]
@@ -432,7 +431,7 @@ class OneHopHandlerMixin:
                     kg.edges[kedge_id].add_attribute(
                             attribute_type_id='Contribution',
                             value=contrib,
-                            value_type_id=BiolinkEntity(BIOLINK_CONTRIBUTION, is_slot=True).get_curie(),
+                            value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
                             )
                     _edge_bindings[qedge_id] = [kedge_id]
                 # Process node and edge binding results

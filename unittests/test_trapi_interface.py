@@ -3,13 +3,26 @@ import logging
 import pickle
 import json
 import copy
+import sys
 
-from trapi_model import Query
+import trapi_model
+trapi_model.set_biolink_debug_mode(False)
+from trapi_model.query import Query
 
 from chp.trapi_interface import TrapiInterface
 from chp.errors import *
 
-logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+stream_handler = logging.StreamHandler(sys.stdout)
+logger.addHandler(stream_handler)
+
+#logging.basicConfig(level=logging.INFO)
+#logger = logging.getLogger()
+#logger.setLevel(logging.INFO)
+logger_root = logging.getLogger()
+logger_root.setLevel(logging.INFO)
 
 class TestDefaultHandler(unittest.TestCase):
 
@@ -32,16 +45,31 @@ class TestDefaultHandler(unittest.TestCase):
 
     def test_default_single_query(self):
         # This is a non-simple query
+        logger.info('Running single query test.')
         for trapi_version, queries in self.queries.items():
             query = Query.load(trapi_version, None, query=queries[3])
             interface = TrapiInterface(query=query)
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
-        
+    
+    def test_inverse_query(self):
+        # This is a simple query 
+        logger.info('Running default inverse query test.')
+        for trapi_version, queries in self.queries.items():
+            query = Query.load(trapi_version, None, query=queries[1])
+            for edge_id, edge in query.message.query_graph.edges.items():
+                predicate = edge.predicates[0]
+                inverse = edge.predicates[0].get_inverse()
+                edge.set_predicates(inverse)
+            interface = TrapiInterface(query=query)
+            interface.build_chp_queries()
+            interface.run_chp_queries()
+            response = interface.construct_trapi_response()
 
     def test_simple_single_query(self):
         # This is a simple query 
+        logger.info('Running single simple query test.')
         for trapi_version, queries in self.queries.items():
             query = Query.load(trapi_version, None, query=queries[1])
             interface = TrapiInterface(query=query)
@@ -50,6 +78,7 @@ class TestDefaultHandler(unittest.TestCase):
             response = interface.construct_trapi_response()
         
     def test_default_batch_query(self):
+        logger.info('Running batch query test.')
         # These are non-simple queries
         for trapi_version, queries in self.batch_queries.items():
             query = Query.load(trapi_version, None, query=queries[1])
@@ -60,6 +89,7 @@ class TestDefaultHandler(unittest.TestCase):
 
     def test_simple_batch_query(self):
         # These are simple queries
+        logger.info('Running batch simple query test.')
         for trapi_version, queries in self.batch_queries.items():
             query = Query.load(trapi_version, None, query=queries[0])
             interface = TrapiInterface(query=query)
@@ -87,6 +117,19 @@ class TestWildCardHandler(unittest.TestCase):
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
+
+    def test_inverse_wildcard_query(self):
+        for trapi_version, queries in self.gene_queries.items():
+            query = Query.load(trapi_version, None, query=queries[0])
+            for edge_id, edge in query.message.query_graph.edges.items():
+                predicate = edge.predicates[0]
+                inverse = edge.predicates[0].get_inverse()
+                edge.set_predicates(inverse)
+            interface = TrapiInterface(query=query)
+            interface.build_chp_queries()
+            interface.run_chp_queries()
+            response = interface.construct_trapi_response()
+
 
     def test_single_drug_wildcard_query(self):
         for trapi_version, queries in self.drug_queries.items():
@@ -131,6 +174,22 @@ class TestOneHopHandler(unittest.TestCase):
                 #if name != 'gene_to_disease_proxy_context':
                 #    continue
                 query = Query.load(trapi_version, None, query=query_dict)
+                interface = TrapiInterface(query=query)
+                interface.build_chp_queries()
+                interface.run_chp_queries()
+                response = interface.construct_trapi_response()
+    
+    def test_inverse_onehop_query(self):
+        for trapi_version, queries in self.standard_single_queries.items():
+            for name, query_dict in queries.items():
+                #if name != 'gene_to_disease_proxy_context':
+                #    continue
+                query = Query.load(trapi_version, None, query=query_dict)
+                for edge_id, edge in query.message.query_graph.edges.items():
+                    predicate = edge.predicates[0]
+                    inverse = edge.predicates[0].get_inverse()
+                    if inverse is not None:
+                        edge.set_predicates(inverse)
                 interface = TrapiInterface(query=query)
                 interface.build_chp_queries()
                 interface.run_chp_queries()

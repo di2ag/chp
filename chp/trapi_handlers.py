@@ -76,6 +76,15 @@ class BaseHandler:
         # Read in curies
         with open(self.bkb_data_handler.curies_path, 'r') as f_:
             self.curies = json.load(f_)
+    
+    @staticmethod
+    def check_predicate_support(predicate1, predicate2, support_inverse=True):
+        if predicate1 == predicate2:
+            return True
+        elif support_inverse is True and predicate2.get_inverse() is not None:
+            if predicate1 == predicate2.get_inverse():
+                return True
+        return False
 
     def _handler_setup(self):
         pass
