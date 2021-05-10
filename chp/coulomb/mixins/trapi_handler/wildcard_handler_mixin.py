@@ -15,22 +15,20 @@ import pickle
 from collections import defaultdict
 import json
 
-from trapi_model.biolink.constants import *
 from chp_data.bkb_handler import BkbDataHandler
+from chp_data.trapi_constants import *
 
 from chp.query import Query
 from chp.reasoner import ChpDynamicReasoner
 from pybkb.python_base.utils import get_operator, get_opposite_operator
 
-# Setup logging
-logger = logging.getLogger(__name__)
 
 class WildCardHandlerMixin:
     def _setup_handler(self):
         # Only do the rest of this if a query is passed
-        if self.messages is not None:
-            # Setup messages
-            self._setup_messages()
+        if self.init_query is not None:
+            # Setup queries
+            self._setup_queries()
 
             # Instiatate Reasoners
             if self.dynamic_reasoner is None:
@@ -39,26 +37,30 @@ class WildCardHandlerMixin:
                     hosts_filename=self.hosts_filename,
                     num_processes_per_host=self.num_processes_per_host)
 
-    def _setup_messages(self):
-        if type(self.messages) == list:
-            self.message_dict = defaultdict(list)
-            for message in self.messages:
-                self.message_dict[self._get_wildcard_type(message)].append(message)
+    def _setup_queries(self):
+        if type(self.init_query) == list:
+            self.query_dict = defaultdict(list)
+            self.query_map = []
+            for query in self.init_query:
+                self.query_map.append(query["query_id"])
+                self.query_dict[self._get_wildcard_type(query)].append(self._setup_single_query(query))
+        else:
+            self.query_dict[self._get_wildcard_type(query)].append(self._setup_single_query(query))
 
-    def _get_wildcard_type(self, message):
+    def _get_wildcard_type(self, query):
         wildcard_type = None
-        for node_id, node in message.query_graph.nodes.items():
-            if node.ids is None:
+        for node_id, node in query["query_graph"]["nodes"].items():
+            if 'id' not in node:
                 if wildcard_type is None:
-                    wildcard_type = node.categories[0]
-        if wildcard_type == BIOLINK_DRUG_ENTITY:
+                    wildcard_type = node['category']
+        if wildcard_type == BIOLINK_DRUG:
             return 'drug'
-        elif wildcard_type == BIOLINK_GENE_ENTITY:
+        elif wildcard_type == BIOLINK_GENE:
             return 'gene'
         else:
             raise ValueError('Did not understand wildcard type {}.'.format(wildcard_type))
 
-    def _extract_chp_query(self, message, message_type):
+    def _extract_chp_query(self, query, query_type):
         evidence = {}
         targets = []
         dynamic_evidence = {}
@@ -67,14 +69,13 @@ class WildCardHandlerMixin:
         total_nodes = 0
         total_edges = 0
 
-        query_graph = message.query_graph
         # get phenotype node
         targets = list()
         acceptable_target_curies = ['EFO:0000714']
         self.implicit_survival_node = False
-        for node_key in query_graph.nodes.keys():
-            node = query_graph.nodes[node_key]
-            if node.categories[0] == BIOLINK_PHENOTYPIC_FEATURE_ENTITY and node.ids[0] in acceptable_target_curies:
+        for node_key in query["query_graph"]['nodes'].keys():
+            node = query["query_graph"]['nodes'][node_key]
+            if node['category'] == BIOLINK_PHENOTYPIC_FEATURE and node['id'] in acceptable_target_curies:
                 target_id = node_key
                 total_nodes += 1
         if total_nodes == 0:
@@ -82,27 +83,24 @@ class WildCardHandlerMixin:
             self.implicit_survival_node = True
             total_nodes += 1
             #acceptable_target_curies_print = ','.join(acceptable_target_curies)
-            #sys.exit("Survival Node not found. Node category must be '{}' and id must be in: {}".format(Biolink(BIOLINK_PHENOTYPIC_FEATURE),
+            #sys.exit("Survival Node not found. Node category must be '{}' and id must be in: {}".format(BIOLINK_PHENOTYPIC_FEATURE,
             #                                                                                            acceptable_target_curies_print))
 
         # get disease node info and ensure only 1 disease:
         acceptable_disease_curies = ['MONDO:0007254']
-        for node_key in query_graph.nodes.keys():
-            node = query_graph.nodes[node_key]
-            if node.categories[0] == BIOLINK_DISEASE_ENTITY and node.ids[0] in acceptable_disease_curies:
+        for node_key in query["query_graph"]['nodes'].keys():
+            node = query["query_graph"]['nodes'][node_key]
+            if node['category'] == BIOLINK_DISEASE and node['id'] in acceptable_disease_curies:
                 disease_id = node_key
-                for edge_key in query_graph.edges.keys():
-                    edge = query_graph.edges[edge_key]
-                    if self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY) and edge.subject == disease_id and edge.object == target_id:
-                        survival_time_constraint = edge.find_constraint(name='survival_time')
-                        if survival_time_constraint is not None:
-                            survival_value = survival_time_constraint.value
-                            survival_operator = survival_time_constraint.operator
-                            if survival_operator == 'matches':
-                                survival_operator = '=='
+                for edge_key in query["query_graph"]['edges'].keys():
+                    edge = query["query_graph"]['edges'][edge_key]
+                    if edge['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE and edge['subject'] == disease_id and edge['object'] == target_id:
+                        if 'properties' in edge.keys():
+                            days = edge['properties']['days']
+                            qualifier = edge['properties']['qualifier']
                         else:
-                            survival_value = 970
-                            survival_operator = '>='
+                            days = 970
+                            qualifier = '>='
                         total_edges += 1
                 total_nodes += 1
 
@@ -113,41 +111,41 @@ class WildCardHandlerMixin:
 
         # set BKB target
         dynamic_targets['EFO:0000714'] = {
-            "op": survival_operator,
-            "value": survival_value,
+            "op": qualifier,
+            "value": days,
         }
-        truth_target = ('EFO:0000714', '{} {}'.format(survival_operator, survival_value))
+        truth_target = ('EFO:0000714', '{} {}'.format(qualifier, days))
 
         # get evidence
-        for node_key in query_graph.nodes.keys():
+        for node_key in query["query_graph"]['nodes'].keys():
             # genes
-            node = query_graph.nodes[node_key]
-            if node.categories[0] == BIOLINK_GENE_ENTITY:
+            node = query["query_graph"]['nodes'][node_key]
+            if node['category'] == BIOLINK_GENE:
                 # check for appropriate gene node structure
                 gene_id = node_key
-                for edge_key in query_graph.edges.keys():
-                    edge = query_graph.edges[edge_key]
-                    if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY) and edge.subject == gene_id and edge.object == disease_id:
+                for edge_key in query["query_graph"]['edges'].keys():
+                    edge = query["query_graph"]['edges'][edge_key]
+                    if edge['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE and edge['subject'] == gene_id and edge['object'] == disease_id:
                         total_edges += 1
                 # check for appropriate gene node curie
-                if message_type != 'gene':
-                    gene_curie = node.ids[0]
-                    if gene_curie in self.curies[BIOLINK_GENE_ENTITY.get_curie()]:
+                if query_type != 'gene':
+                    gene_curie = node['id']
+                    if gene_curie in self.curies[BIOLINK_GENE]:
                         gene = gene_curie
                     evidence["_" + gene] = 'True'
                 total_nodes += 1
             # drugs
-            if node.categories[0] == BIOLINK_DRUG_ENTITY:
+            if node['category'] == BIOLINK_DRUG:
                 # check for appropriate drug node structure
                 drug_id = node_key
-                for edge_key in query_graph.edges.keys():
-                    edge = query_graph.edges[edge_key]
-                    if self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY) and edge.subject == drug_id and edge.object == disease_id:
+                for edge_key in query["query_graph"]['edges'].keys():
+                    edge = query["query_graph"]['edges'][edge_key]
+                    if edge['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE and edge['subject'] == drug_id and edge['object'] == disease_id:
                         total_edges += 1
                 # check for appropriate drug node curie
-                if message_type != 'drug':
-                    drug_curie = node.ids[0]
-                    if drug_curie in self.curies[BIOLINK_DRUG_ENTITY.get_curie()]:
+                if query_type != 'drug':
+                    drug_curie = node['id']
+                    if drug_curie in self.curies[BIOLINK_DRUG]:
                         drug = drug_curie
                     evidence['_' + drug] = 'True'
                 total_nodes += 1
@@ -167,6 +165,7 @@ class WildCardHandlerMixin:
             type='updating')
         # Set some other helpful attributes
         chp_query.truth_target = truth_target
+        chp_query.query_id = query["query_id"] if 'query_id' in query else None
         return chp_query
 
     def _run_query(self, chp_query, query_type):
@@ -186,11 +185,7 @@ class WildCardHandlerMixin:
             chp_res_norm_dict = chp_query.result.process_updates(normalize=True)
             #chp_query.result.summary()
             chp_res_contributions = chp_query.result.process_inode_contributions()
-            try:
-                chp_query.truth_prob = max([0, chp_res_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
-            except KeyError:
-                # May need to come back and fix this.
-                chp_query.truth_prob = -1
+            chp_query.truth_prob = max([0, chp_res_norm_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
 
             # Collect all source inodes and process patient hashes
             patient_contributions = defaultdict(lambda: defaultdict(int))
@@ -262,64 +257,44 @@ class WildCardHandlerMixin:
 
         return chp_query
 
-    def _construct_trapi_message(self, chp_query, message, query_type=None):
+    def _construct_trapi_response(self, chp_query, query_type):
+        # Get orginal query
+        if len(self.init_query) == 1:
+            query = self.init_query[0]
+            query_id = None
+        else:
+            for _query in self.init_query:
+                if _query["query_id"] == chp_query.query_id:
+                    query = _query
+                    query_id = query["query_id"]
+                    break
 
-        # update target node info and form edge pair combos for results graph
-
-        qg = message.query_graph
-        kg = message.knowledge_graph
-
-        # Process Standard QUery as first result.
+        # Construct first result which is the result of the standard probablistic query.
+        kg = copy.deepcopy(query["query_graph"])
         # Process Nodes
-        node_bindings = {}
+        node_pairs = defaultdict(None)
         contrib_qg_id = None
-        for qnode_key, qnode in qg.nodes.items():
-            if qnode.ids is not None:
-                if qnode.categories[0] == BIOLINK_GENE_ENTITY:
-                    knode_key = kg.add_node(
-                            qnode.ids[0],
-                            self.curies[BIOLINK_GENE_ENTITY.get_curie()][qnode.ids[0]][0],
-                            qnode.categories[0].get_curie(),
-                            )
-                elif qnode.categories[0] == BIOLINK_DRUG_ENTITY:
-                    knode_key = kg.add_node(
-                            qnode.ids[0],
-                            self.curies[BIOLINK_DRUG_ENTITY.get_curie()][qnode.ids[0]][0],
-                            qnode.categories[0].get_curie(),
-                            )
-                else:
-                    knode_key = kg.add_node(
-                            qnode.ids[0],
-                            qnode.ids[0],
-                            qnode.categories[0].get_curie(),
-                            )
-                node_bindings[qnode_key] = [knode_key]
+        for node_key in list(kg["nodes"].keys())[:]:
+            qg_node_curie = kg['nodes'][node_key].pop('id', None)
+            if qg_node_curie is not None:
+                kg['nodes'][qg_node_curie] = kg['nodes'].pop(node_key)
+                if kg['nodes'][qg_node_curie]['category'] == BIOLINK_GENE:
+                    kg['nodes'][qg_node_curie]['name'] = self.curies["biolink:Gene"][qg_node_curie][0]
+                elif kg['nodes'][qg_node_curie]['category'] == BIOLINK_DRUG:
+                    kg['nodes'][qg_node_curie]['name'] = self.curies["biolink:Drug"][qg_node_curie][0]
+                node_pairs[node_key] = qg_node_curie
+            else:
+                kg["nodes"].pop(node_key)
+
         if not self.implicit_survival_node:
             # Process Edges
-            edge_bindings = {}
+            edge_pairs = dict()
             knowledge_edges = 0
-            for qedge_key, qedge in qg.edges.items():
-                if not qedge.subject in node_bindings or not qedge.object in node_bindings:
-                    continue
-                kedge_key = kg.add_edge(
-                        node_bindings[qedge.subject][0],
-                        node_bindings[qedge.object][0],
-                        predicate=qedge.predicates[0].get_curie(),
-                        relation=qedge.relation,
-                        )
-                edge_bindings[qedge_key] = [kedge_key]
-                # Add Attribute
-                if self.check_predicate_support(qedge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY):
-                    kg.edges[kedge_key].add_attribute(
-                            attribute_type_id='Probability of Survival',
-                            value=chp_query.truth_prob,
-                            value_type_id=BIOLINK_HAS_CONFIDENCE_LEVEL_ENTITY.get_curie(),
-                            )
-                '''
+            for edge_key in list(kg['edges'].keys())[:]:
                 subject_node = kg['edges'][edge_key]['subject']
-                if kg['edges'][edge_key]['predicate'] == BIOLINK_GENE_ENTITY_TO_DISEASE_PREDICATE, is_slot=True) and query['query_graph']['nodes'][subject_node]['category'] == BIOLINK_GENE_ENTITY and query_type == 'gene':
+                if kg['edges'][edge_key]['predicate'] == BIOLINK_GENE_TO_DISEASE_PREDICATE and query['query_graph']['nodes'][subject_node]['category'] == BIOLINK_GENE and query_type == 'gene':
                     kg['edges'].pop(edge_key)
-                elif kg['edges'][edge_key]['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True) and query['query_graph']['nodes'][subject_node]['category'] == BIOLINK_DRUG_ENTITY and query_type == 'drug':
+                elif kg['edges'][edge_key]['predicate'] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE and query['query_graph']['nodes'][subject_node]['category'] == BIOLINK_DRUG and query_type == 'drug':
                     kg['edges'].pop(edge_key)
                 else:
                     kg_id = 'kge{}'.format(knowledge_edges)
@@ -328,19 +303,13 @@ class WildCardHandlerMixin:
                     kg['edges'][kg_id]['subject'] = node_pairs[kg['edges'][kg_id]['subject']]
                     kg['edges'][kg_id]['object'] = node_pairs[kg['edges'][kg_id]['object']]
                     edge_pairs[edge_key] = kg_id
-                    if kg['edges'][kg_id]['predicate'] == BIOLINK_DISEASE_ENTITY_TO_PHENOTYPIC_FEATURE_PREDICATE, is_slot=True):
+                    if kg['edges'][kg_id]['predicate'] == BIOLINK_DISEASE_TO_PHENOTYPIC_FEATURE_PREDICATE:
                         if 'properties' in kg['edges'][kg_id].keys():
                             kg['edges'][kg_id].pop('properties')
                         kg['edges'][kg_id]['attributes'] = [{'name':'Probability of Survival',
                                                              'type':BIOLINK_PROBABILITY,
                                                              'value':chp_query.truth_prob}]
-                '''
-            # Proces results
-            message.results.add_result(
-                    node_bindings,
-                    edge_bindings,
-                    )
-            '''
+
             # Put first result of standard prob query of only curie nodes (i.e. no wildcard nodes where used as evidence)
             results = []
             results.append({'edge_bindings':dict(),
@@ -349,11 +318,11 @@ class WildCardHandlerMixin:
                 results[0]['edge_bindings'][edge_pair_key] = [{ 'id': str(edge_pairs[edge_pair_key])}]
             for node_pair_key in node_pairs:
                 results[0]['node_bindings'][node_pair_key] = [{ 'id': str(node_pairs[node_pair_key])}]
-            '''
-        #else:
-        #    knowledge_edges = 0
-        #    kg['edges'] = {}
-        #    results = []
+
+        else:
+            knowledge_edges = 0
+            kg['edges'] = {}
+            results = []
 
         # Build relative contribution results and added associated edges into knowledge graph
         unsorted_wildcard_contributions = []
@@ -362,71 +331,60 @@ class WildCardHandlerMixin:
         sorted_wildcard_contributions = [(contrib,wildcard) for contrib, wildcard in sorted(unsorted_wildcard_contributions, key=lambda x: abs(x[0]), reverse=True)]
 
         for contrib, wildcard in sorted_wildcard_contributions[:self.max_results]:
-            #TODO: Fix this!
-            if wildcard == 'missing':
-                continue
-            #rg = copy.deepcopy(query["query_graph"])
-            _node_bindings = {}
-            _edge_bindings = {}
-            # Process node bindings
-            bad_wildcard = False
-            for qnode_id, qnode in qg.nodes.items():
-                if qnode.categories[0] == BIOLINK_GENE_ENTITY and query_type == 'gene':
-                    try:
-                        knode_id = kg.add_node(
-                                wildcard,
-                                self.curies[BIOLINK_GENE_ENTITY.get_curie()][wildcard][0],
-                                qnode.categories[0].get_curie(),
-                                )
-                        _node_bindings[qnode_id] = [knode_id]
-                    except KeyError:
-                        logger.info("Couldn't find {} in curies[{}]".format(wildcard, BIOLINK_GENE_ENTITY.get_curie()))
-                        bad_wildcard = True
-                elif qnode.categories[0] == BIOLINK_DRUG_ENTITY and query_type == 'drug':
-                    knode_id = kg.add_node(
-                            wildcard,
-                            self.curies[BIOLINK_DRUG_ENTITY.get_curie()][wildcard][0],
-                            qnode.categories[0].get_curie(),
-                            )
-                    _node_bindings[qnode_id] = [knode_id]
+            rg = copy.deepcopy(query["query_graph"])
+            _node_pairs = {}
+            _edge_pairs = {}
+            # Process node pairs
+            for node_id, node in rg["nodes"].items():
+                if node["category"] == BIOLINK_GENE and query_type == 'gene':
+                    kg["nodes"][wildcard] = copy.deepcopy(node)
+                    kg["nodes"][wildcard].update({"name": self.curies[BIOLINK_GENE][wildcard][0]})
+                    _node_pairs[node_id] = wildcard
+                elif node["category"] == BIOLINK_DRUG and query_type == 'drug':
+                    kg["nodes"][wildcard] = copy.deepcopy(node)
+                    kg["nodes"][wildcard].update({"name": self.curies[BIOLINK_DRUG][wildcard][0]})
+                    _node_pairs[node_id] = wildcard
                 else:
-                    _node_bindings[qnode_id] = node_bindings[qnode_id]
-            if bad_wildcard:
-                continue
-            # Process edge bindings
-            for qedge_id, qedge in qg.edges.items():
-                subject_node = qedge.subject
-                if query_type == 'gene' and self.check_predicate_support(qedge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY) and qg.nodes[subject_node].categories[0] == BIOLINK_GENE_ENTITY:
-                    kedge_id = kg.add_edge(
-                            _node_bindings[qedge.subject][0],
-                            _node_bindings[qedge.object][0],
-                            predicate=qedge.predicates[0],
-                            relation=qedge.relation,
-                            )
-                    kg.edges[kedge_id].add_attribute(
-                            attribute_type_id='Contribution',
-                            value=contrib,
-                            value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
-                            )
-                    _edge_bindings[qedge_id] = [kedge_id]
-                elif query_type == 'drug' and self.check_predicate_support(qedge.predicates[0], BIOLINK_TREATS_ENTITY) and qg.nodes[subject_node].categories[0] == BIOLINK_DRUG_ENTITY:
-                    kedge_id = kg.add_edge(
-                            _node_bindings[qedge.subject][0],
-                            _node_bindings[qedge.object][0],
-                            predicate=qedge.predicates[0],
-                            relation=qedge.relation,
-                            )
-                    kg.edges[kedge_id].add_attribute(
-                            attribute_type_id='Contribution',
-                            value=contrib,
-                            value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
-                            )
-                    _edge_bindings[qedge_id] = [kedge_id]
+                    _node_pairs[node_id] = node_pairs[node_id]
+            # Process edge pairs
+            for edge_id, edge in rg["edges"].items():
+                subject_node = edge['subject']
+                if query_type == 'gene'  and edge["predicate"] == BIOLINK_GENE_TO_DISEASE_PREDICATE and query['query_graph']['nodes'][subject_node]['category'] == BIOLINK_GENE:
+                    knowledge_edges += 1
+                    kg_edge_id = 'kge{}'.format(knowledge_edges)
+                    kg["edges"][kg_edge_id] = copy.deepcopy(edge)
+                    kg["edges"][kg_edge_id]["subject"] = _node_pairs[kg["edges"][kg_edge_id]["subject"]]
+                    kg["edges"][kg_edge_id]["object"] = _node_pairs[kg["edges"][kg_edge_id]["object"]]
+                    #kg["edges"][kg_edge_id]["value"] = contrib
+                    kg["edges"][kg_edge_id]["attributes"] = [{'name':'Contribution',
+                                                              'type':BIOLINK_CONTRIBUTION,
+                                                              'value':contrib}]
+                    _edge_pairs[edge_id] = kg_edge_id
+                elif query_type == 'drug'  and edge["predicate"] == BIOLINK_CHEMICAL_TO_DISEASE_OR_PHENOTYPIC_FEATURE_PREDICATE and query['query_graph']['nodes'][subject_node]['category'] == BIOLINK_DRUG:
+                    knowledge_edges += 1
+                    kg_edge_id = 'kge{}'.format(knowledge_edges)
+                    kg["edges"][kg_edge_id] = copy.deepcopy(edge)
+                    kg["edges"][kg_edge_id]["subject"] = _node_pairs[kg["edges"][kg_edge_id]["subject"]]
+                    kg["edges"][kg_edge_id]["object"] = _node_pairs[kg["edges"][kg_edge_id]["object"]]
+                    #kg["edges"][kg_edge_id]["value"] = contrib
+                    kg["edges"][kg_edge_id]["attributes"] = [{'name':'Contribution',
+                                                              'type':BIOLINK_CONTRIBUTION,
+                                                              'value':contrib}]
+                    _edge_pairs[edge_id] = kg_edge_id
                 else:
-                    _edge_bindings[qedge_id] = edge_bindings[qedge_id]
+                    _edge_pairs[edge_id] = edge_pairs[edge_id]
             # Process node and edge binding results
-            message.results.add_result(
-                    _node_bindings,
-                    _edge_bindings,
-                    )
-        return message
+            _res = {"edge_bindings": {},
+                    "node_bindings": {}}
+            for edge_pair_key in _edge_pairs:
+                _res["edge_bindings"][edge_pair_key] = [{ "id": str(_edge_pairs[edge_pair_key])}]
+            for node_pair_key in _node_pairs:
+                _res["node_bindings"][node_pair_key] = [{ "id": str(_node_pairs[node_pair_key])}]
+            results.append(_res)
+
+        # query response
+        trapi_message = {'query_graph': query["query_graph"],
+                        'knowledge_graph': kg,
+                        'results': results}
+        trapi_response = {'message' : trapi_message}
+        return query_id, trapi_response

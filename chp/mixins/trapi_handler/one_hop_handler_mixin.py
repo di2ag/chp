@@ -14,11 +14,31 @@ import sys
 import pickle
 from collections import defaultdict
 
-from chp_data.trapi_constants import *
+from trapi_model.biolink.constants import *
 
 from chp.query import Query
-from chp.reasoner import ChpDynamicReasoner
+from chp.reasoner import ChpDynamicReasoner, ChpJointReasoner
 from chp_data.bkb_handler import BkbDataHandler
+from pybkb.python_base.utils import get_operator, get_opposite_operator
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Default functions
+def get_default_predicate_proxy():
+    return 'EFO:0000714'
+
+def get_default_operator(predicate_proxy):
+    if predicate_proxy == 'EFO:0000714':
+        return '>='
+    else:
+        raise ValueError('Unknown predicate proxy: {}'.format(predicate_proxy))
+
+def get_default_value(predicate_proxy):
+    if predicate_proxy == 'EFO:0000714':
+        return 978
+    else:
+        raise ValueError('Unknown predicate proxy: {}'.format(predicate_proxy))
 
 class OneHopHandlerMixin:
     """ OneHopeHandler is the handler for 1-hop queries. That is
@@ -44,9 +64,9 @@ class OneHopHandlerMixin:
         }
 
         # Only do the rest of this if a query is passed
-        if self.init_query is not None:
+        if self.messages is not None:
             # Setup queries
-            self._setup_queries()
+            self._setup_messages()
 
             # Instiatate Reasoners
             if self.dynamic_reasoner is None:
@@ -54,26 +74,29 @@ class OneHopHandlerMixin:
                     bkb_handler=self.bkb_data_handler,
                     hosts_filename=self.hosts_filename,
                     num_processes_per_host=self.num_processes_per_host)
+            if self.joint_reasoner is None:
+                self.joint_reasoner = ChpJointReasoner(
+                    bkb_handler=self.bkb_data_handler,
+                    hosts_filename=self.hosts_filename,
+                    num_processes_per_host=self.num_processes_per_host)
 
-    def _setup_queries(self):
-        if type(self.init_query) == list:
-            self.query_dict = defaultdict(list)
-            self.query_map = []
-            for query in self.init_query:
-                self.query_map.append(query["query_id"])
-                self.query_dict[self._get_wildcard_type(query)].append(self._setup_single_query(query))
-        else:
-            self.query_dict[self._get_wildcard_type(query)].append(self._setup_single_query(query))
+    def _setup_messages(self):
+        self.message_dict = defaultdict(list)
+        for message in self.messages:
+            self.message_dict[self._get_onehop_type(message)].append(message)
 
-    def _get_wildcard_type(self, query):
+    def _get_onehop_type(self, message):
         wildcard_type = None
-        for node_id, node in query["query_graph"]["nodes"].items():
-            if 'id' not in node:
+        for node_id, node in message.query_graph.nodes.items():
+            if node.ids is None:
                 if wildcard_type is None:
-                    wildcard_type = node['category']
-        if wildcard_type == BIOLINK_DRUG:
+                    wildcard_type = node.categories[0]
+        # If standard onehop query
+        if wildcard_type is None:
+            return 'standard'
+        elif wildcard_type == BIOLINK_DRUG_ENTITY:
             return 'drug'
-        elif wildcard_type == BIOLINK_GENE:
+        elif wildcard_type == BIOLINK_GENE_ENTITY:
             return 'gene'
         else:
             raise ValueError('Did not understand wildcard type {}.'.format(wildcard_type))
@@ -83,37 +106,130 @@ class OneHopHandlerMixin:
         """
         return True
 
-    def _extract_chp_query(self, query, query_type=None):
+    @staticmethod
+    def _process_predicate_proxy(qedge):
+        dynamic_targets = {}
+        predicate_proxy_constraint = qedge.find_constraint('predicate_proxy')
+        if predicate_proxy_constraint is None:
+            predicate_proxy = get_default_predicate_proxy()
+            proxy_constraint = qedge.find_constraint(predicate_proxy)
+        else:
+            predicate_proxy = predicate_proxy_constraint.value[0]
+            proxy_constraint = qedge.find_constraint(predicate_proxy)
+        if proxy_constraint is None:
+            proxy_operator = get_default_operator(predicate_proxy)
+            proxy_value = get_default_value(predicate_proxy)
+        else:
+            proxy_operator = proxy_constraint.operator
+            proxy_value = proxy_constraint.value
+        # Setup dynamic target
+        dynamic_targets[predicate_proxy] = {
+                "op": proxy_operator,
+                "value": proxy_value,
+                }
+        return dynamic_targets
+
+    @staticmethod
+    def _process_predicate_context(qedge, message_type):
+        evidence = {}
+        dynamic_evidence = {}
+        predicate_context_constraint = qedge.find_constraint('predicate_context')
+        if predicate_context_constraint is not None:
+            for context in predicate_context_constraint.value:
+                context_curie = get_biolink_entity(context)
+                context_constraint = qedge.find_constraint(context)
+                if context_constraint is None:
+                    raise ValueError('Provided no context details for {}'.format(context))
+                if context_curie == BIOLINK_GENE_ENTITY: 
+                    if message_type == 'gene':
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                dynamic_evidence[_curie] = {
+                                        "op": '==',
+                                        "value": 'True',
+                                        }
+                        else:
+                            dynamic_evidence[context_constraint.value] = {
+                                    "op": '==',
+                                    "value": 'True',
+                                    }
+                    else:
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                evidence['_{}'.format(_curie)] = 'True'
+                        else:
+                            evidence['_{}'.format(_curie)] = 'True'
+                elif context_curie == BIOLINK_DRUG_ENTITY:
+                    if message_type == 'drug':
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                dynamic_evidence[_curie] = {
+                                        "op": '==',
+                                        "value": 'True',
+                                        }
+                        else:
+                            dynamic_evidence[context_constraint.value] = {
+                                    "op": '==',
+                                    "value": 'True',
+                                    }
+                    else:
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                evidence['_{}'.format(_curie)] = 'True'
+                        else:
+                            evidence['_{}'.format(_curie)] = 'True'
+                else:
+                    raise ValueError('Unsupported context type: {}'.format(context_curie))
+        return evidence, dynamic_evidence
+
+    def _extract_chp_query(self, message, message_type):
         evidence = {}
         dynamic_targets = {}
+        dynamic_evidence = {}
 
-        # check edge for source and target
-        edge_key = list(query["query_graph"]["edges"].keys())[0]
-        edge = query["query_graph"]['edges'][edge_key]
-        subject = edge['subject']
-        obj = edge['object']
+        if message_type == 'standard':
+            # Setup gene and drug evidence
+            for qnode_id, qnode in message.query_graph.nodes.items():
+                if qnode.categories[0] == BIOLINK_GENE_ENTITY or qnode.categories[0] == BIOLINK_DRUG_ENTITY:
+                    evidence['_{}'.format(qnode.ids[0])] = 'True'
+        elif message_type == 'gene':
+            for qnode_id, qnode in message.query_graph.nodes.items():
+                if qnode.categories[0] == BIOLINK_DRUG_ENTITY:
+                    #dynamic_evidence[qnode.ids[0]] = {
+                    #        "op": '==',
+                    #        "value": 'True',
+                    #        }
+                    evidence['_{}'.format(qnode.ids[0])] = 'True'
+        elif message_type == 'drug':
+            for qnode_id, qnode in message.query_graph.nodes.items():
+                if qnode.categories[0] == BIOLINK_GENE_ENTITY:
+                    #dynamic_evidence[qnode.ids[0]] = {
+                    #        "op": '==',
+                    #        "value": 'True',
+                    #        }
+                    evidence['_{}'.format(qnode.ids[0])] = 'True'
+        # Grab edge
+        for qedge_id, qedge in message.query_graph.edges.items():
+            break
+        # Process predicate proxy
+        dynamic_targets = self._process_predicate_proxy(qedge)
+        # Process predicate context
+        _evidence, _dynamic_evidence = self._process_predicate_context(qedge, message_type)
+        evidence.update(_evidence)
+        dynamic_evidence.update(_dynamic_evidence)
+        #TODO: Probably need a more robust solution for when no context is provided in wildcard queries and you need it.
+        #if len(evidence) == 0:
+        #    raise ValueError('Did not supply context with a query that required context.')
 
-        # Get non-wildcard node
-        if query_type == 'gene':
-            drug_curie = query["query_graph"]['nodes'][obj]['id']
-            evidence['_{}'.format(drug_curie)] = 'True'
-        elif query_type == 'drug':
-            gene_curie = query["query_graph"]['nodes'][obj]['id']
-            evidence['_{}'.format(gene_curie)] = 'True'
-
-        # default survival time
-        dynamic_targets.update(self.default_survival_target)
-        truth_target = ('EFO:0000714', '{} {}'.format(self.default_survival_target["EFO:0000714"]["op"],
-                                                      self.default_survival_target["EFO:0000714"]["value"]))
-
+        target = list(dynamic_targets.keys())[0]
+        truth_target = (target, '{} {}'.format(dynamic_targets[target]["op"], dynamic_targets[target]["value"]))
         chp_query = Query(evidence=evidence,
                       targets=None,
-                      dynamic_evidence=None,
+                      dynamic_evidence=dynamic_evidence,
                       dynamic_targets=dynamic_targets,
                       type='updating')
         # Set some other helpful attributes
         chp_query.truth_target = truth_target
-        chp_query.query_id = query["query_id"] if 'query_id' in query else None
         return chp_query
 
     def _run_query(self, chp_query, query_type):
@@ -122,150 +238,249 @@ class OneHopHandlerMixin:
             Contributions for each gene are calculuated and classified under
             their true/false target assignments.
         """
-        if query_type == 'gene':
-            chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='drug')
-        elif query_type == 'drug':
-            chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='gene')
-        chp_res_dict = chp_query.result.process_updates()
-        chp_res_norm_dict = chp_query.result.process_updates(normalize=True)
-        #chp_query.result.summary()
-        chp_res_contributions = chp_query.result.process_inode_contributions()
-        chp_query.truth_prob = max([0, chp_res_norm_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
+        if query_type == 'standard':
+            chp_query = self.joint_reasoner.run_query(chp_query)
+            # If a probability was found for the target
+            if len(chp_query.result) > 0:
+                # If a probability was found for the truth target
+                if chp_query.truth_target in chp_query.result:
+                    total_unnormalized_prob = 0
+                    for target, contrib in chp_query.result.items():
+                        prob = max(0, contrib)
+                        total_unnormalized_prob += prob
+                    chp_query.truth_prob = max([0, chp_query.result[(chp_query.truth_target)]])/total_unnormalized_prob
+                else:
+                    chp_query.truth_prob = 0
+            else:
+                chp_query.truth_prob = -1
+            chp_query.report = None
+            return chp_query
+        else:
+            # Do this if a disease node is present
+            if len(chp_query.evidence) == 0:
+                # probability of survival
+                chp_query = self.joint_reasoner.run_query(chp_query)
+                if len(chp_query.result) > 0:
+                    # If a probability was found for the truth target
+                    if chp_query.truth_target in chp_query.result:
+                        total_unnormalized_prob = 0
+                        for target, contrib in chp_query.result.items():
+                            prob = max(0, contrib)
+                            total_unnormalized_prob += prob
+                        chp_query.truth_prob = max([0, chp_query.result[(chp_query.truth_target)]])/total_unnormalized_prob
+                    else:
+                        chp_query.truth_prob = 0
+                else:
+                    chp_query.truth_prob = -1
+                
+                # patient_contributions
+                num_all = len(self.joint_reasoner.patient_data)
+                num_matched = chp_query.truth_prob * num_all
+                patient_contributions = defaultdict(lambda: defaultdict(int))
+                for patient, feature_dict in self.joint_reasoner.patient_data.items():
+                    for predicate_proxy, proxy_info in chp_query.dynamic_targets.items():
+                        proxy_op = get_operator(proxy_info["op"])
+                        proxy_opp_op = get_opposite_operator(proxy_info["op"])
+                        proxy_value = proxy_info["value"]
+                        if proxy_op(feature_dict[predicate_proxy], proxy_value):
+                            if num_matched == 0:
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op, proxy_value))][patient] = 0
+                            else:
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op, proxy_value))][patient] = chp_query.truth_prob/num_matched
+                        else:
+                            if num_matched == 0:
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/num_matched
+                            else:
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/(num_all-num_matched)
 
-        #print(chp_res_contributions)
+                '''
+                num_survived = 0
+                num_all = len(self.dynamic_reasoner.raw_patient_data.keys())
+                str_op = chp_query.dynamic_targets['EFO:0000714']['op']
+                opp_op = get_opposite_operator(str_op)
+                op = get_operator(str_op)
+                days = chp_query.dynamic_targets['EFO:0000714']['value']
+                for patient, pat_dict in self.dynamic_reasoner.raw_patient_data.items():
+                    if op(pat_dict['survival_time'], days):
+                        num_survived += 1
+                chp_query.truth_prob = num_survived/num_all
+                # patient_contributions
+                patient_contributions = defaultdict(lambda: defaultdict(int))
+                for patient, pat_dict in self.dynamic_reasoner.raw_patient_data.items():
+                    if op(pat_dict['survival_time'], days):
+                        if num_survived == 0:
+                            patient_contributions[('EFO:0000714', '{} {}'.format(str_op, days))][patient] = 0
+                        else:
+                            patient_contributions[('EFO:0000714', '{} {}'.format(str_op, days))][patient] = chp_query.truth_prob/num_survived
+                    else:
+                        if num_survived == 0:
+                            patient_contributions[('EFO:0000714', '{} {}'.format(opp_op, days))][patient] = (1-chp_query.truth_prob)/num_all
+                        else:
+                            patient_contributions[('EFO:0000714', '{} {}'.format(opp_op, days))][patient] = (1-chp_query.truth_prob)/(num_all-num_survived)
+                '''
+            else:
+                if query_type == 'gene':
+                    chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='drug')
+                elif query_type == 'drug':
+                    chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='gene')
+                chp_res_dict = chp_query.result.process_updates()
+                chp_res_norm_dict = chp_query.result.process_updates(normalize=True)
+                #chp_query.result.summary()
+                chp_res_contributions = chp_query.result.process_inode_contributions()
+                chp_query.truth_prob = max([0, chp_res_norm_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
 
-        # Collect all source inodes and process patient hashes
-        patient_contributions = defaultdict(lambda: defaultdict(int))
-        for target, contrib_dict in chp_res_contributions.items():
-            target_comp_name, target_state_name = target
-            for inode, contrib in contrib_dict.items():
-                comp_name, state_name = inode
-                if '_Source_' in comp_name:
-                    # Split source state name to get patient hashes
-                    source_hashes_str = state_name.split('_')[-1]
-                    source_hashes = [int(source_hash) for source_hash in source_hashes_str.split(',')]
-                    hash_len = len(source_hashes)
-                    # Process patient contributions
-                    for _hash in source_hashes:
-                        # Normalize to get relative contribution
-                        patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
+                # Collect all source inodes and process patient hashes
+                patient_contributions = defaultdict(lambda: defaultdict(int))
+                for target, contrib_dict in chp_res_contributions.items():
+                    target_comp_name, target_state_name = target
+                    for inode, contrib in contrib_dict.items():
+                        comp_name, state_name = inode
+                        if '_Source_' in comp_name:
+                            # Split source state name to get patient hashes
+                            source_hashes_str = state_name.split('_')[-1]
+                            source_hashes = [int(source_hash) for source_hash in source_hashes_str.split(',')]
+                            hash_len = len(source_hashes)
+                            # Process patient contributions
+                            for _hash in source_hashes:
+                                # Normalize to get relative contribution
+                                patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
 
         # Now iterate through the patient data to translate patient contributions to drug/gene contributions
         wildcard_contributions = defaultdict(lambda: defaultdict(int))
         for target, patient_contrib_dict in patient_contributions.items():
             for patient, contrib in patient_contrib_dict.items():
                 if query_type == 'gene':
-                    for gene_curie in self.dynamic_reasoner.raw_patient_data[patient]["gene_curies"]:
+                    for gene_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["gene_curies"]:
                         wildcard_contributions[gene_curie][target] += contrib
                 elif query_type == 'drug':
-                    for drug_curie in self.dynamic_reasoner.raw_patient_data[patient]["drug_curies"]:
+                    for drug_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["drug_curies"]:
                         wildcard_contributions[drug_curie][target] += contrib
-
+        
         # normalize gene contributions by the target and take relative difference
         for curie in wildcard_contributions.keys():
             truth_target_gene_contrib = 0
             nontruth_target_gene_contrib = 0
             for target, contrib in wildcard_contributions[curie].items():
                 if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
-                    truth_target_gene_contrib += contrib / chp_res_dict[target[0]][target[1]]
+                    truth_target_gene_contrib += contrib / chp_query.truth_prob
                 else:
-                    nontruth_target_gene_contrib += contrib / chp_res_dict[target[0]][target[1]]
+                    nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
             wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
-
+        
         chp_query.report = None
         chp_query.wildcard_contributions = wildcard_contributions
 
         return chp_query
 
-    def _construct_trapi_response(self, chp_query, query_type):
-        # Get orginal query
-        if len(self.init_query) == 1:
-            query = self.init_query[0]
-            query_id = None
-        else:
-            for _query in self.init_query:
-                if _query["query_id"] == chp_query.query_id:
-                    query = _query
-                    query_id = query["query_id"]
-                    break
-
-        kg = copy.deepcopy(query["query_graph"])
+    def _construct_trapi_message(self, chp_query, message, query_type):
+        
+        qg = message.query_graph
+        kg = message.knowledge_graph
 
         edge_bindings = {}
         node_bindings = {}
+        
+        # Process nodes
+        for qnode_id, qnode in qg.nodes.items():
+            if qnode.ids is not None:
+                if qnode.categories[0] == BIOLINK_GENE_ENTITY:
+                    knode_key = kg.add_node(
+                            qnode.ids[0],
+                            self.curies[BIOLINK_GENE_ENTITY.get_curie()][qnode.ids[0]][0],
+                            qnode.categories[0].get_curie(),
+                            )
+                elif qnode.categories[0] == BIOLINK_DRUG_ENTITY:
+                    knode_key = kg.add_node(
+                            qnode.ids[0],
+                            self.curies[BIOLINK_DRUG_ENTITY.get_curie()][qnode.ids[0]][0],
+                            qnode.categories[0].get_curie(),
+                            )
+                elif qnode.categories[0] == BIOLINK_DISEASE_ENTITY:
+                    #TODO: Add diseases to curies and fix name hack below.
+                    knode_key = kg.add_node(
+                            qnode.ids[0],
+                            qnode.ids[0], #TODO: Once curies is fixed, make this a name.
+                            qnode.categories[0].get_curie(),
+                            )
+                node_bindings[qnode_id] = [knode_key]
+            else:
+                wildcard_node = qnode
+        if query_type == 'standard':
+            for qedge_key, qedge in qg.edges.items():
+                kedge_key = kg.add_edge(
+                        node_bindings[qedge.subject][0],
+                        node_bindings[qedge.object][0],
+                        predicate=qedge.predicates[0].get_curie(),
+                        relation=qedge.relation,
+                        )
+                edge_bindings[qedge_key] = [kedge_key]
+                # Add Attribute
+                kg.edges[kedge_key].add_attribute(
+                        attribute_type_id='Probability of Survival',
+                        value=chp_query.truth_prob,
+                        value_type_id=BIOLINK_HAS_CONFIDENCE_LEVEL_ENTITY.get_curie(),
+                        )
+            message.results.add_result(
+                    node_bindings,
+                    edge_bindings,
+                    )
+        else:
+            # Build relative contribution results and added associated edges into knowledge graph
+            unsorted_wildcard_contributions = []
+            for wildcard, contrib_dict in chp_query.wildcard_contributions.items():
+                unsorted_wildcard_contributions.append((contrib_dict['relative'], wildcard))
+            sorted_wildcard_contributions = [(contrib,wildcard) for contrib, wildcard in sorted(unsorted_wildcard_contributions, key=lambda x: abs(x[0]), reverse=True)]
 
-        # get edge subject, object, edge label and pop edge
-        edge_key = list(kg['edges'].keys())[0]
-        edge = kg['edges'][edge_key]
-        edge_label = edge['predicate']
-        subject = edge['subject']
-        obj = edge['object']
-        kg['edges'].pop(edge_key)
-
-        # move curie to key
-        non_wildcard_curie = kg['nodes'][obj].pop('id')
-        kg['nodes'][non_wildcard_curie] = kg['nodes'].pop(obj)
-        if query_type == 'gene':
-            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name(BIOLINK_DRUG, non_wildcard_curie)[0]
-        elif query_type == 'drug':
-            kg['nodes'][non_wildcard_curie]['name'] = self._get_curie_name(BIOLINK_GENE, non_wildcard_curie)[0]
-        node_bindings[obj] = non_wildcard_curie
-
-        # remove wildcard gene node from kg
-        kg['nodes'].pop(subject)
-
-        # Build relative contribution results and added associated edges into knowledge graph
-        unsorted_wildcard_contributions = []
-        for wildcard, contrib_dict in chp_query.wildcard_contributions.items():
-            unsorted_wildcard_contributions.append((contrib_dict['relative'], wildcard))
-        sorted_wildcard_contributions = [(contrib,wildcard) for contrib, wildcard in sorted(unsorted_wildcard_contributions, key=lambda x: abs(x[0]), reverse=True)]
-
-        # add kg gene nodes and edges
-        edge_count = 0
-        node_count = 1
-        results = []
-        for contrib, wildcard in sorted_wildcard_contributions[:self.max_results]:
-            if query_type == 'gene':
-                kg['nodes'][wildcard] = {
-                    "name" : self._get_curie_name(BIOLINK_GENE, wildcard)[0],
-                    "category" : BIOLINK_GENE
-                }
-                # add edge
-                kg['edges']['kge{}'.format(edge_count)] = {
-                    "predicate" : BIOLINK_CHEMICAL_TO_GENE_PREDICATE,
-                    "subject" : wildcard,
-                    "object" : non_wildcard_curie,
-                    "attributes":[{'name':'Contribution',
-                                   'type':BIOLINK_CONTRIBUTION,
-                                   'value':contrib}]
-                }
-            elif query_type == 'drug':
-                kg['nodes'][wildcard] = {
-                    "name" : self._get_curie_name(BIOLINK_DRUG, wildcard)[0],
-                    "category" : BIOLINK_DRUG
-                }
-                # add edge
-                kg['edges']['kge{}'.format(edge_count)] = {
-                    "predicate" : BIOLINK_CHEMICAL_TO_GENE_PREDICATE,
-                    "subject" : wildcard,
-                    "object" : non_wildcard_curie,
-                    "attributes":[{'name':'Contribution',
-                                   'type':BIOLINK_CONTRIBUTION,
-                                   'value':contrib}]
-                }
-            # add to results
-            node_binding = {obj : [{'id': non_wildcard_curie}],
-                            subject : [{'id':wildcard}]}
-            edge_binding = {edge_key : [{'id':'kge{}'.format(edge_count)}]}
-            results.append({'node_bindings': node_binding,
-                            'edge_bindings': edge_binding})
-
-            edge_count += 1
-            node_count += 1
-
-        # query response
-        trapi_message = {'query_graph': query["query_graph"],
-                        'knowledge_graph': kg,
-                        'results': results}
-        trapi_response = {'message' : trapi_message}
-        return query_id, trapi_response
+            # add kg gene nodes and edges
+            edge_count = 0
+            node_count = 1
+            results = []
+            for contrib, wildcard in sorted_wildcard_contributions[:self.max_results]:
+                _node_bindings = {}
+                _edge_bindings = {}
+                # Process node bindings
+                bad_wildcard = False
+                for qnode_id, qnode in qg.nodes.items():
+                    if qnode.categories[0] == BIOLINK_GENE_ENTITY and query_type == 'gene':
+                        try:
+                            knode_id = kg.add_node(
+                                    wildcard,
+                                    self.curies[BIOLINK_GENE_ENTITY.get_curie()][wildcard][0],
+                                    qnode.categories[0].get_curie(),
+                                    )
+                            _node_bindings[qnode_id] = [knode_id]
+                        except KeyError:
+                            logger.info("Couldn't find {} in curies[{}]".format(wildcard, BIOLINK_GENE))
+                            bad_wildcard = True
+                    elif qnode.categories[0] == BIOLINK_DRUG_ENTITY and query_type == 'drug':
+                        knode_id = kg.add_node(
+                                wildcard,
+                                self.curies[BIOLINK_DRUG_ENTITY.get_curie()][wildcard][0],
+                                qnode.categories[0].get_curie(),
+                                )
+                        _node_bindings[qnode_id] = [knode_id]
+                    else:
+                        _node_bindings[qnode_id] = node_bindings[qnode_id]
+                if bad_wildcard:
+                    continue
+                # Process edge bindings
+                for qedge_id, qedge in qg.edges.items():
+                    kedge_id = kg.add_edge(
+                            _node_bindings[qedge.subject][0],
+                            _node_bindings[qedge.object][0],
+                            predicate=qedge.predicates[0],
+                            relation=qedge.relation,
+                            )
+                    kg.edges[kedge_id].add_attribute(
+                            attribute_type_id='Contribution',
+                            value=contrib,
+                            value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
+                            )
+                    _edge_bindings[qedge_id] = [kedge_id]
+                # Process node and edge binding results
+                message.results.add_result(
+                        _node_bindings,
+                        _edge_bindings,
+                        )
+        
+        return message

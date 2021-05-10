@@ -1,15 +1,9 @@
-[submodule "submodlues/reasoner-validator"]
-	path = submodultes/reasoner-validator
-	url = https://github.com/NCATSTranslator/reasoner-validator.git
 [submodule "submodules/PyBKB"]
 	path = submodules/PyBKB
 	url = git@intuition.thayer.dartmouth.edu:/home/public/git/modules/PyBKB
 [submodule "submodules/ChpData"]
 	path = submodules/ChpData
 	url = git@intuition.thayer.dartmouth.edu:/home/public/git/projects/ChpData
-[submodule "submodules/reasoner-validation"]
-	path = submodules/reasoner-validation
-	url = https://github.com/NCATSTranslator/reasoner-validator.git
 [submodule "submodules/reasoner-validator"]
 	path = submodules/reasoner-validator
-	url = https://github.com/NCATSTranslator/reasoner-validator.git
+	url = https://github.com/di2ag/reasoner-validator.git

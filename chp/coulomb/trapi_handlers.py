@@ -40,25 +40,20 @@ class BaseHandler:
     """
 
     def __init__(self,
-                 messages,
                  query,
                  hosts_filename=None,
                  num_processes_per_host=0,
+                 max_results=100,
                  bkb_handler=None,
                  joint_reasoner=None,
-                 dynamic_reasoner=None,
-                 max_results=10):
+                 dynamic_reasoner=None):
         # Save initial passed query(s)
-        self.messages = messages
-        self.query = query
-        if query is not None:
-            self.query = query.get_copy()
+        self.init_query = query
         # Instantiate handler is one was not passed
         if bkb_handler is None:
             self.bkb_data_handler = BkbDataHandler(
-                bkb_major_version='darwin',
-                bkb_minor_version='1.0',
-                disease='tcga',
+                bkb_major_version='coulomb',
+                bkb_minor_version='1.0'
             )
         else:
             self.bkb_data_handler = bkb_handler
@@ -76,15 +71,6 @@ class BaseHandler:
         # Read in curies
         with open(self.bkb_data_handler.curies_path, 'r') as f_:
             self.curies = json.load(f_)
-    
-    @staticmethod
-    def check_predicate_support(predicate1, predicate2, support_inverse=True):
-        if predicate1 == predicate2:
-            return True
-        elif support_inverse is True and predicate2.get_inverse() is not None:
-            if predicate1 == predicate2.get_inverse():
-                return True
-        return False
 
     def _handler_setup(self):
         pass
@@ -94,6 +80,16 @@ class BaseHandler:
         self.query_dict, where the keys are query types for instance 'simple' or 'default', 'gene' or 'drug', etc.
         """
         pass
+
+    def _setup_single_query(self, query):
+        if 'knowledge_graph' not in query:
+            query["knowledge_graph"] = {
+                "edges": {},
+                "nodes": {},
+            }
+        if 'results' not in query:
+            query["results"] = []
+        return query
 
     def check_query(self):
         """ Currently not implemented. Would check validity of query.
@@ -107,9 +103,9 @@ class BaseHandler:
             :rtype: dict
         """
         self.chp_query_dict = defaultdict(list)
-        for message_type, messages in self.message_dict.items():
-            for _message in messages:
-                self.chp_query_dict[message_type].append(self._extract_chp_query(_message, message_type))
+        for query_type, query in self.query_dict.items():
+            for _query in query:
+                self.chp_query_dict[query_type].append(self._extract_chp_query(_query, query_type))
         return self.chp_query_dict
 
     def _extract_chp_query(self, query, query_type):
@@ -128,33 +124,24 @@ class BaseHandler:
         """ Runs built BKB query(s) in correspondence with the handlers _run_query function.
         """
         self.results = defaultdict(list)
-        for message_type, chp_queries in self.chp_query_dict.items():
+        for query_type, chp_queries in self.chp_query_dict.items():
             for chp_query in chp_queries:
-                self.results[message_type].append(self._run_query(chp_query, message_type))
+                self.results[query_type].append(self._run_query(chp_query, query_type))
 
     def construct_trapi_response(self):
         """ Constructs the trapi responses for each query in correspondance with each handlers
             _construct_trapi_response function.
         """
         responses = defaultdict(list)
-        for (query_type, chp_queries), (_, messages) in zip(self.results.items(), self.message_dict.items()):
-            for chp_query, message in zip(chp_queries, messages):
-                responses[query_type].append(self._construct_trapi_message(chp_query, message, query_type))
-        response_query = self.merge_messages(responses)
-        return response_query
-
-    def merge_messages(self, responses):
-        new_query = self.query.get_copy()
-        master_message = new_query.message
-        for _, responses in responses.items():
-            for i, message in enumerate(responses):
-                master_message.update(message.knowledge_graph, message.results)
-        return new_query
+        for query_type, chp_queries in self.results.items():
+            for chp_query in chp_queries:
+                responses[query_type].append(self._construct_trapi_response(chp_query, query_type))
+        return responses
 
     def _get_curie_name(self, entity_type, curie):
         return self.curies[entity_type][curie]
 
-    def _construct_trapi_message(self, chp_query, message, query_type):
+    def _construct_trapi_response(self, chp_query, query_type):
         """ Should be overwitten by specific handler and return the response for a single query
             and its associated query_id which can be a uuid or just None if working with a single
             query.
