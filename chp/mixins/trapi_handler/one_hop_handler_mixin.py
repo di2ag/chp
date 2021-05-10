@@ -412,7 +412,7 @@ class OneHopHandlerMixin:
                     elif qnode.categories[0] == BIOLINK_DRUG_ENTITY and query_type == 'drug':
                         knode_id = kg.add_node(
                                 wildcard,
-                                self.curies[BIOLINK_DRUG.get_curie()][wildcard][0],
+                                self.curies[BIOLINK_DRUG_ENTITY.get_curie()][wildcard][0],
                                 qnode.categories[0].get_curie(),
                                 )
                         _node_bindings[qnode_id] = [knode_id]
