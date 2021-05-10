@@ -130,8 +130,9 @@ class OneHopHandlerMixin:
         return dynamic_targets
 
     @staticmethod
-    def _process_predicate_context(qedge):
+    def _process_predicate_context(qedge, message_type):
         evidence = {}
+        dynamic_evidence = {}
         predicate_context_constraint = qedge.find_constraint('predicate_context')
         if predicate_context_constraint is not None:
             for context in predicate_context_constraint.value:
@@ -139,19 +140,52 @@ class OneHopHandlerMixin:
                 context_constraint = qedge.find_constraint(context)
                 if context_constraint is None:
                     raise ValueError('Provided no context details for {}'.format(context))
-                if context_curie == BIOLINK_GENE_ENTITY or context_curie == BIOLINK_DRUG_ENTITY:
-                    if type(context_constraint.value) is list:
-                        for _curie in context_constraint.value:
-                            evidence['_{}'.format(_curie)] = 'True'
+                if context_curie == BIOLINK_GENE_ENTITY: 
+                    if message_type == 'gene':
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                dynamic_evidence[_curie] = {
+                                        "op": '==',
+                                        "value": 'True',
+                                        }
+                        else:
+                            dynamic_evidence[context_constraint.value] = {
+                                    "op": '==',
+                                    "value": 'True',
+                                    }
                     else:
-                        evidence['_{}'.format(context_constraint.value)] = 'True'
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                evidence['_{}'.format(_curie)] = 'True'
+                        else:
+                            evidence['_{}'.format(_curie)] = 'True'
+                elif context_curie == BIOLINK_DRUG_ENTITY:
+                    if message_type == 'drug':
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                dynamic_evidence[_curie] = {
+                                        "op": '==',
+                                        "value": 'True',
+                                        }
+                        else:
+                            dynamic_evidence[context_constraint.value] = {
+                                    "op": '==',
+                                    "value": 'True',
+                                    }
+                    else:
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                evidence['_{}'.format(_curie)] = 'True'
+                        else:
+                            evidence['_{}'.format(_curie)] = 'True'
                 else:
                     raise ValueError('Unsupported context type: {}'.format(context_curie))
-        return evidence
+        return evidence, dynamic_evidence
 
     def _extract_chp_query(self, message, message_type):
         evidence = {}
         dynamic_targets = {}
+        dynamic_evidence = {}
 
         if message_type == 'standard':
             # Setup gene and drug evidence
@@ -161,10 +195,18 @@ class OneHopHandlerMixin:
         elif message_type == 'gene':
             for qnode_id, qnode in message.query_graph.nodes.items():
                 if qnode.categories[0] == BIOLINK_DRUG_ENTITY:
+                    #dynamic_evidence[qnode.ids[0]] = {
+                    #        "op": '==',
+                    #        "value": 'True',
+                    #        }
                     evidence['_{}'.format(qnode.ids[0])] = 'True'
         elif message_type == 'drug':
             for qnode_id, qnode in message.query_graph.nodes.items():
                 if qnode.categories[0] == BIOLINK_GENE_ENTITY:
+                    #dynamic_evidence[qnode.ids[0]] = {
+                    #        "op": '==',
+                    #        "value": 'True',
+                    #        }
                     evidence['_{}'.format(qnode.ids[0])] = 'True'
         # Grab edge
         for qedge_id, qedge in message.query_graph.edges.items():
@@ -172,17 +214,18 @@ class OneHopHandlerMixin:
         # Process predicate proxy
         dynamic_targets = self._process_predicate_proxy(qedge)
         # Process predicate context
-        evidence.update(self._process_predicate_context(qedge))
+        _evidence, _dynamic_evidence = self._process_predicate_context(qedge, message_type)
+        evidence.update(_evidence)
+        dynamic_evidence.update(_dynamic_evidence)
         #TODO: Probably need a more robust solution for when no context is provided in wildcard queries and you need it.
         #if len(evidence) == 0:
         #    raise ValueError('Did not supply context with a query that required context.')
 
         target = list(dynamic_targets.keys())[0]
         truth_target = (target, '{} {}'.format(dynamic_targets[target]["op"], dynamic_targets[target]["value"]))
-
         chp_query = Query(evidence=evidence,
                       targets=None,
-                      dynamic_evidence=None,
+                      dynamic_evidence=dynamic_evidence,
                       dynamic_targets=dynamic_targets,
                       type='updating')
         # Set some other helpful attributes
