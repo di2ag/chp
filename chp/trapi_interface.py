@@ -207,6 +207,12 @@ class TrapiInterface:
         with open(self.handler.bkb_data_handler.predicates_path, 'r') as predicates_file:
             return json.load(predicates_file)
 
+    def get_meta_knowledge_graph(self):
+        """ Returns the meta knowledge graph.
+        """
+        with open(self.handler.bkb_data_handler.meta_knowledge_graph_path, 'r') as metakg_file:
+            return json.load(metakg_file)
+
     def checkQuery(self):
         return True
 

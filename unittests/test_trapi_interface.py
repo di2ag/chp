@@ -43,6 +43,11 @@ class TestDefaultHandler(unittest.TestCase):
         predicates = interface.get_predicates()
         self.assertIsInstance(predicates, dict)
 
+    def test_meta_knowledge_graph(self):
+        interface = TrapiInterface()
+        meta_kg = interface.get_meta_knowledge_graph()
+        self.assertIsInstance(meta_kg, dict)
+
     def test_default_single_query(self):
         # This is a non-simple query
         logger.info('Running single query test.')
