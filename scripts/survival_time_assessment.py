@@ -21,20 +21,20 @@ logger.setLevel(logging.INFO)
 
 start_time = time.time()
 # Load patient data
-bkb_handler = BkbDataHandler()
+bkb_handler = BkbDataHandler(disease='tcga_brca')
 # Read patient data
 with open(bkb_handler.patient_data_pk_path, 'rb') as f_:
     patient_data = pickle.load(f_)
 
 # Filter out patients with MX staging.
-_patient_data = {}
-for pat, feature_dict in patient_data.items():
-    if feature_dict['path_m'] == 'MX':
-        print('True')
-        continue
-    _patient_data[pat] = feature_dict
+#_patient_data = {}
+#for pat, feature_dict in patient_data.items():
+#    if feature_dict['path_m'] == 'MX':
+#        print('True')
+#        continue
+#    _patient_data[pat] = feature_dict
 
-patient_data = _patient_data
+#patient_data = _patient_data
 
 # Setup Discretization Scheme
 #CRITERIA = 'linspace'
@@ -208,5 +208,6 @@ for i, gene in enumerate(top_genes):
         #print(_query.result.process_updates())
 '''
 logger.info('Total Multiprocessing time: {}'.format(time.time() - start_time))
-with open('results-{}-{}.pk'.format(CRITERIA, time.time()), 'wb') as f_:
+_filename = 'results-{}-{}.pk'.format(CRITERIA, time.time())
+with open(_filename, 'wb') as f_:
     pickle.dump(res, f_)
