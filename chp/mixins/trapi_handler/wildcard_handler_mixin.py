@@ -277,9 +277,7 @@ class WildCardHandlerMixin:
         for qnode_key, qnode in qg.nodes.items():
             if qnode.ids is not None:
                 if qnode.categories[0] == BIOLINK_GENE_ENTITY:
-                    logger.note('loo', qnode.ids, qnode_key)
-                    logger.note('goo', BIOLINK_GENE_ENTITY.get_curie())
-                    logger.note('foo',qnode.ids)
+                    logger.note('foo', self.curies)
                     knode_key = kg.add_node(
                             qnode.ids[0],
                             self.curies[BIOLINK_GENE_ENTITY.get_curie()][qnode.ids[0]][0],
