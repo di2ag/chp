@@ -134,7 +134,7 @@ class WildCardHandlerMixin:
                     gene_curie = node.ids[0]
                     if gene_curie in self.curies[BIOLINK_GENE_ENTITY.get_curie()]:
                         gene = gene_curie
-                    evidence["_" + gene] = 'True'
+                        evidence["_" + gene] = 'True'
                 total_nodes += 1
             # drugs
             if node.categories[0] == BIOLINK_DRUG_ENTITY:
@@ -149,7 +149,7 @@ class WildCardHandlerMixin:
                     drug_curie = node.ids[0]
                     if drug_curie in self.curies[BIOLINK_DRUG_ENTITY.get_curie()]:
                         drug = drug_curie
-                    evidence['_' + drug] = 'True'
+                        evidence['_' + drug] = 'True'
                 total_nodes += 1
 
         # Temporary solution to no evidence linking
