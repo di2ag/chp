@@ -246,7 +246,7 @@ class TrapiInterface:
                 raise(UnexpectedEdgeType(edge_id))
         return True
 
-    def _check_one_hop_query(self, query, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
+    def _check_one_hop_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
         for edge_id, edge in query_graph.edges.items():
             if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
                 if edge.subject not in gene_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
