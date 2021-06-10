@@ -138,6 +138,10 @@ class TrapiInterface:
                 qg = message.query_graph
                 for node_id, node in qg.nodes.items():
                     if node.categories is not None:
+                        print(node.categories[0])
+                        print(BIOLINK_GENE_ENTITY)
+                        print(node.categories[0].get_curie())
+                        print(BIOLINK_GENE_ENTITY.get_curie())
                         if node.categories[0] == BIOLINK_GENE_ENTITY:
                             gene_nodes.append(node_id)
                             if node.ids is None:
