@@ -295,6 +295,7 @@ class TrapiInterface:
                 num_processes_per_host=self.num_processes_per_host,
                 max_results=self.max_results,
                 bkb_handler=self.bkb_handler,
+                joint_reasoner=self.joint_reasoner,
                 dynamic_reasoner=self.dynamic_reasoner,
             )
         elif message_type == 'onehop':
@@ -304,6 +305,8 @@ class TrapiInterface:
                 hosts_filename=self.hosts_filename,
                 num_processes_per_host=self.num_processes_per_host,
                 max_results=self.max_results,
+                bkb_handler=self.bkb_handler,
+                joint_reasoner=self.joint_reasoner,
                 dynamic_reasoner=self.dynamic_reasoner,
             )
         elif message_type is None:
