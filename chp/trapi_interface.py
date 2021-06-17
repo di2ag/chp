@@ -122,59 +122,60 @@ class TrapiInterface:
         if message is None:
             raise UnidentifiedQueryType
         query_graph = message.query_graph
-        # Check for onehop query
-        if len(query_graph.edges) == 1 or len(query_graph.nodes) == 2:
-            return 'onehop', message
-        else:
-            # Check for standard or wildcard multihop query.
-            gene_nodes = []
-            disease_nodes = []
-            drug_nodes = []
-            phenotype_nodes = []
-            wildcard_node_count = 0
-            wildcard_node = None
 
-            if message is not None:
-                qg = message.query_graph
-                for node_id, node in qg.nodes.items():
-                    if node.categories is not None:
-                        if node.categories[0] == BIOLINK_GENE_ENTITY:
-                            gene_nodes.append(node_id)
-                            if node.ids is None:
-                                wildcard_node_count += 1
-                                wildcard_node = node_id
-                            else:
-                                found_curie = None
-                                for curie in node.ids:
-                                    if curie in self.curies[BIOLINK_GENE_ENTITY.get_curie()]:
-                                        found_curie = curie
-                                        qg.nodes[node_id].set_ids(found_curie)
-                                if found_curie is None:
-                                    raise(UnidentifiedGeneCurie(node.ids))
-                        elif node.categories[0] == BIOLINK_DRUG_ENTITY:
-                            drug_nodes.append(node_id)
-                            if node.ids is None:
-                                wildcard_node_count += 1
-                                wildcard_node = node_id
-                            else:
-                                found_curie = None
-                                for curie in node.ids:
-                                    if curie in self.curies[BIOLINK_DRUG_ENTITY.get_curie()]:
-                                        found_curie = curie
-                                        qg.nodes[node_id].set_ids(found_curie)
-                                if found_curie is None:
-                                    raise(UnidentifiedDrugCurie(node.ids))
-                        elif node.categories[0] == BIOLINK_DISEASE_ENTITY:
-                            disease_nodes.append(node_id)
-                        elif node.categories[0] == BIOLINK_PHENOTYPIC_FEATURE_ENTITY:
-                            phenotype_nodes.append(node_id)
+        # Check for standard or wildcard multihop query.
+        gene_nodes = []
+        disease_nodes = []
+        drug_nodes = []
+        phenotype_nodes = []
+        wildcard_node_count = 0
+        wildcard_node = None
+
+        if message is not None:
+            qg = message.query_graph
+            for node_id, node in qg.nodes.items():
+               if node.categories is not None:
+                    if node.categories[0] == BIOLINK_GENE_ENTITY:
+                        gene_nodes.append(node_id)
+                        if node.ids is None:
+                            wildcard_node_count += 1
+                            wildcard_node = node_id
+                        else:
                             found_curie = None
                             for curie in node.ids:
-                                if curie in self.curies[BIOLINK_PHENOTYPIC_FEATURE_ENTITY.get_curie()]:
+                                if curie in self.curies[BIOLINK_GENE_ENTITY.get_curie()]:
                                     found_curie = curie
                                     qg.nodes[node_id].set_ids(found_curie)
                             if found_curie is None:
-                                raise(UnidentifiedPhenotypeCurie(node.ids))
+                                raise(UnidentifiedGeneCurie(node.ids))
+                    elif node.categories[0] == BIOLINK_DRUG_ENTITY:
+                        drug_nodes.append(node_id)
+                        if node.ids is None:
+                            wildcard_node_count += 1
+                            wildcard_node = node_id
+                        else:
+                            found_curie = None
+                            for curie in node.ids:
+                                if curie in self.curies[BIOLINK_DRUG_ENTITY.get_curie()]:
+                                    found_curie = curie
+                                    qg.nodes[node_id].set_ids(found_curie)
+                            if found_curie is None:
+                                raise(UnidentifiedDrugCurie(node.ids))
+                    elif node.categories[0] == BIOLINK_DISEASE_ENTITY:
+                        disease_nodes.append(node_id)
+                    elif node.categories[0] == BIOLINK_PHENOTYPIC_FEATURE_ENTITY:
+                        phenotype_nodes.append(node_id)
+                        found_curie = None
+                        for curie in node.ids:
+                            if curie in self.curies[BIOLINK_PHENOTYPIC_FEATURE_ENTITY.get_curie()]:
+                                found_curie = curie
+                                qg.nodes[node_id].set_ids(found_curie)
+                        if found_curie is None:
+                            raise(UnidentifiedPhenotypeCurie(node.ids))
+                    else:
+                        raise(UnidentifiedNode(node.categories[0]))
+
+            num_total_nodes = len(gene_nodes) + len(disease_nodes) + len(drug_nodes) + len(phenotype_nodes)
 
             if wildcard_node_count > 1:
                 raise(TooManyContributionNodes)
@@ -186,9 +187,12 @@ class TrapiInterface:
             if wildcard_node_count == 0 and len(phenotype_nodes) == 1 and len(disease_nodes) == 1:
                 if self._check_default_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
                     return 'default', message
-            elif len(disease_nodes) == 1 and wildcard_node_count == 1:
-                if self._check_wildcard_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
+            elif wildcard_node_count == 1 and num_total_nodes > 2:
+                if self._check_wildcard_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
                     return 'wildcard', message
+            elif wildcard_node_count == 1 and num_total_nodes == 2 and len(phenotype_nodes) == 0:
+                if self._check_one_hop_query(qg, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
+                    return 'onehop', message
             else:
                 raise(UnidentifiedQueryType)
             
@@ -225,13 +229,13 @@ class TrapiInterface:
                 return True
         return False
 
-    def _check_wildcard_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
+    def _check_wildcard_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
         for edge_id, edge in query_graph.edges.items():
             if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
-                if edge.subject not in gene_nodes or edge.object not in disease_nodes:
+                if edge.subject not in gene_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
                     raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
             elif self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY):
-                if edge.subject not in drug_nodes or edge.object not in disease_nodes:
+                if edge.subject not in drug_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
                     raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
             elif self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY):
                 if edge.subject not in disease_nodes and edge.object not in phenotype_nodes:
@@ -242,19 +246,17 @@ class TrapiInterface:
                 raise(UnexpectedEdgeType(edge_id))
         return True
 
-    def _check_one_hop_query(self, query, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
-        for edge_id, edge in query['edges'].items():
-            if edge['predicate'] == BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY:
-                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
-            elif edge['predicate'] == BIOLINK_TREATS_ENTITY:
-                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
-            elif edge['predicate'] == BIOLINK_HAS_PHENOTYPE:
-                raise(IncompatibleDrugGeneOneHopEdge(edge_id))
-            elif edge['predicate'] == BIOLINK_INTERACTS_WITH_ENTITY:
-                subject = edge['subject']
-                object = edge['object']
-                if object == wildcard_node:
-                     raise(MalformedSubjectObjectOnDrugGene(edge_id))
+    def _check_one_hop_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
+        for edge_id, edge in query_graph.edges.items():
+            if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
+                if edge.subject not in gene_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
+                    raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+            elif self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY):
+                if edge.subject not in drug_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
+                    raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+            elif self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY):
+                if edge.object == wildcard_node:
+                    raise(MalformedSubjectObjectOnDrugGene(edge_id))
             else:
                 raise(UnexpectedEdgeType(edge_id))
         return True

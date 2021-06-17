@@ -7,6 +7,14 @@ class UnidentifiedQueryType(Exception):
     def __str__(self):
         return 'Unidentified query type. Please see https://github.com/di2ag/chp_client for details on our query types.'
 
+class UnidentifiedNode(Exception):
+
+    def __init__(self, *args):
+        self.node_type = args[0]
+
+    def __str__(self):
+        return 'Unidentified node type: {}.'.format(self.node_type)
+
 class UnidentifiedGeneCurie(Exception):
 
     def __init__(self, *args):
