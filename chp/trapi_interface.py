@@ -190,7 +190,7 @@ class TrapiInterface:
             elif wildcard_node_count == 1 and num_total_nodes > 2:
                 if self._check_wildcard_query(qg, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
                     return 'wildcard', message
-            elif wildcard_node_count == 1 and num_total_nodes == 2 and len(phenotype_nodes) == 0:
+            elif num_total_nodes == 2 and len(phenotype_nodes) == 0:
                 if self._check_one_hop_query(qg, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
                     return 'onehop', message
             else:
@@ -248,14 +248,16 @@ class TrapiInterface:
 
     def _check_one_hop_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
         for edge_id, edge in query_graph.edges.items():
+
+            # check predicate types
             if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
-                if edge.subject not in gene_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
+                if edge.subject not in gene_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
                     raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
             elif self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY):
-                if edge.subject not in drug_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
+                if edge.subject not in drug_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
                     raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
             elif self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY):
-                if edge.object == wildcard_node:
+                if wildcard_node is not None and edge.object == wildcard_node:
                     raise(MalformedSubjectObjectOnDrugGene(edge_id))
             else:
                 raise(UnexpectedEdgeType(edge_id))
