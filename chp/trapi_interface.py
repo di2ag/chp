@@ -223,61 +223,130 @@ class TrapiInterface:
     @staticmethod
     def check_predicate_support(predicate1, predicate2, support_inverse=True):
         if predicate1 == predicate2:
-            return True
+            is_inverse = False
+            return True, is_inverse
         elif support_inverse is True and predicate2.get_inverse() is not None:
             if predicate1 == predicate2.get_inverse():
-                return True
-        return False
+                is_inverse = True
+                return True, is_inverse
+        return False, False
 
     def _check_wildcard_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes, wildcard_node):
         for edge_id, edge in query_graph.edges.items():
-            if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
-                if edge.subject not in gene_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
-                    raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
-            elif self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY):
-                if edge.subject not in drug_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
-                    raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
-            elif self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY):
-                if edge.subject not in disease_nodes and edge.object not in phenotype_nodes:
-                    raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
-            elif self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY):
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in disease_nodes or edge.object not in gene_nodes or edge.subject == wildcard_node:
+                        raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+                else:
+                    if edge.subject not in gene_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
+                        raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+                continue
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in disease_nodes or edge.object not in drug_nodes or edge.subject == wildcard_node:
+                        raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+                else:
+                    if edge.subject not in drug_nodes or edge.object not in disease_nodes or edge.object == wildcard_node:
+                        raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+                continue
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in phenotype_nodes and edge.object not in disease_nodes:
+                        raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
+                else:
+                    if edge.subject not in disease_nodes and edge.object not in phenotype_nodes:
+                        raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
+                continue
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY)
+            if is_valid:
                 raise(IncompatibleWildcardEdge(edge_id))
-            else:
-                raise(UnexpectedEdgeType(edge_id))
+
+            # unexpected edge
+            raise(UnexpectedEdgeType(edge_id))
         return True
 
     def _check_one_hop_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
         for edge_id, edge in query_graph.edges.items():
 
-            # check predicate types
-            if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
-                if edge.subject not in gene_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
-                    raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
-            elif self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY):
-                if edge.subject not in drug_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
-                    raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
-            elif self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY):
-                if wildcard_node is not None and edge.object == wildcard_node:
-                    raise(MalformedSubjectObjectOnDrugGene(edge_id))
-            else:
-                raise(UnexpectedEdgeType(edge_id))
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in disease_nodes  or edge.object not in gene_nodes or (wildcard_node is not None and edge.subject == wildcard_node):
+                        raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+                else:
+                    if edge.subject not in gene_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
+                        raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+                continue
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in disease_nodes or edge.object not in drug_nodes or (wildcard_node is not None and edge.subject == wildcard_node):
+                        raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+                else:
+                    if edge.subject not in drug_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
+                        raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+                continue
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if wildcard_node is notNone and edge.subject == wildcard_node:
+                        raise(MalformedSubjectObjectOnDrugGene(edge_id))
+                else:
+                    if wildcard_node is not None and edge.object == wildcard_node:
+                        raise(MalformedSubjectObjectOnDrugGene(edge_id))
+                continue
+
+            # unexpected edge
+            raise(UnexpectedEdgeType(edge_id))
         return True
 
     def _check_default_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, phenotype_nodes):
         for edge_id, edge in query_graph.edges.items():
-            if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY):
-                if edge.subject not in gene_nodes or edge.object not in disease_nodes:
-                    raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
-            elif self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY):
-                if edge.subject not in drug_nodes or edge.object not in disease_nodes:
-                    raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
-            elif self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY):
-                if edge.subject not in disease_nodes and edge.object not in phenotype_nodes:
-                    raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
-            elif self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY):
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in disease_nodes or edge.object not in gene_nodes:
+                        raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+                else:
+                    if edge.subject not in gene_nodes or edge.object not in disease_nodes:
+                        raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
+                continue
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in disease_nodes or edge.object not in drug_nodes:
+                        raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+                else:
+                    if edge.subject not in drug_nodes or edge.object not in disease_nodes:
+                        raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
+                continue
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in phenotype_nodes or edge.object not in disease_nodes:
+                        raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
+                else:
+                    if edge.subject not in disease_nodes or edge.object not in phenotype_nodes:
+                        raise(MalformedSubjectObjectOnDiseaseToPhenotype(edge_id))
+                continue
+
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY)
+            if is_valid:
                 raise(IncompatibleDefaultEdge(edge_id))
-            else:
-                raise(UnexpectedEdgeType(edge_id))
+
+            # unexpected edge
+            raise(UnexpectedEdgeType(edge_id))
         return True
 
     def _get_handler(self, message_type):
