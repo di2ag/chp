@@ -294,6 +294,17 @@ class TrapiInterface:
                         raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
                 continue
 
+            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENETICALLY_INTERACTS_WITH_ENTITY)
+            if is_valid:
+                if is_inverse:
+                    if edge.subject not in gene_nodes or edge.object not in gene_nodes or (wildcard_node is not None and edge.subject == wildcard_node):
+                        raise(MalformedSubjectObjectOnGeneToGene(edge_id))
+                else:
+                    if edge.subject not in gene_nodes or edge.object not in gene_nodes or (wildcard_node is not None and edge.object == wildcard_node):
+                        raise(MalformedSubjectObjectOnGeneToGene(edge_id))
+
+                continue
+
             is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY)
             if is_valid:
                 if is_inverse:
