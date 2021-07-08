@@ -85,6 +85,8 @@ class WildCardHandlerMixin:
             #sys.exit("Survival Node not found. Node category must be '{}' and id must be in: {}".format(Biolink(BIOLINK_PHENOTYPIC_FEATURE),
             #                                                                                            acceptable_target_curies_print))
 
+        survival_value = 970
+        survival_operator = '>='
         # get disease node info and ensure only 1 disease:
         acceptable_disease_curies = ['MONDO:0007254']
         for node_key in query_graph.nodes.keys():
@@ -100,9 +102,6 @@ class WildCardHandlerMixin:
                             survival_operator = survival_time_constraint.operator
                             if survival_operator == 'matches':
                                 survival_operator = '=='
-                        else:
-                            survival_value = 970
-                            survival_operator = '>='
                         total_edges += 1
                 total_nodes += 1
 

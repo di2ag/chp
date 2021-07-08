@@ -308,10 +308,10 @@ class TrapiInterface:
             is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY)
             if is_valid:
                 if is_inverse:
-                    if wildcard_node is notNone and edge.subject == wildcard_node:
+                    if wildcard_node is not None and edge.subject == wildcard_node or len(gene_nodes) != len(drug_nodes):
                         raise(MalformedSubjectObjectOnDrugGene(edge_id))
                 else:
-                    if wildcard_node is not None and edge.object == wildcard_node:
+                    if wildcard_node is not None and edge.object == wildcard_node or len(gene_nodes) != len(drug_nodes):
                         raise(MalformedSubjectObjectOnDrugGene(edge_id))
                 continue
 
