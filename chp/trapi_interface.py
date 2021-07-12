@@ -136,14 +136,17 @@ class TrapiInterface:
             for node_id, node in qg.nodes.items():
                if node.categories is not None:
                     if node.categories[0] == BIOLINK_GENE_ENTITY:
+                        print("hi")
                         gene_nodes.append(node_id)
                         if node.ids is None:
                             wildcard_node_count += 1
                             wildcard_node = node_id
                         else:
                             for curie in node.ids:
+                                print(curie, "@@@@@@@@@@@@")
                                 if curie in self.curies[BIOLINK_GENE_ENTITY.get_curie()]:
                                     qg.nodes[node_id].set_ids(curie)
+                                    print("made it")
                                 else:
                                     raise(UnidentifiedGeneCurie(node.ids))
                     elif node.categories[0] == BIOLINK_DRUG_ENTITY:
