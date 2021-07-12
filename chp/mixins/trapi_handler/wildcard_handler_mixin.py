@@ -95,7 +95,8 @@ class WildCardHandlerMixin:
                 disease_id = node_key
                 for edge_key in query_graph.edges.keys():
                     edge = query_graph.edges[edge_key]
-                    if self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY) and edge.subject == disease_id and edge.object == target_id:
+                    is_valid, is_reverse = self.check_predicate_support(edge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY)
+                    if is_valid and ((not is_reverse and edge.subject == disease_id and edge.object == target_id) or (is_reverse and edge.object == disease_id and edge.subject == target_id)):
                         survival_time_constraint = edge.find_constraint(name='survival_time')
                         if survival_time_constraint is not None:
                             survival_value = survival_time_constraint.value
@@ -126,7 +127,8 @@ class WildCardHandlerMixin:
                 gene_id = node_key
                 for edge_key in query_graph.edges.keys():
                     edge = query_graph.edges[edge_key]
-                    if self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY) and edge.subject == gene_id and edge.object == disease_id:
+                    is_valid, is_reverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY)
+                    if is_valid and ((not is_reverse and edge.subject == gene_id and edge.object == disease_id) or (is_reverse and edge.object == gene_id and edge.subject == disease_id)):
                         total_edges += 1
                 # check for appropriate gene node curie
                 if message_type != 'gene':
@@ -141,7 +143,8 @@ class WildCardHandlerMixin:
                 drug_id = node_key
                 for edge_key in query_graph.edges.keys():
                     edge = query_graph.edges[edge_key]
-                    if self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY) and edge.subject == drug_id and edge.object == disease_id:
+                    is_valid, is_reverse = self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY)
+                    if is_valid and ((not is_reverse and edge.subject == drug_id and edge.object == disease_id) or (is_reverse and edge.object == drug_id and edge.subject == disease_id)):
                         total_edges += 1
                 # check for appropriate drug node curie
                 if message_type != 'drug':
@@ -308,7 +311,8 @@ class WildCardHandlerMixin:
                         )
                 edge_bindings[qedge_key] = [kedge_key]
                 # Add Attribute
-                if self.check_predicate_support(qedge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY):
+                is_valid, is_reverse = self.check_predicate_support(qedge.predicates[0], BIOLINK_HAS_PHENOTYPE_ENTITY)
+                if is_valid:
                     kg.edges[kedge_key].add_attribute(
                             attribute_type_id='Probability of Survival',
                             value=chp_query.truth_prob,
@@ -395,7 +399,9 @@ class WildCardHandlerMixin:
             # Process edge bindings
             for qedge_id, qedge in qg.edges.items():
                 subject_node = qedge.subject
-                if query_type == 'gene' and self.check_predicate_support(qedge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY) and qg.nodes[subject_node].categories[0] == BIOLINK_GENE_ENTITY:
+                object_node = qedge.object
+                is_valid, is_reverse = self.check_predicate_support(qedge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY)
+                if query_type == 'gene' and ( (not is_reverse and qg.nodes[subject_node].categories[0] == BIOLINK_GENE_ENTITY) or (is_reverse and qg.nodes[object_node].categories[0] == BIOLINK_GENE_ENTITY) ):
                     kedge_id = kg.add_edge(
                             _node_bindings[qedge.subject][0],
                             _node_bindings[qedge.object][0],
@@ -408,7 +414,7 @@ class WildCardHandlerMixin:
                             value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
                             )
                     _edge_bindings[qedge_id] = [kedge_id]
-                elif query_type == 'drug' and self.check_predicate_support(qedge.predicates[0], BIOLINK_TREATS_ENTITY) and qg.nodes[subject_node].categories[0] == BIOLINK_DRUG_ENTITY:
+                elif query_type == 'drug' and ( (not is_reverse and qg.nodes[subject_node].categories[0] == BIOLINK_DRUG_ENTITY) or (is_reverse and qg.nodes[object_node].categories[0] == BIOLINK_DRUG_ENTITY) ):
                     kedge_id = kg.add_edge(
                             _node_bindings[qedge.subject][0],
                             _node_bindings[qedge.object][0],

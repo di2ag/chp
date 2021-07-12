@@ -18,7 +18,7 @@ from collections import defaultdict
 from trapi_model.biolink.constants import *
 #from trapi_model.constants import *
 from chp.trapi_handlers import DefaultHandler, WildCardHandler, OneHopHandler
-from chp.errors import *
+from chp.exceptions import *
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -277,30 +277,30 @@ class TrapiInterface:
             is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY)
             if is_valid:
                 if is_inverse:
-                    if edge.subject not in disease_nodes  or edge.object not in gene_nodes or (wildcard_node is not None and edge.subject == wildcard_node):
+                    if edge.subject not in disease_nodes  or edge.object not in gene_nodes:
                         raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
                 else:
-                    if edge.subject not in gene_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
+                    if edge.subject not in gene_nodes or edge.object not in disease_nodes:
                         raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
                 continue
 
             is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY)
             if is_valid:
                 if is_inverse:
-                    if edge.subject not in disease_nodes or edge.object not in drug_nodes or (wildcard_node is not None and edge.subject == wildcard_node):
+                    if edge.subject not in disease_nodes or edge.object not in drug_nodes:
                         raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
                 else:
-                    if edge.subject not in drug_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
+                    if edge.subject not in drug_nodes or edge.object not in disease_nodes:
                         raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
                 continue
 
             is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENETICALLY_INTERACTS_WITH_ENTITY)
             if is_valid:
                 if is_inverse:
-                    if edge.subject not in gene_nodes or edge.object not in gene_nodes or (wildcard_node is not None and edge.subject == wildcard_node):
+                    if edge.subject not in gene_nodes or edge.object not in gene_nodes:
                         raise(MalformedSubjectObjectOnGeneToGene(edge_id))
                 else:
-                    if edge.subject not in gene_nodes or edge.object not in gene_nodes or (wildcard_node is not None and edge.object == wildcard_node):
+                    if edge.subject not in gene_nodes or edge.object not in gene_nodes:
                         raise(MalformedSubjectObjectOnGeneToGene(edge_id))
 
                 continue
@@ -308,10 +308,10 @@ class TrapiInterface:
             is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY)
             if is_valid:
                 if is_inverse:
-                    if wildcard_node is not None and edge.subject == wildcard_node or len(gene_nodes) != len(drug_nodes):
+                    if len(gene_nodes) != len(drug_nodes):
                         raise(MalformedSubjectObjectOnDrugGene(edge_id))
                 else:
-                    if wildcard_node is not None and edge.object == wildcard_node or len(gene_nodes) != len(drug_nodes):
+                    if len(gene_nodes) != len(drug_nodes):
                         raise(MalformedSubjectObjectOnDrugGene(edge_id))
                 continue
 
