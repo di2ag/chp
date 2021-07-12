@@ -141,37 +141,31 @@ class TrapiInterface:
                             wildcard_node_count += 1
                             wildcard_node = node_id
                         else:
-                            found_curie = None
                             for curie in node.ids:
                                 if curie in self.curies[BIOLINK_GENE_ENTITY.get_curie()]:
-                                    found_curie = curie
-                                    qg.nodes[node_id].set_ids(found_curie)
-                            if found_curie is None:
-                                raise(UnidentifiedGeneCurie(node.ids))
+                                    qg.nodes[node_id].set_ids(curie)
+                                else:
+                                    raise(UnidentifiedGeneCurie(node.ids))
                     elif node.categories[0] == BIOLINK_DRUG_ENTITY:
                         drug_nodes.append(node_id)
                         if node.ids is None:
                             wildcard_node_count += 1
                             wildcard_node = node_id
                         else:
-                            found_curie = None
                             for curie in node.ids:
                                 if curie in self.curies[BIOLINK_DRUG_ENTITY.get_curie()]:
-                                    found_curie = curie
-                                    qg.nodes[node_id].set_ids(found_curie)
-                            if found_curie is None:
-                                raise(UnidentifiedDrugCurie(node.ids))
+                                    qg.nodes[node_id].set_ids(curie)
+                                else:
+                                    raise(UnidentifiedDrugCurie(node.ids))
                     elif node.categories[0] == BIOLINK_DISEASE_ENTITY:
                         disease_nodes.append(node_id)
                     elif node.categories[0] == BIOLINK_PHENOTYPIC_FEATURE_ENTITY:
                         phenotype_nodes.append(node_id)
-                        found_curie = None
                         for curie in node.ids:
                             if curie in self.curies[BIOLINK_PHENOTYPIC_FEATURE_ENTITY.get_curie()]:
-                                found_curie = curie
-                                qg.nodes[node_id].set_ids(found_curie)
-                        if found_curie is None:
-                            raise(UnidentifiedPhenotypeCurie(node.ids))
+                                qg.nodes[node_id].set_ids(curie)
+                            else:
+                                raise(UnidentifiedPhenotypeCurie(node.ids))
                     else:
                         raise(UnidentifiedNode(node.categories[0]))
 
