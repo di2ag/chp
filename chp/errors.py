@@ -1,3 +1,5 @@
+from chp.mixins.trapi_handler.mixin_errors import *
+
 ###########################################
 # General Trapi Handler Exceptions
 ###########################################
@@ -87,6 +89,14 @@ class MalformedSubjectObjectOnDrugGene(Exception):
 
     def __str__(self):
         return 'Malformed subject and/or object nodes in Drug Gene edge (edge id: {}).'.format(self.edge_id)
+
+class MalformedSubjectObjectOnGeneToGene(Exception):
+
+    def __init__(self, *args):
+        self.edge_id = args[0]
+
+    def __str__(self):
+        return 'Malformed subject and/or object nodes in Gene to Gene edge (edge id: {}).'.format(self.edge_id)
 
 class UnexpectedEdgeType(Exception):
 

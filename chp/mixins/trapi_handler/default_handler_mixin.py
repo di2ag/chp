@@ -106,6 +106,9 @@ class DefaultHandlerMixin:
                 target_id = node_key
                 total_nodes += 1
 
+        survival_value = 970
+        survival_operator = '>='
+
         # get disease node info and ensure only 1 disease:
         for node_key in query_graph.nodes.keys():
             node = query_graph.nodes[node_key]
@@ -120,9 +123,6 @@ class DefaultHandlerMixin:
                             survival_operator = survival_time_constraint.operator
                             if survival_operator == 'matches':
                                 survival_operator = '=='
-                        else:
-                            survival_value = 970
-                            survival_operator = '>='
                         total_edges += 1
                 total_nodes += 1
         # set BKB target
