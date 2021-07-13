@@ -8,8 +8,10 @@ import sys
 import trapi_model
 trapi_model.set_biolink_debug_mode(False)
 from trapi_model.query import Query
+from chp_data.bkb_handler import BkbDataHandler
 
 from chp.trapi_interface import TrapiInterface
+from chp.reasoner import ChpJointReasoner, ChpDynamicReasoner
 from chp.errors import *
 
 
@@ -25,26 +27,43 @@ logger_root = logging.getLogger()
 logger_root.setLevel(logging.INFO)
 
 class TestDefaultHandler(unittest.TestCase):
-
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super(TestDefaultHandler, cls).setUpClass()
         # load in sample query graphs
         with open('query_samples/random_queries.pk', 'rb') as f_:
-            self.queries = pickle.load(f_)
+            cls.queries = pickle.load(f_)
         with open('query_samples/random_batch_queries.pk', 'rb') as f_:
-            self.batch_queries = pickle.load(f_)
+            cls.batch_queries = pickle.load(f_)
+
+        cls.bkb_handler = BkbDataHandler()
+        cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
+        cls.joint_reasoner = ChpJointReasoner(cls.bkb_handler)
 
     def test_curies(self):
-        interface = TrapiInterface()
+        interface = TrapiInterface(
+                bkb_handler=self.bkb_handler,
+                dynamic_reasoner=self.dynamic_reasoner,
+                joint_reasoner=self.joint_reasoner,
+                )
         curies = interface.get_curies()
         self.assertIsInstance(curies, dict)
 
     def test_predicates(self):
-        interface = TrapiInterface()
+        interface = TrapiInterface(
+                bkb_handler=self.bkb_handler,
+                dynamic_reasoner=self.dynamic_reasoner,
+                joint_reasoner=self.joint_reasoner,
+                )
         predicates = interface.get_predicates()
         self.assertIsInstance(predicates, dict)
 
     def test_meta_knowledge_graph(self):
-        interface = TrapiInterface()
+        interface = TrapiInterface(
+                bkb_handler=self.bkb_handler,
+                dynamic_reasoner=self.dynamic_reasoner,
+                joint_reasoner=self.joint_reasoner,
+                )
         meta_kg = interface.get_meta_knowledge_graph()
         self.assertIsInstance(meta_kg, dict)
 
@@ -53,7 +72,12 @@ class TestDefaultHandler(unittest.TestCase):
         logger.info('Running single query test.')
         for trapi_version, queries in self.queries.items():
             query = Query.load(trapi_version, None, query=queries[3])
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
@@ -67,7 +91,12 @@ class TestDefaultHandler(unittest.TestCase):
                 predicate = edge.predicates[0]
                 inverse = edge.predicates[0].get_inverse()
                 edge.set_predicates(inverse)
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
@@ -77,7 +106,12 @@ class TestDefaultHandler(unittest.TestCase):
         logger.info('Running single simple query test.')
         for trapi_version, queries in self.queries.items():
             query = Query.load(trapi_version, None, query=queries[1])
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
@@ -87,7 +121,12 @@ class TestDefaultHandler(unittest.TestCase):
         # These are non-simple queries
         for trapi_version, queries in self.batch_queries.items():
             query = Query.load(trapi_version, None, query=queries[1])
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
@@ -97,28 +136,42 @@ class TestDefaultHandler(unittest.TestCase):
         logger.info('Running batch simple query test.')
         for trapi_version, queries in self.batch_queries.items():
             query = Query.load(trapi_version, None, query=queries[0])
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
 
 class TestWildCardHandler(unittest.TestCase):
 
-    def setUp(self):
-        # load in sample query graphs
+    @classmethod
+    def setUpClass(cls):
+        super(TestWildCardHandler, cls).setUpClass()
         with open('query_samples/random_gene_wildcard_queries.pk', 'rb') as f_:
-            self.gene_queries = pickle.load(f_)
+            cls.gene_queries = pickle.load(f_)
         with open('query_samples/random_gene_wildcard_batch_queries.pk', 'rb') as f_:
-            self.gene_batch_queries = pickle.load(f_)
+            cls.gene_batch_queries = pickle.load(f_)
         with open('query_samples/random_drug_wildcard_queries.pk', 'rb') as f_:
-            self.drug_queries = pickle.load(f_)
+            cls.drug_queries = pickle.load(f_)
         with open('query_samples/random_drug_wildcard_batch_queries.pk', 'rb') as f_:
-            self.drug_batch_queries = pickle.load(f_)
+            cls.drug_batch_queries = pickle.load(f_)
+        cls.bkb_handler = BkbDataHandler()
+        cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
+        cls.joint_reasoner = ChpJointReasoner(cls.bkb_handler)
 
     def test_single_gene_wildcard_query(self):
         for trapi_version, queries in self.gene_queries.items():
             query = Query.load(trapi_version, None, query=queries[0])
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
@@ -130,7 +183,12 @@ class TestWildCardHandler(unittest.TestCase):
                 predicate = edge.predicates[0]
                 inverse = edge.predicates[0].get_inverse()
                 edge.set_predicates(inverse)
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
@@ -139,7 +197,12 @@ class TestWildCardHandler(unittest.TestCase):
     def test_single_drug_wildcard_query(self):
         for trapi_version, queries in self.drug_queries.items():
             query = Query.load(trapi_version, None, query=queries[0])
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
@@ -147,7 +210,12 @@ class TestWildCardHandler(unittest.TestCase):
     def test_batch_gene_wildcard_query(self):
         for trapi_version, queries in self.gene_batch_queries.items():
             query = Query.load(trapi_version, None, query=queries[0])
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
@@ -155,34 +223,51 @@ class TestWildCardHandler(unittest.TestCase):
     def test_batch_drug_wildcard_query(self):
         for trapi_version, queries in self.drug_batch_queries.items():
             query = Query.load(trapi_version, None, query=queries[0])
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
             interface.build_chp_queries()
             interface.run_chp_queries()
             response = interface.construct_trapi_response()
 
 class TestOneHopHandler(unittest.TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super(TestOneHopHandler, cls).setUpClass()
         # load in sample query graphs
         with open('query_samples/standard_single_onehop_queries.pk', 'rb') as f_:
-            self.standard_single_queries = pickle.load(f_)
+            cls.standard_single_queries = pickle.load(f_)
         with open('query_samples/standard_batch_onehop_queries.pk', 'rb') as f_:
-            self.standard_batch_queries = pickle.load(f_)
+            cls.standard_batch_queries = pickle.load(f_)
         with open('query_samples/wildcard_single_onehop_queries.pk', 'rb') as f_:
-            self.wildcard_single_queries = pickle.load(f_)
+            cls.wildcard_single_queries = pickle.load(f_)
         with open('query_samples/wildcard_batch_onehop_queries.pk', 'rb') as f_:
-            self.wildcard_batch_queries = pickle.load(f_)
+            cls.wildcard_batch_queries = pickle.load(f_)
+        cls.bkb_handler = BkbDataHandler()
+        cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
+        cls.joint_reasoner = ChpJointReasoner(cls.bkb_handler)
 
     def test_standard_single_onehop_query(self):
         for trapi_version, queries in self.standard_single_queries.items():
             for name, query_dict in queries.items():
-                #if name != 'gene_to_disease_proxy_context':
-                #    continue
+                if trapi_version != '1.1':
+                    continue
                 query = Query.load(trapi_version, None, query=query_dict)
-                interface = TrapiInterface(query=query)
+                interface = TrapiInterface(
+                        query=query,
+                        bkb_handler=self.bkb_handler,
+                        dynamic_reasoner=self.dynamic_reasoner,
+                        joint_reasoner=self.joint_reasoner,
+                        )
                 interface.build_chp_queries()
                 interface.run_chp_queries()
                 response = interface.construct_trapi_response()
+                print(response.json())
+                input('Continue.')
     
     def test_inverse_onehop_query(self):
         for trapi_version, queries in self.standard_single_queries.items():
@@ -195,7 +280,12 @@ class TestOneHopHandler(unittest.TestCase):
                     inverse = edge.predicates[0].get_inverse()
                     if inverse is not None:
                         edge.set_predicates(inverse)
-                interface = TrapiInterface(query=query)
+                interface = TrapiInterface(
+                        query=query,
+                        bkb_handler=self.bkb_handler,
+                        dynamic_reasoner=self.dynamic_reasoner,
+                        joint_reasoner=self.joint_reasoner,
+                        )
                 interface.build_chp_queries()
                 interface.run_chp_queries()
                 response = interface.construct_trapi_response()
@@ -206,7 +296,12 @@ class TestOneHopHandler(unittest.TestCase):
                 #if name != 'gene_to_disease_proxy_context':
                 #    continue
                 query = Query.load(trapi_version, None, query=query_dict)
-                interface = TrapiInterface(query=query)
+                interface = TrapiInterface(
+                        query=query,
+                        bkb_handler=self.bkb_handler,
+                        dynamic_reasoner=self.dynamic_reasoner,
+                        joint_reasoner=self.joint_reasoner,
+                        )
                 interface.build_chp_queries()
                 interface.run_chp_queries()
                 response = interface.construct_trapi_response()
@@ -217,7 +312,12 @@ class TestOneHopHandler(unittest.TestCase):
                 #if name != 'gene_to_disease_proxy_context':
                 #    continue
                 query = Query.load(trapi_version, None, query=query_dict)
-                interface = TrapiInterface(query=query)
+                interface = TrapiInterface(
+                        query=query,
+                        bkb_handler=self.bkb_handler,
+                        dynamic_reasoner=self.dynamic_reasoner,
+                        joint_reasoner=self.joint_reasoner,
+                        )
                 interface.build_chp_queries()
                 interface.run_chp_queries()
                 response = interface.construct_trapi_response()
@@ -228,138 +328,254 @@ class TestOneHopHandler(unittest.TestCase):
                 #if name != 'gene_to_disease_proxy_context':
                 #    continue
                 query = Query.load(trapi_version, None, query=query_dict)
-                interface = TrapiInterface(query=query)
+                interface = TrapiInterface(
+                        query=query,
+                        bkb_handler=self.bkb_handler,
+                        dynamic_reasoner=self.dynamic_reasoner,
+                        joint_reasoner=self.joint_reasoner,
+                        )
                 interface.build_chp_queries()
                 interface.run_chp_queries()
                 response = interface.construct_trapi_response()
 
 class TestHandlerErrors(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super(TestHandlerErrors, cls).setUpClass()
+        cls.bkb_handler = BkbDataHandler()
+        cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
+        cls.joint_reasoner = ChpJointReasoner(cls.bkb_handler)
 
     def test_more_than_one_contribution(self):
         with open('query_samples/error_samples/test_more_than_one_contribution.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(TooManyContributionNodes) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_more_than_one_disease(self):
         with open('query_samples/error_samples/test_more_than_one_disease.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(TooManyDiseaseNodes) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_more_than_one_phenotype(self):
         with open('query_samples/error_samples/test_more_than_one_phenotype.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(TooManyPhenotypeNodes) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_more_than_one_disease(self):
         with open('query_samples/error_samples/test_more_than_one_disease.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(TooManyDiseaseNodes) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_no_disease(self):
         with open('query_samples/error_samples/test_no_disease.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(UnidentifiedQueryType) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_no_target(self):
         with open('query_samples/error_samples/test_no_target.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(UnidentifiedQueryType) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_drug_to_disease_default(self):
         with open('query_samples/error_samples/test_illegal_drug_to_disease_default.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(MalformedSubjectObjectOnDrugToDisease) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_gene_to_disease_default(self):
         with open('query_samples/error_samples/test_illegal_gene_to_disease_default.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(MalformedSubjectObjectOnGeneToDisease) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_disease_to_phenotype_default(self):
         with open('query_samples/error_samples/test_illegal_disease_to_phenotype_default.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(MalformedSubjectObjectOnDiseaseToPhenotype) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_edge_default(self):
         with open('query_samples/error_samples/test_illegal_edge_default.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(IncompatibleDefaultEdge) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_unknown_edge_default(self):
         with open('query_samples/error_samples/test_unknown_edge_default.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(UnexpectedEdgeType) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_gene_to_disease_wildcard(self):
         with open('query_samples/error_samples/test_illegal_gene_to_disease_wildcard.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(MalformedSubjectObjectOnGeneToDisease) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_drug_to_disease_wildcard(self):
         with open('query_samples/error_samples/test_illegal_drug_to_disease_wildcard.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(MalformedSubjectObjectOnDrugToDisease) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_disease_to_phenotype_wildcard(self):
         with open('query_samples/error_samples/test_illegal_disease_to_phenotype_wildcard.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(MalformedSubjectObjectOnDiseaseToPhenotype) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_edge_wildcard(self):
         with open('query_samples/error_samples/test_illegal_edge_wildcard.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(IncompatibleWildcardEdge) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_unknown_edge_wildcard(self):
         with open('query_samples/error_samples/test_unknown_edge_wildcard.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(UnexpectedEdgeType) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_drug_to_disease_one_hop(self):
         with open('query_samples/error_samples/test_illegal_drug_to_disease_one_hop.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(IncompatibleDrugGeneOneHopEdge) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_gene_to_drug_one_hop(self):
         with open('query_samples/error_samples/test_illegal_gene_to_drug_one_hop.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(IncompatibleDrugGeneOneHopEdge) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_illegal_disease_to_phenotype_one_hop(self):
         with open('query_samples/error_samples/test_illegal_disease_to_phenotype_one_hop.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(IncompatibleDrugGeneOneHopEdge) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_backwards_contribution_node_one_hop(self):
         with open('query_samples/error_samples/test_backwards_contribution_node_one_hop.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(MalformedSubjectObjectOnDrugGene) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
     def test_unknown_edge_one_hop(self):
         with open('query_samples/error_samples/test_unknown_edge_one_hop.pk', 'rb') as f_:
             query = pickle.load(f_)
         with self.assertRaises(UnexpectedEdgeType) as context:
-            interface = TrapiInterface(query=query)
+            interface = TrapiInterface(
+                    query=query,
+                    bkb_handler=self.bkb_handler,
+                    dynamic_reasoner=self.dynamic_reasoner,
+                    joint_reasoner=self.joint_reasoner,
+                    )
 
 
 
