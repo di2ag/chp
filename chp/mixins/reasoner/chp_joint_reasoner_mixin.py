@@ -11,22 +11,16 @@ class ChpJointReasonerMixin:
         self.joint_reasoner = JointReasoner(self.patient_data)
         logger.info('Setup Joint Reasoner.')
 
-    def _process_evidence(self, evidence):
-        """ Since no interpolation is going on remove the '_' from the gene evidence if
-            it is passed.
+    def _process_evidence(self, query):
+        """ Since no interpolation is going on merge the evidence and meta evidence together.
         """
-        new_format = {}
-        for feature, state in evidence.items():
-            if feature[0] == '_':
-                new_format[feature[1:]] = state
-            else:
-                new_format[feature] = state
-        return new_format
+        evidence = query.evidence
+        return evidence.update(query.meta_evidence)
 
     def run_query(self, query):
         # Compute joint probability
         res, contrib = self.joint_reasoner.compute_joint(
-            self._process_evidence(query.evidence),
+            self._process_evidence(query),
             query.targets,
             continuous_evidence=query.dynamic_evidence,
             continuous_targets=query.dynamic_targets,

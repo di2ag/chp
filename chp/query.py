@@ -23,30 +23,96 @@ class Query:
                  evidence=None,
                  targets=None,
                  marginal_evidence=None,
-                 type='updating',
+                 reasoning_type='updating',
                  name='query0',
                  dynamic_evidence=None,
-                 dynamic_targets=None):
+                 dynamic_targets=None,
+                 meta_evidence=None,
+                 meta_targets=None,
+                 ):
+        """ BKB query class for CHP.
+
+        Note:
+            All evidence and target random variables and states including dynamic and meta must be exactly
+            the same as the associated I-node names in the underlying BKB.
+
+        kwargs:
+            :param evidence: A dictionary of BKB evidence which has Random Variable
+            names as keys and the associated Random Variable State names as the keys value.
+            :type evidence: dict, optional
+            :param targets: A list of Random Variable names that are targets of the BKB reasoning task.
+            :type targets: list, defaults to None
+            :param marginal_evidence: Not currently supported.
+            :type marginal_evidence: None
+            :param reasoning_type: The type of BKB reasoning to perform: updating or revision.
+            :type reasoning_type: str, defaults to 'updating'.
+            :param name: Name of the query.
+            :type name: str, defaults to 'query0'.
+            :param dynamic_evidence: A dictionary of dynamic BKB evidence which has Random Variable
+            names as keys and a dictionary containing the keys: 'op' with values that can be ['>=', '==', '<=']
+            and 'value' which is the associated value to apply to the 'op'.
+            :type dynamic_evidence: dict, defaults to None
+            :param dynamic_targets: A dictionary of dynamic BKB targets which has Random Variable
+            names as keys and a dictionary containing the keys: 'op' with values that can be ['>=', '==', '<=']
+            and 'value' which is the associated value to apply to the 'op'.
+            :type dynamic_targets: dict, defaults to None
+            :param meta_evidence: A dictionary of BKB evidence which has Random Variable names 
+            appended to an underscore as keys and the associated Random Variable state name as the key value.
+            :type meta_evidence: dict, defaults to None
+            :param meta_targets: A list of Random Variable names append to an underscore that represent the meta targets
+            of the BKB reasoning task.
+            :type meta_targets: list, defaults to None
+        """
+        # Initialize evidence and targets
         self.evidence = evidence
         self.targets = targets
         self.marginal_evidence = marginal_evidence
-        self.type = type
-        self.name = name
         self.dynamic_evidence = dynamic_evidence
         self.dynamic_targets = dynamic_targets
+        self.meta_evidence = meta_evidence
+        self.meta_targets = meta_targets
+        if evidence is None:
+            self.evidence = {}
+        if targets is None:
+            self.targets = []
+        if dynamic_evidence is None:
+            self.dynamic_evidence = {}
+        if dynamic_targets is None:
+            self.dynamic_targets = {}
+        if meta_evidence is None:
+            self.meta_evidence = {}
+        if meta_targets is None:
+            self.meta_targets = []
+
+        # Initiallize query parameters
+        self.reasoning_type = reasoning_type
+        self.name = name
+
+        # Internal attributes that are set after query is run.
         self.result = None
         self.bkb = None
-        self.independ_queries = None
-        self.independ_result = None
         self.compute_time = -1
-        self.patient_data = None
-        self.interpolation = None
-        self.target_strategy = None
-        self.gene_var_direct = None
-        self.max_new_ev = None
         self.from_joint_reasoner = False
 
+        #TODO: Likely deprecate below parameters.
+        #self.independ_queries = None
+        #self.independ_result = None
+        #self.patient_data = None
+        #self.interpolation = None
+        #self.target_strategy = None
+        #self.gene_var_direct = None
+        #self.max_new_ev = None
+
     def make_bogus_updates(self):
+        """ Makes random update probabilities based on dynamic_targets. Used for
+        debugging only.
+
+        Note:
+            Does not actually perform any BKB updating.
+
+        :return: Returns random probabilities for dynamic_targets.
+        :rtype: dict
+        """
         bogus_updates = {}
         for target in self.dynamic_targets:
             for state in ['True', 'False']:
@@ -57,6 +123,116 @@ class Query:
                 else:
                     bogus_updates[comp_name][state] = 1 - prob
         return bogus_updates
+
+    def compose_evidence(self):
+        """ Composes all the normal, dynamic, and meta evidence together into one dictionary.
+        
+        :return: A dictionary of the form of {[RandomVariableName]:  [RandomVariableState], ...}.
+        :rtype: dict
+        """
+        evidence = self.evidence
+        # Compose dynamic evidence
+        for rv, evidence_dict in self.dynamic_evidence.items():
+            op = evidence_dict["op"]
+            value = evidence_dict["value"]
+            evidence[rv] = '{} {}'.format(op, value)
+        # Compose meta evidence
+        for rv, state in self.meta_evidence.items():
+            # Add underscore at beginning of rv name.
+            evidence['_' + rv] = state
+        return evidence
+
+    def compose_targets(self):
+        """ Composes all the normal, dynamic, and meta targets together into one list.
+        
+        :return: A list of composed targets from all target types.
+        :rtype: dict
+        """
+        targets = self.targets
+        # Compose dynamic targets
+        for rv in self.dynamic_targets:
+            targets.append(rv)
+        # Compose meta targets
+        for rv in self.meta_targets:
+            # Add underscore at beginning of rv name.
+            targets.append('_' + rv)
+        return targets
+
+    def add_evidence(self, random_variable, state):
+        """ Add a single piece of evidence to the query.
+
+        :param random_variable: A Random Variable name found in the BKB understudy.
+        :type random_variable: str
+        :param state: A Random Variable State name found in the BKB understudy.
+        :type state: str
+        """
+        self.evidence[random_variable] = state
+
+    def add_dynamic_evidence(self, random_variable, op, value):
+        """ Add a single piece of dynamic evidence to the query.
+
+        :param random_variable: A Random Variable name found in the BKB understudy.
+        :type random_variable: str
+        :param op: One of: '>=, '==', '<='.
+        :type state: str
+        :param value: The value to use with the operator.
+        :type value: str
+        """
+        self.dynamic_evidence[random_variable] = {
+                "op": op,
+                "value": value,
+                }
+
+    def add_meta_evidence(self, random_variable, state):
+        """ Add a single piece of meta evidence to the query.
+
+        Note:
+            Meta evidence is usually found in the BKB after some form of interpolation is done.
+
+        :param random_variable: A Random Variable name found in the BKB understudy.
+        :type random_variable: str
+        :param state: A Random Variable State name found in the BKB understudy.
+        :type state: str
+        """
+        self.meta_evidence[random_variable] = state
+    
+    def add_target(self, random_variable):
+        """ Add a single target to the query.
+
+        :param random_variable: A Random Variable name found in the BKB understudy.
+        :type random_variable: str
+        """
+        self.targets.append(random_variable)
+
+    def add_dynamic_target(self, random_variable, op, value):
+        """ Add a single piece of dynamic targets to the query.
+
+        :param random_variable: A Random Variable name found in the BKB understudy.
+        :type random_variable: str
+        :param op: One of: '>=, '==', '<='.
+        :type state: str
+        :param value: The value to use with the operator.
+        :type value: str
+        """
+        self.dynamic_targets[random_variable] = {
+                "op": op,
+                "value": value,
+                }
+
+    def add_meta_target(self, random_variable):
+        """ Add a single piece of meta targets to the query.
+
+        Note:
+            Meta targets is usually found in the BKB after some form of interpolation is done.
+
+        :param random_variable: A Random Variable name found in the BKB understudy.
+        :type random_variable: str
+        :param state: A Random Variable State name found in the BKB understudy.
+        :type state: str
+        """
+        self.meta_targets.append(random_variable)
+
+""" Code to depreciate in next version.
 
     def save(self, directory, only_json=False):
         if not only_json:
@@ -419,3 +595,4 @@ class Query:
                 q.getReport()
         else:
             print('No results found.')
+"""

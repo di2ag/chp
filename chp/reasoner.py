@@ -58,6 +58,9 @@ class BaseReasoner:
         self._setup_base_reasoner()
 
     def _setup_base_reasoner(self):
+        """ Reads in patient BKB builder if one is not passed and loads patient data into
+        the appropriate format. Lastly, it runs the specific reasoner setup method.
+        """
         # Read in raw patient data
         if self.patient_bkb_builder is None:
             with open(self.bkb_handler.patient_data_pk_path, 'rb') as patient_file:

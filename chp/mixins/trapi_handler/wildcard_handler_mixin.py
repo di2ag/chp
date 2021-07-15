@@ -18,7 +18,7 @@ import json
 from trapi_model.biolink.constants import *
 from chp_data.bkb_handler import BkbDataHandler
 
-from chp.query import Query
+from chp.query import Query as ChpQuery
 from chp.reasoner import ChpDynamicReasoner
 from pybkb.python_base.utils import get_operator, get_opposite_operator
 
@@ -59,10 +59,8 @@ class WildCardHandlerMixin:
             raise ValueError('Did not understand wildcard type {}.'.format(wildcard_type))
 
     def _extract_chp_query(self, message, message_type):
-        evidence = {}
-        targets = []
-        dynamic_evidence = {}
-        dynamic_targets = {}
+        # Initialize CHP BKB Query
+        chp_query = ChpQuery(reasoning_type='updating')
         # ensure we are using all nodes/edges
         total_nodes = 0
         total_edges = 0
@@ -111,10 +109,7 @@ class WildCardHandlerMixin:
             total_edges += 1
 
         # set BKB target
-        dynamic_targets['EFO:0000714'] = {
-            "op": survival_operator,
-            "value": survival_value,
-        }
+        chp_query.add_dynamic_target('EFO:0000714', survival_operator, survival_value)
         truth_target = ('EFO:0000714', '{} {}'.format(survival_operator, survival_value))
 
         # get evidence
@@ -133,7 +128,7 @@ class WildCardHandlerMixin:
                     gene_curie = node.ids[0]
                     if gene_curie in self.curies[BIOLINK_GENE_ENTITY.get_curie()]:
                         gene = gene_curie
-                    evidence["_" + gene] = 'True'
+                    chp_query.add_meta_evidence(gene, 'True')
                 total_nodes += 1
             # drugs
             if node.categories[0] == BIOLINK_DRUG_ENTITY:
@@ -148,22 +143,15 @@ class WildCardHandlerMixin:
                     drug_curie = node.ids[0]
                     if drug_curie in self.curies[BIOLINK_DRUG_ENTITY.get_curie()]:
                         drug = drug_curie
-                    evidence['_' + drug] = 'True'
+                    chp_query.add_meta_evidence(drug, 'True')
                 total_nodes += 1
 
         # Temporary solution to no evidence linking
-        if len(evidence.keys()) == 0 and len(dynamic_evidence.keys()) == 0:
+        if len(chp_query.evidence.keys()) == 0 and len(chp_query.dynamic_evidence.keys()) == 0:
             self.no_evidence_probability_check = True
         else:
             self.no_evidence_probability_check = False
 
-        # produce BKB query
-        chp_query = Query(
-            evidence=evidence,
-            targets=targets,
-            dynamic_evidence=dynamic_evidence,
-            dynamic_targets=dynamic_targets,
-            type='updating')
         # Set some other helpful attributes
         chp_query.truth_target = truth_target
         return chp_query
@@ -395,6 +383,7 @@ class WildCardHandlerMixin:
             # Process edge bindings
             for qedge_id, qedge in qg.edges.items():
                 subject_node = qedge.subject
+                object_node = qedge.object
                 if query_type == 'gene' and self.check_predicate_support(qedge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY) and qg.nodes[subject_node].categories[0] == BIOLINK_GENE_ENTITY:
                     kedge_id = kg.add_edge(
                             _node_bindings[qedge.subject][0],
@@ -408,7 +397,33 @@ class WildCardHandlerMixin:
                             value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
                             )
                     _edge_bindings[qedge_id] = [kedge_id]
+                elif query_type == 'gene' and self.check_predicate_support(qedge.predicates[0], BIOLINK_CONDITION_ASSOCIATED_WITH_GENE_ENTITY) and qg.nodes[object_node].categories[0] == BIOLINK_GENE_ENTITY:
+                    kedge_id = kg.add_edge(
+                            _node_bindings[qedge.subject][0],
+                            _node_bindings[qedge.object][0],
+                            predicate=qedge.predicates[0],
+                            relation=qedge.relation,
+                            )
+                    kg.edges[kedge_id].add_attribute(
+                            attribute_type_id='Contribution',
+                            value=contrib,
+                            value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
+                            )
+                    _edge_bindings[qedge_id] = [kedge_id]
                 elif query_type == 'drug' and self.check_predicate_support(qedge.predicates[0], BIOLINK_TREATS_ENTITY) and qg.nodes[subject_node].categories[0] == BIOLINK_DRUG_ENTITY:
+                    kedge_id = kg.add_edge(
+                            _node_bindings[qedge.subject][0],
+                            _node_bindings[qedge.object][0],
+                            predicate=qedge.predicates[0],
+                            relation=qedge.relation,
+                            )
+                    kg.edges[kedge_id].add_attribute(
+                            attribute_type_id='Contribution',
+                            value=contrib,
+                            value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
+                            )
+                    _edge_bindings[qedge_id] = [kedge_id]
+                elif query_type == 'drug' and self.check_predicate_support(qedge.predicates[0], BIOLINK_TREATED_BY_ENTITY) and qg.nodes[object_node].categories[0] == BIOLINK_DRUG_ENTITY:
                     kedge_id = kg.add_edge(
                             _node_bindings[qedge.subject][0],
                             _node_bindings[qedge.object][0],

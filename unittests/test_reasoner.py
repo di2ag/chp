@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class TestJointReasoner(unittest.TestCase):
-
-    def setUp(self):
-        self.bkb_handler = BkbDataHandler()
-        self.joint_reasoner = ChpJointReasoner(self.bkb_handler)
+    @classmethod
+    def setUpClass(cls):
+        super(TestJointReasoner, cls).setUpClass()
+        cls.bkb_handler = BkbDataHandler()
+        cls.joint_reasoner = ChpJointReasoner(cls.bkb_handler)
 
     def test_joint_reasoner_one_gene(self):
         # Specify evidence
@@ -58,16 +59,15 @@ class TestJointReasoner(unittest.TestCase):
 
 class TestDynamicReasoner(unittest.TestCase):
 
-    def setUp(self):
-        self.bkb_handler = BkbDataHandler(
-                 bkb_major_version='coulomb',
-                 bkb_minor_version='1.0',
-        )
-        self.dynamic_reasoner = ChpDynamicReasoner(self.bkb_handler)
+    @classmethod
+    def setUpClass(cls):
+        super(TestDynamicReasoner, cls).setUpClass()
+        cls.bkb_handler = BkbDataHandler(disease='tcga_brca')
+        cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
 
     def test_dynamic_reasoner_one_gene(self):
         # Specify evidence
-        evidence = {'_ENSEMBL:ENSG00000155657': 'True'}
+        meta_evidence = {'ENSEMBL:ENSG00000155657': 'True'}
         # Specify targets
         dynamic_targets = {
             "EFO:0000714": {
@@ -77,7 +77,7 @@ class TestDynamicReasoner(unittest.TestCase):
         }
         # Setup query
         query = Query(
-            evidence=evidence,
+            meta_evidence=meta_evidence,
             dynamic_targets=dynamic_targets
         )
         query =  self.dynamic_reasoner.run_query(query)
@@ -85,10 +85,15 @@ class TestDynamicReasoner(unittest.TestCase):
 
     def test_dynamic_reasoner_one_gene_one_drug(self):
         # Specify evidence
-        evidence = {
-            '_ENSEMBL:ENSG00000155657': 'True',
-            'CHEMBL:CHEMBL83': 'True',
+        dynamic_evidence = {
+            'CHEMBL:CHEMBL83': {
+                "op": '==',
+                "value": 'True',
+                }
         }
+        meta_evidence = {
+            'ENSEMBL:ENSG00000155657': 'True',
+            }
         # Specify targets
         dynamic_targets = {
             "EFO:0000714": {
@@ -98,7 +103,8 @@ class TestDynamicReasoner(unittest.TestCase):
         }
         # Setup query
         query = Query(
-            evidence=evidence,
+            dynamic_evidence=dynamic_evidence,
+            meta_evidence=meta_evidence,
             dynamic_targets=dynamic_targets
         )
         query =  self.dynamic_reasoner.run_query(query)
@@ -106,9 +112,35 @@ class TestDynamicReasoner(unittest.TestCase):
 
     def test_dynamic_reasoner_two_gene_one_drug(self):
         # Specify evidence
-        evidence = {
-            '_ENSEMBL:ENSG00000155657': 'True',
-            '_ENSEMBL:ENSG00000241973': 'True',
+        dynamic_evidence = {
+            'CHEMBL:CHEMBL83': {
+                "op": '==',
+                "value": 'True',
+                }
+        }
+        meta_evidence = {
+            'ENSEMBL:ENSG00000155657': 'True',
+            'ENSEMBL:ENSG00000241973': 'True',
+            }
+        # Specify targets
+        dynamic_targets = {
+            "EFO:0000714": {
+                "op": '>=',
+                "value": 1000
+            }
+        }
+        # Setup query
+        query = Query(
+            dynamic_evidence=dynamic_evidence,
+            meta_evidence=meta_evidence,
+            dynamic_targets=dynamic_targets
+        )
+        query =  self.dynamic_reasoner.run_query(query)
+        query.result.summary(include_contributions=False)
+
+    def test_dynamic_reasoner_one_drug_survival(self):
+        # Specify evidence
+        meta_evidence = {
             'CHEMBL:CHEMBL83': 'True',
         }
         # Specify targets
@@ -120,27 +152,7 @@ class TestDynamicReasoner(unittest.TestCase):
         }
         # Setup query
         query = Query(
-            evidence=evidence,
-            dynamic_targets=dynamic_targets
-        )
-        query =  self.dynamic_reasoner.run_query(query)
-        query.result.summary(include_contributions=False)
-
-    def test_dynamic_reasoner_one_drug_survival(self):
-        # Specify evidence
-        evidence = {
-            '_CHEMBL:CHEMBL83': 'True',
-        }
-        # Specify targets
-        dynamic_targets = {
-            "EFO:0000714": {
-                "op": '>=',
-                "value": 1000
-            }
-        }
-        # Setup query
-        query = Query(
-            evidence=evidence,
+            meta_evidence=meta_evidence,
             dynamic_targets=dynamic_targets
         )
         query =  self.dynamic_reasoner.run_query(query, bkb_type='drug')
@@ -148,9 +160,9 @@ class TestDynamicReasoner(unittest.TestCase):
 
     def test_dynamic_reasoner_two_drug_survival(self):
         # Specify evidence
-        evidence = {
-            '_CHEMBL:CHEMBL83': 'True',
-            '_CHEMBL:CHEMBL1201247': 'True',
+        meta_evidence = {
+            'CHEMBL:CHEMBL83': 'True',
+            'CHEMBL:CHEMBL1201247': 'True',
         }
         # Specify targets
         dynamic_targets = {
@@ -161,7 +173,7 @@ class TestDynamicReasoner(unittest.TestCase):
         }
         # Setup query
         query = Query(
-            evidence=evidence,
+            meta_evidence=meta_evidence,
             dynamic_targets=dynamic_targets
         )
         query =  self.dynamic_reasoner.run_query(query, bkb_type='drug')

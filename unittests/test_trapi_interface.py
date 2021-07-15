@@ -87,10 +87,16 @@ class TestDefaultHandler(unittest.TestCase):
         logger.info('Running default inverse query test.')
         for trapi_version, queries in self.queries.items():
             query = Query.load(trapi_version, None, query=queries[1])
+            print(query.json())
             for edge_id, edge in query.message.query_graph.edges.items():
                 predicate = edge.predicates[0]
                 inverse = edge.predicates[0].get_inverse()
                 edge.set_predicates(inverse)
+                # Switch subject and object
+                edge_subject = copy.deepcopy(edge.subject)
+                edge_object = copy.deepcopy(edge.object)
+                edge.subject = edge_object
+                edge.object = edge_subject
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -106,6 +112,8 @@ class TestDefaultHandler(unittest.TestCase):
         logger.info('Running single simple query test.')
         for trapi_version, queries in self.queries.items():
             query = Query.load(trapi_version, None, query=queries[1])
+            print(query.json())
+            input()
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -165,7 +173,8 @@ class TestWildCardHandler(unittest.TestCase):
 
     def test_single_gene_wildcard_query(self):
         for trapi_version, queries in self.gene_queries.items():
-            query = Query.load(trapi_version, None, query=queries[0])
+            _queries = copy.deepcopy(queries)
+            query = Query.load(trapi_version, None, query=_queries[0])
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -178,11 +187,18 @@ class TestWildCardHandler(unittest.TestCase):
 
     def test_inverse_wildcard_query(self):
         for trapi_version, queries in self.gene_queries.items():
-            query = Query.load(trapi_version, None, query=queries[0])
+            _queries = copy.deepcopy(queries)
+            query = Query.load(trapi_version, None, query=_queries[0])
             for edge_id, edge in query.message.query_graph.edges.items():
                 predicate = edge.predicates[0]
                 inverse = edge.predicates[0].get_inverse()
                 edge.set_predicates(inverse)
+                # Switch subject and object
+                edge_subject = copy.deepcopy(edge.subject)
+                edge_object = copy.deepcopy(edge.object)
+                edge.subject = edge_object
+                edge.object = edge_subject
+            print(query.json())
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -196,7 +212,8 @@ class TestWildCardHandler(unittest.TestCase):
 
     def test_single_drug_wildcard_query(self):
         for trapi_version, queries in self.drug_queries.items():
-            query = Query.load(trapi_version, None, query=queries[0])
+            _queries = copy.deepcopy(queries)
+            query = Query.load(trapi_version, None, query=_queries[0])
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -209,7 +226,8 @@ class TestWildCardHandler(unittest.TestCase):
 
     def test_batch_gene_wildcard_query(self):
         for trapi_version, queries in self.gene_batch_queries.items():
-            query = Query.load(trapi_version, None, query=queries[0])
+            _queries = copy.deepcopy(queries)
+            query = Query.load(trapi_version, None, query=_queries[0])
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -222,7 +240,8 @@ class TestWildCardHandler(unittest.TestCase):
     
     def test_batch_drug_wildcard_query(self):
         for trapi_version, queries in self.drug_batch_queries.items():
-            query = Query.load(trapi_version, None, query=queries[0])
+            _queries = copy.deepcopy(queries)
+            query = Query.load(trapi_version, None, query=_queries[0])
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -266,8 +285,6 @@ class TestOneHopHandler(unittest.TestCase):
                 interface.build_chp_queries()
                 interface.run_chp_queries()
                 response = interface.construct_trapi_response()
-                print(response.json())
-                input('Continue.')
     
     def test_inverse_onehop_query(self):
         for trapi_version, queries in self.standard_single_queries.items():
@@ -280,6 +297,11 @@ class TestOneHopHandler(unittest.TestCase):
                     inverse = edge.predicates[0].get_inverse()
                     if inverse is not None:
                         edge.set_predicates(inverse)
+                        # Switch subject and object
+                        edge_subject = copy.deepcopy(edge.subject)
+                        edge_object = copy.deepcopy(edge.object)
+                        edge.subject = edge_object
+                        edge.object = edge_subject
                 interface = TrapiInterface(
                         query=query,
                         bkb_handler=self.bkb_handler,

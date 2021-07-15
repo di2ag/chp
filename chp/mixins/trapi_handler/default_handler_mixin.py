@@ -19,7 +19,7 @@ from collections import defaultdict
 from trapi_model.biolink.constants import *
 from chp_data.bkb_handler import BkbDataHandler
 
-from chp.query import Query
+from chp.query import Query as ChpQuery
 from chp.reasoner import ChpDynamicReasoner, ChpJointReasoner
 
 # Setup logging
@@ -88,11 +88,9 @@ class DefaultHandlerMixin:
         return True
 
     def _extract_chp_query(self, message, message_type=None):
-        evidence = {}
-        targets = []
-        dynamic_evidence = {}
-        dynamic_targets = {}
-        # ensure we are using all nodes/edges
+        # Initialize Chp Query
+        chp_query = ChpQuery(reasoning_type='updating')
+        # Ensure we are using all nodes/edges
         total_nodes = 0
         total_edges = 0
 
@@ -126,10 +124,7 @@ class DefaultHandlerMixin:
                         total_edges += 1
                 total_nodes += 1
         # set BKB target
-        dynamic_targets[node.ids[0]] = {
-            "op": survival_operator,
-            "value": survival_value,
-        }
+        chp_query.add_dynamic_target(node.ids[0], survival_operator, survival_value)
         truth_target = (node.ids[0], '{} {}'.format(survival_operator, survival_value))
 
         # get evidence
@@ -146,7 +141,7 @@ class DefaultHandlerMixin:
                 # check for appropriate gene node curie
                 gene_curie = node.ids[0]
                 gene = gene_curie
-                evidence["_" + gene] = 'True'
+                chp_query.add_meta_evidence(gene, 'True')
                 total_nodes += 1
             # drugs
             if node.categories[0] == BIOLINK_DRUG_ENTITY:
@@ -159,16 +154,9 @@ class DefaultHandlerMixin:
                 # check for appropriate drug node curie
                 drug_curie = node.ids[0]
                 drug = drug_curie
-                evidence[node.ids[0]] = 'True'
+                chp_query.add_dynamic_evidence(node.ids[0], '==', 'True')
                 total_nodes += 1
 
-        # produce BKB query
-        chp_query = Query(
-            evidence=evidence,
-            targets=targets,
-            dynamic_evidence=dynamic_evidence,
-            dynamic_targets=dynamic_targets,
-            type='updating')
         # Set some other helpful attributes
         chp_query.truth_target = truth_target
         return chp_query
