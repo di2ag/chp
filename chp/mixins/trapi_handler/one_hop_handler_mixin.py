@@ -144,29 +144,13 @@ class OneHopHandlerMixin:
         chp_query.add_dynamic_target(predicate_proxy, proxy_operator, proxy_value)
         return chp_query
 
+
     @staticmethod
     def _process_predicate_context(qedge, message_type, chp_query):
         evidence = {}
         dynamic_evidence = {}
-        two_hop_proxy = []
-
-        # extract proxy first if exists
         predicate_context_constraint = qedge.find_constraint('predicate_context')
-        if predicate_context_constraint is not None:
-            for context in predicate_context_constraint.value:
-                context_curie = get_biolink_entity(context)
-                context_constraint = qedge.find_constraint(context)
-                # used 2 hop structure where context curie is the proxy
-                if context_constraint is None:
-                     two_hop_proxy.append(context_curie)
-        if len(two_hop_proxy) > 1:
-            raise TooManyOneHopProxies()
-        elif len(two_hop_proxy) == 1 and message_type != 'standard':
-            two_hop_proxy = proxy[0]
-        elif len(two_hop_proxy) == 0 and (message_type == 'gene_two_hop' or message_type == 'drug_two_hop'):
-            two_hop_proxy = get_default_two_hop_proxy(message_type)
-        else:
-            two_hop_proxy = None
+
         if predicate_context_constraint is not None:
             for context in predicate_context_constraint.value:
                 context_curie = get_biolink_entity(context)
@@ -175,59 +159,31 @@ class OneHopHandlerMixin:
                 if context_constraint is None:
                      continue
                 if context_curie == BIOLINK_GENE_ENTITY:
-                    if two_hop_proxy is not None:
-                        if two_hop_proxy == BIOLINK_GENE_ENTITY:
+                    if message_type == 'gene' or message_type == 'drug_two_hop':
                             if type(context_constraint.value) is list:
                                 for _curie in context_constraint.value:
                                     chp_query.add_dynamic_evidence(_curie, '==', 'True')
                             else:
                                 chp_query.add_dynamic_evidence(context_constraint.value, '==', 'True')
-                        else:
-                            if type(context_constraint.value) is list:
-                                for _curie in context_constraint.value:
-                                    chp_query.add_meta_evidence(_curie, 'True')
-                            else:
-                                chp_query.add_meta_evidence(_curie, 'True')
                     else:
-                        if message_type == 'gene':
-                            if type(context_constraint.value) is list:
-                                for _curie in context_constraint.value:
-                                    chp_query.add_dynamic_evidence(_curie, '==', 'True')
-                            else:
-                                chp_query.add_dynamic_evidence(context_constraint.value, '==', 'True')
-                        else:
-                            if type(context_constraint.value) is list:
-                                for _curie in context_constraint.value:
-                                    chp_query.add_meta_evidence(_curie, 'True')
-                            else:
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
                                 chp_query.add_meta_evidence(_curie, 'True')
+                        else:
+                            chp.add_meta_evidence(_curie, 'True')
                 elif context_curie == BIOLINK_DRUG_ENTITY:
-                    if two_hop_proxy is not None:
-                        if two_hop_proxy == BIOLINK_GENE_ENTITY:
-                            if type(context_constraint.value) is list:
-                                for _curie in context_constraint.value:
-                                    chp_query.add_dynamic_evidence(_curie, '==', 'True')
-                            else:
-                                chp_query.add_dynamic_evidence(context_constraint.value, '==', 'True')
+                    if message_type == 'drug' or message_type == 'gene_two_hop':
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
+                                chp_query.add_dynamic_evidence(_curie, '==', 'True')
                         else:
-                            if type(context_constraint.value) is list:
-                                for _curie in context_constraint.value:
-                                    chp_query.add_meta_evidence(_curie, 'True')
-                            else:
-                                chp_query.add_meta_evidence(_curie, 'True')
+                            chp_query.add_dynamic_evidence(context_constraint.value, '==', 'True')
                     else:
-                        if message_type == 'drug':
-                            if type(context_constraint.value) is list:
-                                for _curie in context_constraint.value:
-                                    chp_query.add_dynamic_evidence(_curie, '==', 'True')
-                            else:
-                                chp_query.add_dynamic_evidence(context_constraint.value, '==', 'True')
-                        else:
-                            if type(context_constraint.value) is list:
-                                for _curie in context_constraint.value:
-                                    chp_query.add_meta_evidence(_curie, 'True')
-                            else:
+                        if type(context_constraint.value) is list:
+                            for _curie in context_constraint.value:
                                 chp_query.add_meta_evidence(_curie, 'True')
+                        else:
+                            chp_query.add_meta_evidence(_curie, 'True')
                 else:
                     raise ValueError('Unsupported context type: {}'.format(context_curie))
         return chp_query
@@ -262,6 +218,7 @@ class OneHopHandlerMixin:
                 if qnode.categories[0] == BIOLINK_GENE_ENTITY:
                     if qnode.ids is not None:
                         chp_query.add_meta_evidence(qnode.ids[0], 'True')
+
         target = list(chp_query.dynamic_targets.keys())[0]
         truth_target = (target, '{} {}'.format(chp_query.dynamic_targets[target]["op"], chp_query.dynamic_targets[target]["value"]))
         # Set some other helpful attributes
@@ -385,7 +342,7 @@ class OneHopHandlerMixin:
             for wildcard, contrib_dict in wildcard_contributions.items():
                 unsorted_wildcard_contributions.append((contrib_dict['relative'], wildcard))
             truncated_sorted_wildcard_contributions = [(contrib,wildcard) for contrib, wildcard in sorted(unsorted_wildcard_contributions, key=lambda x: abs(x[0]), reverse=True)][:self.max_results]
-            truncated_contribution_list = [drug[1] for drug in truncated_sorted_wildcard_contributions]
+            truncated_contribution_list = [curie[1] for curie in truncated_sorted_wildcard_contributions]
 
             # Now iterate through the patient data to translate patient contributions for opposite type (i.e. drug_two_hop yields drug contributions and gene_two_hop yields gene contributions)
             wildcard_contributions = defaultdict(lambda: defaultdict(int))

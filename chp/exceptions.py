@@ -1,4 +1,4 @@
-from chp.mixins.trapi_handler.mixin_errors import *
+from chp.mixins.trapi_handler.mixin_exceptions import *
 
 ###########################################
 # General Trapi Handler Exceptions
