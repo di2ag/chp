@@ -15,8 +15,6 @@ import uuid
 import json
 from collections import defaultdict
 
-from trapi_model.biolink.constants import *
-
 from chp_data.bkb_handler import BkbDataHandler
 
 from chp.mixins.trapi_handler.default_handler_mixin import DefaultHandlerMixin
@@ -82,11 +80,13 @@ class BaseHandler:
     @staticmethod
     def check_predicate_support(predicate1, predicate2, support_inverse=True):
         if predicate1 == predicate2:
-            return True
+            is_inverse = False
+            return True, is_inverse
         elif support_inverse is True and predicate2.get_inverse() is not None:
             if predicate1 == predicate2.get_inverse():
-                return True
-        return False
+                is_inverse = True
+                return True, is_inverse
+        return False, False
 
     def _handler_setup(self):
         pass
@@ -143,10 +143,7 @@ class BaseHandler:
             for chp_query, message in zip(chp_queries, messages):
                 responses[query_type].append(self._construct_trapi_message(chp_query, message, query_type))
         response_query = self.merge_messages(responses)
-        # Add provenance information
-        #TODO: This will become more complex as more data is integrated.
-        response_query_with_provenance = self.add_provenance_attributes(response_query)
-        return response_query_with_provenance
+        return response_query
 
     def merge_messages(self, responses):
         new_query = self.query.get_copy()
@@ -155,30 +152,6 @@ class BaseHandler:
             for i, message in enumerate(responses):
                 master_message.update(message.knowledge_graph, message.results)
         return new_query
-
-    def add_provenance_attributes(self, query):
-        """ Adds CHP and TCGA provenance attributes to every edge in the knowledge graph.
-        """
-        for kedge_id, kedge in query.message.knowledge_graph.edges.items():
-            # Add CHP InfoRes Attribute
-            kedge.add_attribute(
-                    attribute_type_id=BIOLINK_PRIMARY_KNOWLEDGE_SOURCE_ENTITY.get_curie(),
-                    value='infores:connections_hypothesis_provider',
-                    value_type_id=BIOLINK_INFORMATION_RESOURCE_ENTITY.get_curie(),
-                    value_url='http://chp.thayer.dartmouth.edu',
-                    description='The Connections Hypothesis Provider from NCATS Translator.',
-                    attribute_source='infores:connections_hypothesis_provider',
-                    )
-            # Add TCGA Supporting Data Source Attribute
-            kedge.add_attribute(
-                    attribute_type_id=BIOLINK_SUPPORTING_DATA_SOURCE_ENTITY.get_curie(),
-                    value='infores:tcga',
-                    value_type_id=BIOLINK_INFORMATION_RESOURCE_ENTITY.get_curie(),
-                    value_url='https://portal.gdc.cancer.gov/',
-                    description='The Cancer Genome Atlas provided by the GDC Data Portal.',
-                    attribute_source='infores:nci_gdc',
-                    )
-        return query
 
     def _get_curie_name(self, entity_type, curie):
         return self.curies[entity_type][curie]
