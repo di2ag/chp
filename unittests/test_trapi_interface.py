@@ -31,10 +31,10 @@ class TestDefaultHandler(unittest.TestCase):
     def setUpClass(cls):
         super(TestDefaultHandler, cls).setUpClass()
         # load in sample query graphs
-        with open('query_samples/random_queries.pk', 'rb') as f_:
-            cls.queries = pickle.load(f_)
-        with open('query_samples/random_batch_queries.pk', 'rb') as f_:
-            cls.batch_queries = pickle.load(f_)
+        with open('query_samples/random_queries.json', 'r') as f_:
+            cls.queries = json.load(f_)
+        with open('query_samples/random_batch_queries.json', 'r') as f_:
+            cls.batch_queries = json.load(f_)
 
         cls.bkb_handler = BkbDataHandler()
         cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
@@ -71,7 +71,10 @@ class TestDefaultHandler(unittest.TestCase):
         # This is a non-simple query
         logger.info('Running single query test.')
         for trapi_version, queries in self.queries.items():
-            query = Query.load(trapi_version, None, query=queries[3])
+            query_dict = copy.deepcopy(queries[0])
+            query = Query.load(trapi_version, None, query=query_dict)
+            print(query.json())
+            input()
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -86,8 +89,8 @@ class TestDefaultHandler(unittest.TestCase):
         # This is a simple query 
         logger.info('Running default inverse query test.')
         for trapi_version, queries in self.queries.items():
-            query = Query.load(trapi_version, None, query=queries[1])
-            print(query.json())
+            query_dict = copy.deepcopy(queries[0])
+            query = Query.load(trapi_version, None, query=query_dict)
             for edge_id, edge in query.message.query_graph.edges.items():
                 predicate = edge.predicates[0]
                 inverse = edge.predicates[0].get_inverse()
@@ -111,9 +114,8 @@ class TestDefaultHandler(unittest.TestCase):
         # This is a simple query 
         logger.info('Running single simple query test.')
         for trapi_version, queries in self.queries.items():
-            query = Query.load(trapi_version, None, query=queries[1])
-            print(query.json())
-            input()
+            query_dict = copy.deepcopy(queries[3])
+            query = Query.load(trapi_version, None, query=query_dict)
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -128,7 +130,8 @@ class TestDefaultHandler(unittest.TestCase):
         logger.info('Running batch query test.')
         # These are non-simple queries
         for trapi_version, queries in self.batch_queries.items():
-            query = Query.load(trapi_version, None, query=queries[1])
+            query_dict = copy.deepcopy(queries[0])
+            query = Query.load(trapi_version, None, query=query_dict)
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -143,7 +146,8 @@ class TestDefaultHandler(unittest.TestCase):
         # These are simple queries
         logger.info('Running batch simple query test.')
         for trapi_version, queries in self.batch_queries.items():
-            query = Query.load(trapi_version, None, query=queries[0])
+            query_dict = copy.deepcopy(queries[1])
+            query = Query.load(trapi_version, None, query=query_dict)
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -159,14 +163,14 @@ class TestWildCardHandler(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         super(TestWildCardHandler, cls).setUpClass()
-        with open('query_samples/random_gene_wildcard_queries.pk', 'rb') as f_:
-            cls.gene_queries = pickle.load(f_)
-        with open('query_samples/random_gene_wildcard_batch_queries.pk', 'rb') as f_:
-            cls.gene_batch_queries = pickle.load(f_)
-        with open('query_samples/random_drug_wildcard_queries.pk', 'rb') as f_:
-            cls.drug_queries = pickle.load(f_)
-        with open('query_samples/random_drug_wildcard_batch_queries.pk', 'rb') as f_:
-            cls.drug_batch_queries = pickle.load(f_)
+        with open('query_samples/random_gene_wildcard_queries.json', 'r') as f_:
+            cls.gene_queries = json.load(f_)
+        with open('query_samples/random_gene_wildcard_batch_queries.json', 'r') as f_:
+            cls.gene_batch_queries = json.load(f_)
+        with open('query_samples/random_drug_wildcard_queries.json', 'r') as f_:
+            cls.drug_queries = json.load(f_)
+        with open('query_samples/random_drug_wildcard_batch_queries.json', 'r') as f_:
+            cls.drug_batch_queries = json.load(f_)
         cls.bkb_handler = BkbDataHandler()
         cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
         cls.joint_reasoner = ChpJointReasoner(cls.bkb_handler)
@@ -198,7 +202,6 @@ class TestWildCardHandler(unittest.TestCase):
                 edge_object = copy.deepcopy(edge.object)
                 edge.subject = edge_object
                 edge.object = edge_subject
-            print(query.json())
             interface = TrapiInterface(
                     query=query,
                     bkb_handler=self.bkb_handler,
@@ -258,14 +261,14 @@ class TestOneHopHandler(unittest.TestCase):
     def setUpClass(cls):
         super(TestOneHopHandler, cls).setUpClass()
         # load in sample query graphs
-        with open('query_samples/standard_single_onehop_queries.pk', 'rb') as f_:
-            cls.standard_single_queries = pickle.load(f_)
-        with open('query_samples/standard_batch_onehop_queries.pk', 'rb') as f_:
-            cls.standard_batch_queries = pickle.load(f_)
-        with open('query_samples/wildcard_single_onehop_queries.pk', 'rb') as f_:
-            cls.wildcard_single_queries = pickle.load(f_)
-        with open('query_samples/wildcard_batch_onehop_queries.pk', 'rb') as f_:
-            cls.wildcard_batch_queries = pickle.load(f_)
+        with open('query_samples/standard_single_onehop_queries.json', 'r') as f_:
+            cls.standard_single_queries = json.load(f_)
+        with open('query_samples/standard_batch_onehop_queries.json', 'r') as f_:
+            cls.standard_batch_queries = json.load(f_)
+        with open('query_samples/wildcard_single_onehop_queries.json', 'r') as f_:
+            cls.wildcard_single_queries = json.load(f_)
+        with open('query_samples/wildcard_batch_onehop_queries.json', 'r') as f_:
+            cls.wildcard_batch_queries = json.load(f_)
         cls.bkb_handler = BkbDataHandler()
         cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
         cls.joint_reasoner = ChpJointReasoner(cls.bkb_handler)
@@ -273,8 +276,6 @@ class TestOneHopHandler(unittest.TestCase):
     def test_standard_single_onehop_query(self):
         for trapi_version, queries in self.standard_single_queries.items():
             for name, query_dict in queries.items():
-                if trapi_version != '1.1':
-                    continue
                 query = Query.load(trapi_version, None, query=query_dict)
                 interface = TrapiInterface(
                         query=query,

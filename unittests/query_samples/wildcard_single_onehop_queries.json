@@ -1,0 +1,434 @@
+{
+  "1.1": {
+    "gene_to_disease_proxy": [
+      {
+        "message": {
+          "query_graph": {
+            "nodes": {
+              "n0": {
+                "ids": null,
+                "categories": [
+                  "biolink:Gene"
+                ],
+                "constraints": []
+              },
+              "n1": {
+                "ids": [
+                  "MONDO:0007254"
+                ],
+                "categories": [
+                  "biolink:Disease"
+                ],
+                "constraints": []
+              }
+            },
+            "edges": {
+              "e0": {
+                "predicates": [
+                  "biolink:gene_associated_with_condition"
+                ],
+                "relation": null,
+                "subject": "n0",
+                "object": "n1",
+                "constraints": [
+                  {
+                    "name": "predicate_proxy",
+                    "id": "CHP:PredicateProxy",
+                    "operator": "==",
+                    "value": [
+                      "EFO:0000714"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "EFO:0000714",
+                    "id": "EFO:0000714",
+                    "operator": ">",
+                    "value": 687,
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  }
+                ]
+              }
+            }
+          },
+          "knowledge_graph": {
+            "nodes": {},
+            "edges": {}
+          },
+          "results": []
+        },
+        "max_results": 10,
+        "trapi_version": "1.1",
+        "biolink_version": null
+      },
+      {
+        "message": {
+          "query_graph": {
+            "nodes": {
+              "n0": {
+                "ids": null,
+                "categories": [
+                  "biolink:Drug"
+                ],
+                "constraints": []
+              },
+              "n1": {
+                "ids": [
+                  "MONDO:0007254"
+                ],
+                "categories": [
+                  "biolink:Disease"
+                ],
+                "constraints": []
+              }
+            },
+            "edges": {
+              "e0": {
+                "predicates": [
+                  "biolink:treats"
+                ],
+                "relation": null,
+                "subject": "n0",
+                "object": "n1",
+                "constraints": [
+                  {
+                    "name": "predicate_proxy",
+                    "id": "CHP:PredicateProxy",
+                    "operator": "==",
+                    "value": [
+                      "EFO:0000714"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "EFO:0000714",
+                    "id": "EFO:0000714",
+                    "operator": ">",
+                    "value": 1186,
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  }
+                ]
+              }
+            }
+          },
+          "knowledge_graph": {
+            "nodes": {},
+            "edges": {}
+          },
+          "results": []
+        },
+        "max_results": 10,
+        "trapi_version": "1.1",
+        "biolink_version": null
+      },
+      {
+        "message": {
+          "query_graph": {
+            "nodes": {
+              "n0": {
+                "ids": null,
+                "categories": [
+                  "biolink:Gene"
+                ],
+                "constraints": []
+              },
+              "n1": {
+                "ids": [
+                  "MONDO:0007254"
+                ],
+                "categories": [
+                  "biolink:Disease"
+                ],
+                "constraints": []
+              }
+            },
+            "edges": {
+              "e0": {
+                "predicates": [
+                  "biolink:gene_associated_with_condition"
+                ],
+                "relation": null,
+                "subject": "n0",
+                "object": "n1",
+                "constraints": [
+                  {
+                    "name": "predicate_proxy",
+                    "id": "CHP:PredicateProxy",
+                    "operator": "==",
+                    "value": [
+                      "EFO:0000714"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "EFO:0000714",
+                    "id": "EFO:0000714",
+                    "operator": ">",
+                    "value": 1194,
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "predicate_context",
+                    "id": "CHP:PredicateContext",
+                    "operator": "==",
+                    "value": [
+                      "drug"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "drug",
+                    "id": "drug",
+                    "operator": "matches",
+                    "value": [
+                      "CHEMBL.COMPOUND:CHEMBL924"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  }
+                ]
+              }
+            }
+          },
+          "knowledge_graph": {
+            "nodes": {},
+            "edges": {}
+          },
+          "results": []
+        },
+        "max_results": 10,
+        "trapi_version": "1.1",
+        "biolink_version": null
+      },
+      {
+        "message": {
+          "query_graph": {
+            "nodes": {
+              "n0": {
+                "ids": null,
+                "categories": [
+                  "biolink:Drug"
+                ],
+                "constraints": []
+              },
+              "n1": {
+                "ids": [
+                  "MONDO:0007254"
+                ],
+                "categories": [
+                  "biolink:Disease"
+                ],
+                "constraints": []
+              }
+            },
+            "edges": {
+              "e0": {
+                "predicates": [
+                  "biolink:treats"
+                ],
+                "relation": null,
+                "subject": "n0",
+                "object": "n1",
+                "constraints": [
+                  {
+                    "name": "predicate_proxy",
+                    "id": "CHP:PredicateProxy",
+                    "operator": "==",
+                    "value": [
+                      "EFO:0000714"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "EFO:0000714",
+                    "id": "EFO:0000714",
+                    "operator": ">",
+                    "value": 1231,
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "predicate_context",
+                    "id": "CHP:PredicateContext",
+                    "operator": "==",
+                    "value": [
+                      "gene"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "gene",
+                    "id": "gene",
+                    "operator": "matches",
+                    "value": [
+                      "ENSEMBL:ENSG00000158077"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  }
+                ]
+              }
+            }
+          },
+          "knowledge_graph": {
+            "nodes": {},
+            "edges": {}
+          },
+          "results": []
+        },
+        "max_results": 10,
+        "trapi_version": "1.1",
+        "biolink_version": null
+      },
+      {
+        "message": {
+          "query_graph": {
+            "nodes": {
+              "n0": {
+                "ids": null,
+                "categories": [
+                  "biolink:Gene"
+                ],
+                "constraints": []
+              },
+              "n1": {
+                "ids": [
+                  "CHEMBL.COMPOUND:CHEMBL428647"
+                ],
+                "categories": [
+                  "biolink:Drug"
+                ],
+                "constraints": []
+              }
+            },
+            "edges": {
+              "e0": {
+                "predicates": [
+                  "biolink:interacts_with"
+                ],
+                "relation": null,
+                "subject": "n0",
+                "object": "n1",
+                "constraints": [
+                  {
+                    "name": "predicate_proxy",
+                    "id": "CHP:PredicateProxy",
+                    "operator": "==",
+                    "value": [
+                      "EFO:0000714"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "EFO:0000714",
+                    "id": "EFO:0000714",
+                    "operator": ">",
+                    "value": 726,
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  }
+                ]
+              }
+            }
+          },
+          "knowledge_graph": {
+            "nodes": {},
+            "edges": {}
+          },
+          "results": []
+        },
+        "max_results": 10,
+        "trapi_version": "1.1",
+        "biolink_version": null
+      },
+      {
+        "message": {
+          "query_graph": {
+            "nodes": {
+              "n0": {
+                "ids": null,
+                "categories": [
+                  "biolink:Drug"
+                ],
+                "constraints": []
+              },
+              "n1": {
+                "ids": [
+                  "ENSEMBL:ENSG00000165891"
+                ],
+                "categories": [
+                  "biolink:Gene"
+                ],
+                "constraints": []
+              }
+            },
+            "edges": {
+              "e0": {
+                "predicates": [
+                  "biolink:interacts_with"
+                ],
+                "relation": null,
+                "subject": "n0",
+                "object": "n1",
+                "constraints": [
+                  {
+                    "name": "predicate_proxy",
+                    "id": "CHP:PredicateProxy",
+                    "operator": "==",
+                    "value": [
+                      "EFO:0000714"
+                    ],
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  },
+                  {
+                    "name": "EFO:0000714",
+                    "id": "EFO:0000714",
+                    "operator": ">",
+                    "value": 1323,
+                    "unit_id": null,
+                    "unit_name": null,
+                    "not": false
+                  }
+                ]
+              }
+            }
+          },
+          "knowledge_graph": {
+            "nodes": {},
+            "edges": {}
+          },
+          "results": []
+        },
+        "max_results": 10,
+        "trapi_version": "1.1",
+        "biolink_version": null
+      }
+    ]
+  }
+}

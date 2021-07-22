@@ -1,0 +1,907 @@
+{
+  "1.1": [
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL3545252"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 3736,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL888"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 1673,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL428647",
+                "CHEMBL.COMPOUND:CHEMBL1201568",
+                "CHEMBL.COMPOUND:CHEMBL3545252",
+                "CHEMBL.COMPOUND:CHEMBL1201583"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 3186,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL1351",
+                "CHEMBL.COMPOUND:CHEMBL553025",
+                "CHEMBL.COMPOUND:CHEMBL428647",
+                "CHEMBL.COMPOUND:CHEMBL428647"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 1758,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL1201583",
+                "CHEMBL.COMPOUND:CHEMBL1201583"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 1176,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL888",
+                "CHEMBL.COMPOUND:CHEMBL92",
+                "CHEMBL.COMPOUND:CHEMBL553025"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 596,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL553025"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 2975,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL1201583",
+                "CHEMBL.COMPOUND:CHEMBL924"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 3946,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL1201568"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 3270,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    },
+    {
+      "message": {
+        "query_graph": {
+          "nodes": {
+            "n0": {
+              "ids": [
+                "MONDO:0007254"
+              ],
+              "categories": [
+                "biolink:Disease"
+              ],
+              "constraints": []
+            },
+            "n1": {
+              "ids": [
+                "CHEMBL.COMPOUND:CHEMBL306601",
+                "CHEMBL.COMPOUND:CHEMBL3545252",
+                "CHEMBL.COMPOUND:CHEMBL306601",
+                "CHEMBL.COMPOUND:CHEMBL3545252"
+              ],
+              "categories": [
+                "biolink:Drug"
+              ],
+              "constraints": []
+            },
+            "n2": {
+              "ids": [
+                "EFO:0000714"
+              ],
+              "categories": [
+                "biolink:PhenotypicFeature"
+              ],
+              "constraints": []
+            },
+            "n3": {
+              "ids": null,
+              "categories": [
+                "biolink:Gene"
+              ],
+              "constraints": []
+            }
+          },
+          "edges": {
+            "e0": {
+              "predicates": [
+                "biolink:treats"
+              ],
+              "relation": null,
+              "subject": "n1",
+              "object": "n0",
+              "constraints": []
+            },
+            "e1": {
+              "predicates": [
+                "biolink:has_phenotype"
+              ],
+              "relation": null,
+              "subject": "n0",
+              "object": "n2",
+              "constraints": [
+                {
+                  "name": "survival_time",
+                  "id": "EFO:0000714",
+                  "operator": ">",
+                  "value": 1091,
+                  "unit_id": null,
+                  "unit_name": null,
+                  "not": false
+                }
+              ]
+            },
+            "e2": {
+              "predicates": [
+                "biolink:gene_associated_with_condition"
+              ],
+              "relation": null,
+              "subject": "n3",
+              "object": "n0",
+              "constraints": []
+            }
+          }
+        },
+        "knowledge_graph": {
+          "nodes": {},
+          "edges": {}
+        },
+        "results": []
+      },
+      "max_results": 10,
+      "trapi_version": "1.1",
+      "biolink_version": null
+    }
+  ]
+}
