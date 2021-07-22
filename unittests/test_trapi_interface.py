@@ -270,6 +270,8 @@ class TestOneHopHandler(unittest.TestCase):
             cls.wildcard_single_queries = json.load(f_)
         with open('query_samples/wildcard_batch_onehop_queries.json', 'r') as f_:
             cls.wildcard_batch_queries = json.load(f_)
+        with open('query_samples/gene_to_gene_onehop_query.json', 'r') as f_:
+            cls.gene_to_gene_query = json.fload(f_)
         cls.bkb_handler = BkbDataHandler()
         cls.dynamic_reasoner = ChpDynamicReasoner(cls.bkb_handler)
         cls.joint_reasoner = ChpJointReasoner(cls.bkb_handler)

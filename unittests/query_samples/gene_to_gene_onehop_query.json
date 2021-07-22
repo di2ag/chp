@@ -1,0 +1,35 @@
+{
+  "message": {
+    "query_graph": {
+      "nodes": {
+        "n0": {
+          "ids": null,
+          "categories": [
+            "biolink:Gene"
+          ],
+          "constraints": []
+        },
+        "n1": {
+          "ids": [
+            "ENSEMBL:ENSG00000184368"
+          ],
+          "categories": [
+            "biolink:Gene"
+          ],
+          "constraints": []
+        }
+      },
+      "edges": {
+        "e0": {
+          "predicates": [
+            "biolink:genetically_interacts_with"
+          ],
+          "relation": null,
+          "subject": "n0",
+          "object": "n1",
+          "constraints": []
+        }
+      }
+    }
+  }
+}
