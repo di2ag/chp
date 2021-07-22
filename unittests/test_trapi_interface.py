@@ -276,8 +276,9 @@ class TestOneHopHandler(unittest.TestCase):
 
     def test_standard_single_onehop_query(self):
         for trapi_version, queries in self.standard_single_queries.items():
-            for name, query_dict in queries.items():
-                query = Query.load(trapi_version, None, query=query_dict[0])
+            for name, query_list in queries.items():
+                query_dict = copy.deepcopy(query_list[0]) 
+                query = Query.load(trapi_version, None, query=query_dict)
                 interface = TrapiInterface(
                         query=query,
                         bkb_handler=self.bkb_handler,
@@ -290,10 +291,9 @@ class TestOneHopHandler(unittest.TestCase):
     
     def test_inverse_onehop_query(self):
         for trapi_version, queries in self.standard_single_queries.items():
-            for name, query_dict in queries.items():
-                #if name != 'gene_to_disease_proxy_context':
-                #    continue
-                query = Query.load(trapi_version, None, query=query_dict[0])
+            for name, query_list in queries.items():
+                query_dict = copy.deepcopy(query_list[0]) 
+                query = Query.load(trapi_version, None, query=query_dict)
                 for edge_id, edge in query.message.query_graph.edges.items():
                     predicate = edge.predicates[0]
                     inverse = edge.predicates[0].get_inverse()
@@ -316,10 +316,9 @@ class TestOneHopHandler(unittest.TestCase):
             
     def test_standard_batch_onehop_query(self):
         for trapi_version, queries in self.standard_batch_queries.items():
-            for name, query_dict in queries.items():
-                #if name != 'gene_to_disease_proxy_context':
-                #    continue
-                query = Query.load(trapi_version, None, query=query_dict[0])
+            for name, query_list in queries.items():
+                query_dict = copy.deepcopy(query_list[0]) 
+                query = Query.load(trapi_version, None, query=query_dict)
                 interface = TrapiInterface(
                         query=query,
                         bkb_handler=self.bkb_handler,
@@ -332,9 +331,8 @@ class TestOneHopHandler(unittest.TestCase):
     
     def test_wildcard_single_onehop_query(self):
         for trapi_version, queries in self.wildcard_single_queries.items():
-            for name, query_dict in queries.items():
-                #if name != 'gene_to_disease_proxy_context':
-                #    continue
+            for name, query_list in queries.items():
+                query_dict = copy.deepcopy(query_list[0]) 
                 query = Query.load(trapi_version, None, query=query_dict)
                 interface = TrapiInterface(
                         query=query,
@@ -348,10 +346,9 @@ class TestOneHopHandler(unittest.TestCase):
         
     def test_wildcard_batch_onehop_query(self):
         for trapi_version, queries in self.wildcard_batch_queries.items():
-            for name, query_dict in queries.items():
-                #if name != 'gene_to_disease_proxy_context':
-                #    continue
-                query = Query.load(trapi_version, None, query=query_dict[0])
+            for name, query_list in queries.items():
+                query_dict = copy.deepcopy(query_list[0]) 
+                query = Query.load(trapi_version, None, query=query_dict)
                 interface = TrapiInterface(
                         query=query,
                         bkb_handler=self.bkb_handler,
