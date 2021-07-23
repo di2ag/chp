@@ -272,14 +272,15 @@ class OneHopHandlerMixin:
                 patient_contributions = defaultdict(lambda: defaultdict(int))
                 for patient, feature_dict in self.joint_reasoner.patient_data.items():
                     for predicate_proxy, proxy_info in chp_query.dynamic_targets.items():
-                        proxy_op = get_operator(proxy_info["op"])
-                        proxy_opp_op = get_opposite_operator(proxy_info["op"])
+                        proxy_op_str = proxy_info["op"]
+                        proxy_op = get_operator(proxy_op_str)
+                        proxy_opp_op = get_opposite_operator(proxy_op_str)
                         proxy_value = proxy_info["value"]
                         if proxy_op(feature_dict[predicate_proxy], proxy_value):
                             if num_matched == 0:
-                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op, proxy_value))][patient] = 0
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op_str, proxy_value))][patient] = 0
                             else:
-                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op, proxy_value))][patient] = chp_query.truth_prob/num_matched
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op_str, proxy_value))][patient] = chp_query.truth_prob/num_matched
                         else:
                             if num_matched == 0:
                                 patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/num_matched
@@ -312,7 +313,6 @@ class OneHopHandlerMixin:
                             for _hash in source_hashes:
                                 # Normalize to get relative contribution
                                 patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
-
         # Now iterate through the patient data to translate patient contributions to drug/gene contributions
         wildcard_contributions = defaultdict(lambda: defaultdict(int))
         for target, patient_contrib_dict in patient_contributions.items():
@@ -334,7 +334,6 @@ class OneHopHandlerMixin:
                 else:
                     nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
             wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
-
 
         if query_type == 'drug_two_hop' or query_type == 'gene_two_hop':
             # Build relative contribution results and added associated edges into knowledge graph
