@@ -283,7 +283,7 @@ class OneHopHandlerMixin:
                                 patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op_str, proxy_value))][patient] = chp_query.truth_prob/num_matched
                         else:
                             if num_matched == 0:
-                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/num_matched
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = 0
                             else:
                                 patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/(num_all-num_matched)
 
@@ -329,10 +329,13 @@ class OneHopHandlerMixin:
             truth_target_gene_contrib = 0
             nontruth_target_gene_contrib = 0
             for target, contrib in wildcard_contributions[curie].items():
-                if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
-                    truth_target_gene_contrib += contrib / chp_query.truth_prob
-                else:
-                    nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
+                try:
+                    if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
+                        truth_target_gene_contrib += contrib / chp_query.truth_prob
+                    else:
+                        nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
+                except ZeroDivisionError:
+                    continue
             wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
 
         if query_type == 'drug_two_hop' or query_type == 'gene_two_hop':
@@ -365,10 +368,13 @@ class OneHopHandlerMixin:
                 truth_target_gene_contrib = 0
                 nontruth_target_gene_contrib = 0
                 for target, contrib in wildcard_contributions[curie].items():
-                    if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
-                        truth_target_gene_contrib += contrib / chp_query.truth_prob
-                    else:
-                        nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
+                    try:
+                        if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
+                            truth_target_gene_contrib += contrib / chp_query.truth_prob
+                        else:
+                            nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
+                    except ZeroDivisionError:
+                        continue
                 wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
 
         chp_query.report = None

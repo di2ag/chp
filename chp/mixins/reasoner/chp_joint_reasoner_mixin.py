@@ -11,16 +11,11 @@ class ChpJointReasonerMixin:
         self.joint_reasoner = JointReasoner(self.patient_data)
         logger.info('Setup Joint Reasoner.')
 
-    def _process_evidence(self, query):
-        """ Since no interpolation is going on merge the evidence and meta evidence together.
-        """
-        evidence = query.evidence
-        return evidence.update(query.meta_evidence)
-
     def run_query(self, query):
         # Compute joint probability
+        evidence = query.compose_evidence(with_dynamic=False, meta_tag=False)
         res, contrib = self.joint_reasoner.compute_joint(
-            self._process_evidence(query),
+            evidence,
             query.targets,
             continuous_evidence=query.dynamic_evidence,
             continuous_targets=query.dynamic_targets,

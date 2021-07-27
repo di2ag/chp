@@ -124,22 +124,34 @@ class Query:
                     bogus_updates[comp_name][state] = 1 - prob
         return bogus_updates
 
-    def compose_evidence(self):
+    def compose_evidence(self, meta_tag=True, with_dynamic=True, with_meta=True):
         """ Composes all the normal, dynamic, and meta evidence together into one dictionary.
-        
+       
+        :param meta_tag: Adds the meta tag '_' in front of all meta_evidence variables. Used for interpolated BKBs.
+        :type meta_tag: bool
+        :param with_dynamic: Adds all dynamic evidence to composition.
+        :type with_dynamic: bool
+        :param with_meta: Adds all meta evidence to composition.
+        :type with_meta: bool
+
         :return: A dictionary of the form of {[RandomVariableName]:  [RandomVariableState], ...}.
         :rtype: dict
         """
         evidence = self.evidence
         # Compose dynamic evidence
-        for rv, evidence_dict in self.dynamic_evidence.items():
-            op = evidence_dict["op"]
-            value = evidence_dict["value"]
-            evidence[rv] = '{} {}'.format(op, value)
+        if with_dynamic:
+            for rv, evidence_dict in self.dynamic_evidence.items():
+                op = evidence_dict["op"]
+                value = evidence_dict["value"]
+                evidence[rv] = '{} {}'.format(op, value)
         # Compose meta evidence
-        for rv, state in self.meta_evidence.items():
-            # Add underscore at beginning of rv name.
-            evidence['_' + rv] = state
+        if with_meta:
+            for rv, state in self.meta_evidence.items():
+                # Add underscore at beginning of rv name.
+                if meta_tag:
+                    evidence['_' + rv] = state
+                else:
+                    evidence[rv] = state
         return evidence
 
     def compose_targets(self):

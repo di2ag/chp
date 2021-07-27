@@ -363,6 +363,7 @@ class TestOneHopHandler(unittest.TestCase):
 
     def test_gene_to_gene_query(self):
         query = Query.load('1.1', None, query = self.gene_to_gene_query)
+        print(query.json())
         interface = TrapiInterface(
                         query=query,
                         bkb_handler=self.bkb_handler,
