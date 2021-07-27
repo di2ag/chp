@@ -250,7 +250,7 @@ class OneHopHandlerMixin:
             return chp_query
         else:
             # Do this if a disease node is present
-            if len(chp_query.evidence) == 0:
+            if len(chp_query.meta_evidence.keys()) == 0:
                 # probability of survival
                 chp_query = self.joint_reasoner.run_query(chp_query)
                 if len(chp_query.result) > 0:
@@ -283,7 +283,7 @@ class OneHopHandlerMixin:
                                 patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op_str, proxy_value))][patient] = chp_query.truth_prob/num_matched
                         else:
                             if num_matched == 0:
-                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = 0
+                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = 1/num_all
                             else:
                                 patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/(num_all-num_matched)
 
