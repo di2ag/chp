@@ -16,7 +16,8 @@ import uuid
 from collections import defaultdict
 
 from trapi_model.biolink.constants import *
-#from trapi_model.constants import *
+from chp_utils import SriNodeNormalizerApiClient, SriOntologyKpApiClient
+
 from chp.trapi_handlers import DefaultHandler, WildCardHandler, OneHopHandler
 from chp.exceptions import *
 
@@ -79,6 +80,7 @@ class TrapiInterface:
         # Get default handler for processing curies and predicates requests
         self.handler = self._get_handler(None)
         self.curies = self.handler.curies
+        self.meta_knowledge_graph = self.get_meta_knowledge_graph()
         self.query = query
 
         if query is not None:
@@ -91,9 +93,13 @@ class TrapiInterface:
             else:
                 logger.info('Detected single query.')
                 self.queries = [query]
-
+            
+            self.node_normalizer_mappings = {}
+            self.node_normalizer_inverse_mappings = {}
+            self.ontology_mappings = {}
+            self.ontology_inverse_mappings = {}
+        
             self.message_dict = self._setup_messages(self.queries)
-
 
             '''
             # Analyze queries
@@ -107,10 +113,93 @@ class TrapiInterface:
     def _setup_messages(self, queries):
         message_dict = defaultdict(list)
         for query in queries:
+            node_normalized_message = self._node_normalize_message(query.message)
+            descedent_conflated_message = self._conflate_with_descedents(node_normalized_message)
             message_type, message = self._determine_message_type(query.message)
             message_dict[message_type].append(message)
         return message_dict
 
+    def _get_biolink_entity_if_supported_prefix(self, curie_prefix):
+        for biolink_entity, meta_node in self.meta_knowledge_graph.nodes.items():
+            if curie_prefix in meta_node.id_prefixes:
+                return biolink_entity
+        return None
+
+    def _get_more_specific_biolink_entity(self, *biolink_entities):
+        unsorted_entities = []
+        for entity in biolink_entities:
+            unsorted_entities.append((len(entity.get_ancestors()), entity))
+        return sorted(unsorted_entities, reverse=True)[0][1]
+
+    def _get_preferred_curie(self, normalized_node_dict):
+        biolink_entities = normalized_node_dict["types"]
+        normalized_curie_list = normalized_node_dict["equivalent_identifiers"]
+        supported_biolink_entity = set.intersection(
+                *[
+                    set(biolink_entities),
+                    set(self.meta_knowledge_graph.nodes.keys()),
+                    ]
+            )
+        # Biolink category isn't supported
+        if len(supported_biolink_entity) == 0:
+            return None
+        # If multiple supported biolink categories take the most specific.
+        if len(supported_biolink_entity) > 1:
+            supported_biolink_entity = self._get_more_specific_biolink_entity(*supported_biolink_type)
+        # If there is only one supported entity just take that.
+        else:
+            supported_biolink_entity = supported_biolink_entity[0]
+        preferred_prefix = self.meta_knowledge_graph.nodes[supported_biolink_entity].id_prefixes[0]
+        for curie in normalized_curie_list:
+            prefix = curie.split(':')[0]
+            if prefix == preferred_prefix:
+                return curie
+        return None
+
+    def _node_normalize_message(self, message):
+        client = SriNodeNormalizerApiClient()
+        # Collect node curies that need to be normalized
+        node_curies = []
+        for node_id, node in message.query_graph.items():
+            # Grab curie prefix
+            node_prefix = node.ids[0].split(':')[0]
+            # Check CHP support
+            curie_biolink_entity = self._get_biolink_entity_if_supported_prefix(node_prefix)
+            # If curie prefix is not supported
+            if curie_biolink_entity is None:
+                node_curies.append(node.ids[0])
+            # Check query category and supported category alignment
+            elif curie_biolink_entity != node.categories[0]:
+                if node.categories is None:
+                    self.query.info('Interpretting node: {} as having category {}.'.format(node_id, curie_biolink_entity.get_curie()))
+                else:
+                    self.query.info(
+                            'Mismatch in passed category for node {}. \
+                                    Passed {} but deduced {}. Using deduced \
+                                    category {} for reasoning.'.format(
+                                        node_id,
+                                        node.categories[0].get_curie(),
+                                        curie_biolink_entity.get_curie(),
+                                        curie_biolink_entity.get_curie(),
+                                        )
+                                    )
+                node.categories[0] = curie_biolink_entity
+        if len(node_curies) == 0:
+            return message
+        # Query the Node Normalizer
+        normalized_nodes = client.get_normalized_nodes(node_curies)
+        for origin_curie, normalized_node_dict in normalized_nodes.items():
+            normalized_preferred_curie = self._get_preferred_curie(normalized_node_dict)
+            if normalized_preferred_curie is None:
+                self.query.info('Could not find a preferred curie in normalization of curie {}'.format(origin_curie))
+                continue
+            # Run Find and Replace over message
+            message.find_and_replace(origin_curie, normalized_preferred_curie)
+            # Save out curie mappings
+            self.node_normalizer_mappings[origin_curie] = normalized_preferred_curie
+            self.node_normalizer_inverse_mappings[normalized_preferred_curie] = origin_curie
+        return message
+            
     def _determine_message_type(self, message):
         """ checks for query message types. First checks node requirements to check for query type,
             then checks structures under the assumption of query type. Also updates error
@@ -199,17 +288,14 @@ class TrapiInterface:
             curies[BiolinkEntity(biolink_name).get_curie()] = _curies
         return curies
 
-    def get_predicates(self):
-        """ Returns the available predicates and their associated names.
-        """
-        with open(self.handler.bkb_data_handler.predicates_path, 'r') as predicates_file:
-            return json.load(predicates_file)
-
     def get_meta_knowledge_graph(self):
         """ Returns the meta knowledge graph.
         """
-        with open(self.handler.bkb_data_handler.meta_knowledge_graph_path, 'r') as metakg_file:
-            return json.load(metakg_file)
+        return MetaKnowledgeGraph.load(
+                self.query.trapi_version,
+                None, 
+                filename=self.handler.bkb_data_handler.meta_knowledge_graph_path,
+                )
 
     def checkQuery(self):
         return True
