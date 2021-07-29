@@ -165,11 +165,11 @@ class BaseHandler:
             # Add CHP InfoRes Attribute
             kedge.add_attribute(
                     attribute_type_id=BIOLINK_PRIMARY_KNOWLEDGE_SOURCE_ENTITY.get_curie(),
-                    value='infores:connections_hypothesis_provider',
+                    value='infores:connections-hypothesis',
                     value_type_id=BIOLINK_INFORMATION_RESOURCE_ENTITY.get_curie(),
                     value_url='http://chp.thayer.dartmouth.edu',
                     description='The Connections Hypothesis Provider from NCATS Translator.',
-                    attribute_source='infores:connections_hypothesis_provider',
+                    attribute_source='infores:connections-hypothesis',
                     )
             # Add TCGA Supporting Data Source Attribute
             kedge.add_attribute(
@@ -178,7 +178,7 @@ class BaseHandler:
                     value_type_id=BIOLINK_INFORMATION_RESOURCE_ENTITY.get_curie(),
                     value_url='https://portal.gdc.cancer.gov/',
                     description='The Cancer Genome Atlas provided by the GDC Data Portal.',
-                    attribute_source='infores:nci_gdc',
+                    attribute_source='infores:gdc',
                     )
         return query
 
