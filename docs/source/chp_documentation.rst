@@ -19,7 +19,7 @@ Preliminaries
 ===========================================
 The core system of which we reason with, the Bayesian Knowledge Base (BKB) (Santos and Santos 1999), is a probabilistic graphical model that captures dependencies over random variables. The BKB represents random variables at the instantiation level (i.e., :math:`X=x_{1}` rather than :math:`X=?`) which notably allows for modeling over incomplete data. We refer to an instantiated random variable as an Instantiated Node (I-Node). I-Nodes are supported by some prior evidence called a Support Node (S-Node). Moreover, BKBs can merge conflicting conditional representations using source identifiers.
 
-Our primary form of inference is to use belief updating, or to calculate a posterior conditional probability distribution for a set of random variables given some evidence. As an example, let :math:`\theta_{e}=\set{X_1=x_1,X_2=x_2,…,X_n=x_n}` be a set of specified evidence where :math:`X_1-X_n` represent instantiated random variables. :math:`P(X_{target}| \theta_{e})` calculates the conditional probabilities for all instantiations of :math:`X_{target}` that satisfy :math:`\theta_{e}`. The joint probability for a satisfactory world, :math:`I`, is :math:`P(I)=\prod_{s\in{I}} s`  where :math:`s\in{I}` represents the set of mutually exclusive S-Nodes that compose :math:`I`. Mutual exclusivity ensures inferences are devoid of conflicting I-Node instantiations. Let :math:`I_{\theta_{e}}` be the set of all worlds that satisfy :math:`\theta_{e}`. Then :math:`P(\theta_{e})=\sum_{I\in{I_{\theta_{e}}}} P(I)`. For some instantiation of the target, :math:`X_{target}=t_{i}`, :math:`P(X_{target}=t_{i}|\theta_{e})` is simply :math:`\frac{P(X_{target}=t_{i}, \theta_{e})}{P(\theta_{e})}`  which can be computed for all instantiations of :math:`X_{target}`.
+Our primary form of inference is to use belief updating, or to calculate a posterior conditional probability distribution for a set of random variables given some evidence. As an example, let :math:`\theta_{e}=\{X_1=x_1,X_2=x_2,...,X_n=x_n\}` be a set of specified evidence where :math:`X_1-X_n` represent instantiated random variables. :math:`P(X_{target}| \theta_{e})` calculates the conditional probabilities for all instantiations of :math:`X_{target}` that satisfy :math:`\theta_{e}`. The joint probability for a satisfactory world, :math:`I`, is :math:`P(I)=\prod_{s\in{I}} s`  where :math:`s\in{I}` represents the set of mutually exclusive S-Nodes that compose :math:`I`. Mutual exclusivity ensures inferences are devoid of conflicting I-Node instantiations. Let :math:`I_{\theta_{e}}` be the set of all worlds that satisfy :math:`\theta_{e}`. Then :math:`P(\theta_{e})=\sum_{I\in{I_{\theta_{e}}}} P(I)`. For some instantiation of the target, :math:`X_{target}=t_{i}`, :math:`P(X_{target}=t_{i}|\theta_{e})` is simply :math:`\frac{P(X_{target}=t_{i}, \theta_{e})}{P(\theta_{e})}`  which can be computed for all instantiations of :math:`X_{target}`.
 
 CHP Data
 ===========================================
@@ -61,7 +61,7 @@ As there is some sparsity of genes (i.e., cases where genes aren’t frequently 
 
 CHP Single Hop Contribution Analysis
 ===========================================
-When inferencing over a BKB, there is often more at play than strictly the target you wish to investigate, and the evidence you’ve specified. Let :math:`\theta_{e}=\set{X_1=x_1,X_2=x_2,…,X_n=x_n}` be a set of specified evidence where :math:`X_1-X_n` represent instantiated random variables. :math:`P(X_{target} | \theta_e)` calculates the conditional probabilities for all instantiations of :math:`X_{target}` that satisfy :math:`\theta_e`. Often, though there are intermediate factors that have some influence on :math:`X_{target}`. Let :math:`\theta_{\neg e} = \set{X_{n+1},X_{n+2},…,X_{n+m}}` be the inferencable factors not in :math:`\theta_{\neg e}. Note that the factors in :math:`\theta_{\neg e}` are described at the random variable level as they could take on many different instantiations in the possible worlds that satisfy :math:`\theta_{e}` so long as each world is mutually exclusive in their instantiations (i.e., all instantiations of a variable agree in the same world). The goal of contribution analysis is to determine how much each factor in :math:`\theta_{e}` and :math:`\theta_{\neg e}` impact :math:`X_{target}`. If :math:`I_{\theta_{e}}` is the set of all valid worlds that satisfy :math:`\theta_e` then let :math:`I_{\theta_{e+X_i=x_i}}` be the set of all worlds that satisfy :math:`\theta_e` in addition to some instantiated random variable of interest :math:`X_i=x_i`. If :math:`X_i=x_i \in \theta_e`, then :math:`I_{\theta_{e+X_i=x_i}} \equiv I_{\theta_e}`. If not, then :math:`I_{\theta_{e+X_i=x_i}} \subseteq I_{\theta_e}`. The contribution of :math:`X_i=x_i` is then :math:`c(X_i=x_i)=\sum_{I\in I_{\theta_{e+X_i = x_i}}} P(I)`. For our contribution queries we use this to capture the impact of various intermediate factors of patients on survival time. Contributions form a ranking over these intermediate factors which we provide back to the user.
+When inferencing over a BKB, there is often more at play than strictly the target you wish to investigate, and the evidence you’ve specified. Let :math:`\theta_{e}=\{X_1=x_1,X_2=x_2,...,X_n=x_n\}` be a set of specified evidence where :math:`X_1-X_n` represent instantiated random variables. :math:`P(X_{target} | \theta_e)` calculates the conditional probabilities for all instantiations of :math:`X_{target}` that satisfy :math:`\theta_e`. Often, though there are intermediate factors that have some influence on :math:`X_{target}`. Let :math:`\theta_{\neg e} = \{X_{n+1},X_{n+2},...,X_{n+m}\}` be the inferencable factors not in :math:`\theta_{\neg e}. Note` that the factors in :math:`\theta_{\neg e}` are described at the random variable level as they could take on many different instantiations in the possible worlds that satisfy :math:`\theta_{e}` so long as each world is mutually exclusive in their instantiations (i.e., all instantiations of a variable agree in the same world). The goal of contribution analysis is to determine how much each factor in :math:`\theta_{e}` and :math:`\theta_{\neg e}` impact :math:`X_{target}`. If :math:`I_{\theta_{e}}` is the set of all valid worlds that satisfy :math:`\theta_e` then let :math:`I_{\theta_{e+X_i=x_i}}` be the set of all worlds that satisfy :math:`\theta_e` in addition to some instantiated random variable of interest :math:`X_i=x_i`. If :math:`X_i=x_i \in \theta_e`, then :math:`I_{\theta_{e+X_i=x_i}} \equiv I_{\theta_e}`. If not, then :math:`I_{\theta_{e+X_i=x_i}} \subseteq I_{\theta_e}`. The contribution of :math:`X_i=x_i` is then :math:`c(X_i=x_i)=\sum_{I\in I_{\theta_{e+X_i = x_i}}} P(I)`. For our contribution queries we use this to capture the impact of various intermediate factors of patients on survival time. Contributions form a ranking over these intermediate factors which we provide back to the user.
 
 For example, in our drug wildcard to gene query, a user specifies some gene, :math:`Gene_{1}^{Mutated}=True,` as evidence and wishes to find drugs that impact patient’s survival time under such circumstances. We will use Figure 3 as an example. The sources (in this case the patient identifiers) are normalized across all patients to ensure :math:`P(Survival Time | Gene_{1}^{Mutated}=True)` all sums to 1.
 
@@ -70,7 +70,7 @@ For example, in our drug wildcard to gene query, a user specifies some gene, :ma
     :height: 350
     :align: center
 
-The drugs in this case are the intermediate factors that add some weight into the end distributions of Survival Time. In this trivial example, :math:`P(Survival Time = [0, 3000] | Gene_{1}^{Mutated}=True) = \frac{3}{7}` and :math:`P(Survival Time = [3000, 6000] | Gene_{1}^{Mutated}=True) = \frac{4}{7}`. When considering the contribution of each drug on the two instantiations of Survival Time we let :math:`\theta_1 = \set{Survival Time = [0, 3000], Gene_{1}^{Mutated}=True}` and :math:`\theta_2 = \set{Survival Time = [3000, 6000], Gene_{1}^{Mutated}=True}`. We can then determine :math:`c(Drug_{ChEMBL88}=True) = \frac{1}{7}` w.r.t :math:`\theta_1` and :math:`\frac{4}{7}` w.r.t :math:`\theta_2`. Similarly, :math:`c(Drug_{ChEMBL1201585}=True) = \frac{2}{7}` for both :math:`\theta_1` and :math:`\theta_2`. As a form of differential analysis for a drug we would like to compare across :math:`\theta_1` and :math:`\theta_2`. To do so we divide out the probability masses of each theta so that we can compare the contributions directly. We refer to this as the relative contribution, or :math:`relc(X_i=x_i)`. For this example, that is:
+The drugs in this case are the intermediate factors that add some weight into the end distributions of Survival Time. In this trivial example, :math:`P(Survival Time = [0, 3000] | Gene_{1}^{Mutated}=True) = \frac{3}{7}` and :math:`P(Survival Time = [3000, 6000] | Gene_{1}^{Mutated}=True) = \frac{4}{7}`. When considering the contribution of each drug on the two instantiations of Survival Time we let :math:`\theta_1 = \{Survival Time = [0, 3000], Gene_{1}^{Mutated}=True\}` and :math:`\theta_2 = \{Survival Time = [3000, 6000], Gene_{1}^{Mutated}=True\}`. We can then determine :math:`c(Drug_{ChEMBL88}=True) = \frac{1}{7}` w.r.t :math:`\theta_1` and :math:`\frac{4}{7}` w.r.t :math:`\theta_2`. Similarly, :math:`c(Drug_{ChEMBL1201585}=True) = \frac{2}{7}` for both :math:`\theta_1` and :math:`\theta_2`. As a form of differential analysis for a drug we would like to compare across :math:`\theta_1` and :math:`\theta_2`. To do so we divide out the probability masses of each theta so that we can compare the contributions directly. We refer to this as the relative contribution, or :math:`relc(X_i=x_i)`. For this example, that is:
 
 .. math::
 
@@ -102,7 +102,7 @@ Two Hop Contribution Analysis is simply an extension to the Single Hop Contribut
 
     \begin{equation} \label{eq4}
     \begin{split}
-    \theta_{1}=\set{Survival Time = [0, 3000], Drug_{1} = True, Gene_{1}^{Mutated}=True}
+    \theta_{1}=\{Survival Time = [0, 3000], Drug_{1} = True, Gene_{1}^{Mutated}=True\}
     \end{split}
     \end{equation}
 
@@ -110,7 +110,7 @@ Two Hop Contribution Analysis is simply an extension to the Single Hop Contribut
 
     \begin{equation} \label{eq5}
     \begin{split}
-    \theta_{2}= \set{Survival Time = [0, 3000], Drug_{2} = True, Gene_{1}^{Mutated}=True} \\
+    \theta_{2}= \{Survival Time = [0, 3000], Drug_{2} = True, Gene_{1}^{Mutated}=True\} \\
     \end{split}
     \end{equation}
 
@@ -120,7 +120,7 @@ Two Hop Contribution Analysis is simply an extension to the Single Hop Contribut
 
     \begin{equation} \label{eq6}
     \begin{split}
-    \theta_{n}= \set{Survival Time = [0, 3000], Drug_{n} = True, Gene_{1}^{Mutated}=True} \\
+    \theta_{n}= \{Survival Time = [0, 3000], Drug_{n} = True, Gene_{1}^{Mutated}=True\} \\
     \end{split}
     \end{equation}
 
@@ -128,7 +128,7 @@ Two Hop Contribution Analysis is simply an extension to the Single Hop Contribut
 
     \begin{equation} \label{eq7}
     \begin{split}
-    \theta_{n+1}= \set{Survival Time = [3000, 6000], Drug_{1} = True, Gene_{1}^{Mutated}=True} \\
+    \theta_{n+1}= \{Survival Time = [3000, 6000], Drug_{1} = True, Gene_{1}^{Mutated}=True\} \\
     \end{split}
     \end{equation}
 
@@ -136,7 +136,7 @@ Two Hop Contribution Analysis is simply an extension to the Single Hop Contribut
 
     \begin{equation} \label{eq8}
     \begin{split}
-    \theta_{n+2}= \set{Survival Time = [3000, 6000], Drug_{2} = True, Gene_{1}^{Mutated}=True} \\
+    \theta_{n+2}= \{Survival Time = [3000, 6000], Drug_{2} = True, Gene_{1}^{Mutated}=True\} \\
     \end{split}
     \end{equation}
 
@@ -146,11 +146,11 @@ Two Hop Contribution Analysis is simply an extension to the Single Hop Contribut
 
     \begin{equation} \label{eq9}
     \begin{split}
-    \theta_{2n}= \set{Survival Time = [3000, 6000], Drug_{n} = True, Gene_{1}^{Mutated}=True} \\
+    \theta_{2n}= \{Survival Time = [3000, 6000], Drug_{n} = True, Gene_{1}^{Mutated}=True\} \\
     \end{split}
     \end{equation}
 
-With our expanded context we can then build relative contributions over some secondary gene, :math:`Gene_{2}^{Mutated}=True` by, again by calculating the contributions w.r.t each theta and summing over the theta that are in agreement on the instantiation of Survival Time. Let :math:`\theta_{ST=[0,3000]}` be the set of all thetas in agreement on the instantiation of Survival Time. In this case, :math:`\theta_{ST=[0,3000]} = \set{\theta_1, \theta_2, ..., \theta_n}`. We can then define the contribution of :math:`Gene_{2}^{Mutated}=True \: w.r.t \: \theta_{ST=[0, 3000]}` as:
+With our expanded context we can then build relative contributions over some secondary gene, :math:`Gene_{2}^{Mutated}=True` by, again by calculating the contributions w.r.t each theta and summing over the theta that are in agreement on the instantiation of Survival Time. Let :math:`\theta_{ST=[0,3000]}` be the set of all thetas in agreement on the instantiation of Survival Time. In this case, :math:`\theta_{ST=[0,3000]} = \{\theta_1, \theta_2, ..., \theta_n\}`. We can then define the contribution of :math:`Gene_{2}^{Mutated}=True \: w.r.t \: \theta_{ST=[0, 3000]}` as:
 
 .. math::
 
