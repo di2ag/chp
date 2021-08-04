@@ -1,0 +1,328 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Connections Hypothesis Provider (CHP) &mdash; CHP 2.4.0 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="CHP 2.4.0 documentation" href="index.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="#" class="icon icon-home"> CHP
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2.4
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <!-- Local TOC -->
+                <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">Connections Hypothesis Provider (CHP)</a></li>
+<li><a class="reference internal" href="#table-of-content">Table of Content</a></li>
+<li><a class="reference internal" href="#preliminaries">Preliminaries</a></li>
+<li><a class="reference internal" href="#chp-data">CHP Data</a></li>
+<li><a class="reference internal" href="#chp-system-architecture">CHP System Architecture</a></li>
+<li><a class="reference internal" href="#chp-single-hop-contribution-analysis">CHP Single Hop Contribution Analysis</a></li>
+<li><a class="reference internal" href="#chp-two-hope-contribution-analysis">CHP Two Hope Contribution Analysis</a><ul>
+<li><a class="reference internal" href="#references">References:</a></li>
+</ul>
+</li>
+</ul>
+</div>
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="#">CHP</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="#">Docs</a> &raquo;</li>
+      
+    <li>Connections Hypothesis Provider (CHP)</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="_sources/chp_documentation.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="connections-hypothesis-provider-chp">
+<h1>Connections Hypothesis Provider (CHP)<a class="headerlink" href="#connections-hypothesis-provider-chp" title="Permalink to this headline">¶</a></h1>
+<p>Connections Hypothesis Provider (CHP) is a service built by Dartmouth College (PI – Dr. Eugene Santos) and Tufts University (Co-PI – Joseph Gormley) in collaboration with the National Center for Advancing Translational Sciences (NCATS). CHP aims to leverage clinical data along with structured biochemical knowledge to derive a computational representation of pathway structures and molecular components to support human and machine-driven interpretation, enable pathway-based biomarker discovery, and aid in the drug development process. In its current version, CHP supports queries relating to the contribution of genetic and therapeutic features toward patient survival, as computed within the context of our test pilot: a robust cancer dataset from The Cancer Genome Atlas (TCGA). We are using this as a proving ground for our system’s basic operations as we work to incorporate structured pathway knowledge from Reactome and pathway analysis methods into the tool.</p>
+</div>
+<div class="section" id="table-of-content">
+<h1>Table of Content<a class="headerlink" href="#table-of-content" title="Permalink to this headline">¶</a></h1>
+<ol class="arabic simple">
+<li><a class="reference internal" href="#preliminaries">Preliminaries</a></li>
+<li><a class="reference internal" href="#chp-data">CHP Data</a></li>
+<li><a class="reference internal" href="#chp-system-architecture">CHP System Architecture</a></li>
+<li><a class="reference internal" href="#chp-single-hop-contribution-analysis">CHP Single Hop Contribution Analysis</a></li>
+<li><a class="reference internal" href="#chp-two-hope-contribution-analysis">CHP Two Hope Contribution Analysis</a></li>
+</ol>
+</div>
+<div class="section" id="preliminaries">
+<h1>Preliminaries<a class="headerlink" href="#preliminaries" title="Permalink to this headline">¶</a></h1>
+<p>The core system of which we reason with, the Bayesian Knowledge Base (BKB) (Santos and Santos 1999), is a probabilistic graphical model that captures dependencies over random variables. The BKB represents random variables at the instantiation level (i.e., <span class="math">\(X=x_{1}\)</span> rather than <span class="math">\(X=?\)</span>) which notably allows for modeling over incomplete data. We refer to an instantiated random variable as an Instantiated Node (I-Node). I-Nodes are supported by some prior evidence called a Support Node (S-Node). Moreover, BKBs can merge conflicting conditional representations using source identifiers.</p>
+<p>Our primary form of inference is to use belief updating, or to calculate a posterior conditional probability distribution for a set of random variables given some evidence. As an example, let <span class="math">\(\theta_{e}=\set{X_1=x_1,X_2=x_2,…,X_n=x_n}\)</span> be a set of specified evidence where <span class="math">\(X_1-X_n\)</span> represent instantiated random variables. <span class="math">\(P(X_{target}| \theta_{e})\)</span> calculates the conditional probabilities for all instantiations of <span class="math">\(X_{target}\)</span> that satisfy <span class="math">\(\theta_{e}\)</span>. The joint probability for a satisfactory world, <span class="math">\(I\)</span>, is <span class="math">\(P(I)=\prod_{s\in{I}} s\)</span>  where <span class="math">\(s\in{I}\)</span> represents the set of mutually exclusive S-Nodes that compose <span class="math">\(I\)</span>. Mutual exclusivity ensures inferences are devoid of conflicting I-Node instantiations. Let <span class="math">\(I_{\theta_{e}}\)</span> be the set of all worlds that satisfy <span class="math">\(\theta_{e}\)</span>. Then <span class="math">\(P(\theta_{e})=\sum_{I\in{I_{\theta_{e}}}} P(I)\)</span>. For some instantiation of the target, <span class="math">\(X_{target}=t_{i}\)</span>, <span class="math">\(P(X_{target}=t_{i}|\theta_{e})\)</span> is simply <span class="math">\(\frac{P(X_{target}=t_{i}, \theta_{e})}{P(\theta_{e})}\)</span>  which can be computed for all instantiations of <span class="math">\(X_{target}\)</span>.</p>
+</div>
+<div class="section" id="chp-data">
+<h1>CHP Data<a class="headerlink" href="#chp-data" title="Permalink to this headline">¶</a></h1>
+<p>CHP uses of The Cancer Genome Atlas (TCGA) data as the primary source of BKB Knowledge. We use this as a proving ground for our system’s basic operations as we work to incorporate structured pathway knowledge and pathway analysis methods into the tool. Currently ingested are the breast cancer, brain cancer and lung cancer datasets (TCGA-BRCA, TCGA-GBM and TCGA-LUAD, respectively). We leverage this data as it offers a robust decision surface, with the hopes to generalize our knowledge into the rare disease application via pathway semantics.</p>
+<p><strong>IMPORTANT: For gene→disease and drug→disease relationships, we accept any disease identifier even if we do not contain data for it and inference over our ingested TCGA data. This means that if you query CHP for genes associated with Parkinson’s disease, we will return flagged genes in our system that were influential in survival time semantics of the cancer patients we have ingested. Moreover, any edges within our system (gene→drug, gene→gene) are also building associations over the TCGA cancer data.</strong></p>
+</div>
+<div class="section" id="chp-system-architecture">
+<h1>CHP System Architecture<a class="headerlink" href="#chp-system-architecture" title="Permalink to this headline">¶</a></h1>
+<p>The TCGA dataset is entirely composed of tabular patient data. For our purposes this data is anonymized and from each patient record a Bayesian Knowledge Fragment (BKF) is composed. A BKF represents an individual BKB fragment of knowledge supported by some source (in this case a patient identifier). BKFs can be fused together to form a larger BKB that maintains sound probabilistic semantics over the sources (even if they are conflicting). Figure 1 shows a collected set of patient data containing patient survival time, drugs they were prescribed and gene mutations. The nodes reflecting different random variable instantiations are the I-Nodes, which are supported by the black nodes, or the S-Nodes. These S-Nodes maintain the probabilities over these outcomes.</p>
+<a class="reference internal image-reference" href="_images/fig1.PNG"><img alt="_images/fig1.PNG" class="align-center" src="_images/fig1.PNG" style="width: 600px; height: 275px;" /></a>
+<p>Through fusion the resulting BKB is one that allows for frequentist statistics to be calculated over patients, whilst still provided the individual patient level semantics for provenance. We build unique BKBs for each disease we have ingested as well as a universal BKB that composes all patients from all disease types.
+Our primary form of belief updating comes from the following probabilistic semantics:</p>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq1}
+\begin{split}
+P(Survival Time &amp; &gt; X | Disease = d, \\
+                    &amp; Gene_{1}^{Mutated}=True, ..., Gene_{n}^{Mutated}=True, \\
+                    &amp; Drug_{1}=True, ..., Drug_{m}=True)
+\end{split}
+\end{equation}\end{split}\]</div>
+<p>Though what can be made a target and what can be made evidence form the TCGA dataset is largely arbitrary. For instance, one could query the probability of a particular state of tumor staging given some genomic evidence though this is currently not exposed to translator.
+As there is some sparsity of genes (i.e., cases where genes aren’t frequently mutated) we apply a bi-gram interpolation over genes to increase the number of valid worlds that we can inference over. For each gene we calculate another gene that is highly correlated with its mutation status, and link these in a bi-gram relationship. Figure 2 shows how we model this interpolation.</p>
+<a class="reference internal image-reference" href="_images/fig2.PNG"><img alt="_images/fig2.PNG" class="align-center" src="_images/fig2.PNG" style="width: 600px; height: 225px;" /></a>
+<p><span class="math">\(Gene_{2}^{Mutated}=True\)</span> here operates as a stand-in for the case where a patient doesn’t have <span class="math">\(Gene_{1}^{Mutated}=True\)</span>. This expands the patients that we can inference over. Intuitively, note that <span class="math">\(s_{5}\)</span> is set to <span class="math">\(P(Gene_{1}^{Mutated}=True | Gene_{2}^{Mutated}=True)\)</span> which weights this inference space by the predictive power of <span class="math">\(Gene_{2}^{Mutated}=True\)</span> predicting <span class="math">\(Gene_{1}^{Mutated}=True\)</span>.</p>
+</div>
+<div class="section" id="chp-single-hop-contribution-analysis">
+<h1>CHP Single Hop Contribution Analysis<a class="headerlink" href="#chp-single-hop-contribution-analysis" title="Permalink to this headline">¶</a></h1>
+<p>When inferencing over a BKB, there is often more at play than strictly the target you wish to investigate, and the evidence you’ve specified. Let <span class="math">\(\theta_{e}=\set{X_1=x_1,X_2=x_2,…,X_n=x_n}\)</span> be a set of specified evidence where <span class="math">\(X_1-X_n\)</span> represent instantiated random variables. <span class="math">\(P(X_{target} | \theta_e)\)</span> calculates the conditional probabilities for all instantiations of <span class="math">\(X_{target}\)</span> that satisfy <span class="math">\(\theta_e\)</span>. Often, though there are intermediate factors that have some influence on <span class="math">\(X_{target}\)</span>. Let <span class="math">\(\theta_{\neg e} = \set{X_{n+1},X_{n+2},…,X_{n+m}}\)</span> be the inferencable factors not in <span class="math">\(\theta_{\neg e}. Note that the factors in :math:\)</span>theta_{neg e}` are described at the random variable level as they could take on many different instantiations in the possible worlds that satisfy <span class="math">\(\theta_{e}\)</span> so long as each world is mutually exclusive in their instantiations (i.e., all instantiations of a variable agree in the same world). The goal of contribution analysis is to determine how much each factor in <span class="math">\(\theta_{e}\)</span> and <span class="math">\(\theta_{\neg e}\)</span> impact <span class="math">\(X_{target}\)</span>. If <span class="math">\(I_{\theta_{e}}\)</span> is the set of all valid worlds that satisfy <span class="math">\(\theta_e\)</span> then let <span class="math">\(I_{\theta_{e+X_i=x_i}}\)</span> be the set of all worlds that satisfy <span class="math">\(\theta_e\)</span> in addition to some instantiated random variable of interest <span class="math">\(X_i=x_i\)</span>. If <span class="math">\(X_i=x_i \in \theta_e\)</span>, then <span class="math">\(I_{\theta_{e+X_i=x_i}} \equiv I_{\theta_e}\)</span>. If not, then <span class="math">\(I_{\theta_{e+X_i=x_i}} \subseteq I_{\theta_e}\)</span>. The contribution of <span class="math">\(X_i=x_i\)</span> is then <span class="math">\(c(X_i=x_i)=\sum_{I\in I_{\theta_{e+X_i = x_i}}} P(I)\)</span>. For our contribution queries we use this to capture the impact of various intermediate factors of patients on survival time. Contributions form a ranking over these intermediate factors which we provide back to the user.</p>
+<p>For example, in our drug wildcard to gene query, a user specifies some gene, <span class="math">\(Gene_{1}^{Mutated}=True,\)</span> as evidence and wishes to find drugs that impact patient’s survival time under such circumstances. We will use Figure 3 as an example. The sources (in this case the patient identifiers) are normalized across all patients to ensure <span class="math">\(P(Survival Time | Gene_{1}^{Mutated}=True)\)</span> all sums to 1.</p>
+<a class="reference internal image-reference" href="_images/fig3.PNG"><img alt="_images/fig3.PNG" class="align-center" src="_images/fig3.PNG" style="width: 600px; height: 350px;" /></a>
+<p>The drugs in this case are the intermediate factors that add some weight into the end distributions of Survival Time. In this trivial example, <span class="math">\(P(Survival Time = [0, 3000] | Gene_{1}^{Mutated}=True) = \frac{3}{7}\)</span> and <span class="math">\(P(Survival Time = [3000, 6000] | Gene_{1}^{Mutated}=True) = \frac{4}{7}\)</span>. When considering the contribution of each drug on the two instantiations of Survival Time we let <span class="math">\(\theta_1 = \set{Survival Time = [0, 3000], Gene_{1}^{Mutated}=True}\)</span> and <span class="math">\(\theta_2 = \set{Survival Time = [3000, 6000], Gene_{1}^{Mutated}=True}\)</span>. We can then determine <span class="math">\(c(Drug_{ChEMBL88}=True) = \frac{1}{7}\)</span> w.r.t <span class="math">\(\theta_1\)</span> and <span class="math">\(\frac{4}{7}\)</span> w.r.t <span class="math">\(\theta_2\)</span>. Similarly, <span class="math">\(c(Drug_{ChEMBL1201585}=True) = \frac{2}{7}\)</span> for both <span class="math">\(\theta_1\)</span> and <span class="math">\(\theta_2\)</span>. As a form of differential analysis for a drug we would like to compare across <span class="math">\(\theta_1\)</span> and <span class="math">\(\theta_2\)</span>. To do so we divide out the probability masses of each theta so that we can compare the contributions directly. We refer to this as the relative contribution, or <span class="math">\(relc(X_i=x_i)\)</span>. For this example, that is:</p>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq2}
+\begin{split}
+relc(Drug_{ChEMBL88=True}) = &amp; \frac{c(Drug_{ChEMBL88}=True)\: w.r.t \: \theta_2}{P(Survival Time = [3000, 6000] | Gene_{1}^{Mutated}=True)} \\
+                    &amp; - \frac{c(Drug_{ChEMBL88}=True)\: w.r.t \: \theta_1}{P(Survival Time = [0, 3000] | Gene_{1}^{Mutated}=True)}
+\end{split}
+\end{equation}\end{split}\]</div>
+<p>and</p>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq3}
+\begin{split}
+relc(Drug_{ChEMBL1201585=True}) = &amp; \frac{c(Drug_{ChEMBL1201585}=True)\: w.r.t \: \theta_2}{P(Survival Time = [3000, 6000] | Gene_{1}^{Mutated}=True)} \\
+                    &amp; - \frac{c(Drug_{ChEMBL1201585}=True)\: w.r.t \: \theta_1}{P(Survival Time = [0, 3000] | Gene_{1}^{Mutated}=True)}
+\end{split}
+\end{equation}\end{split}\]</div>
+<p>This results in <span class="math">\(relc(Drug_{ChEMBL88=True}) = \frac{2}{3}\)</span> and <span class="math">\(relc(Drug_{ChEMBL1201585=True}) = -\frac{1}{6}\)</span>. Intuitively, this metric produces values between [-1,1] where values closer to 1 are indicative of having some natural skew towards a longer survival time and values closer to -1 are indicative of having some natural skew towards a shorter survival time. Contribution values for drugs are organized by magnitude and presented back to the user. We compute these types of rankings in our gene→disease edge, our drug→disease edge and our gene→drug edge.</p>
+</div>
+<div class="section" id="chp-two-hope-contribution-analysis">
+<h1>CHP Two Hope Contribution Analysis<a class="headerlink" href="#chp-two-hope-contribution-analysis" title="Permalink to this headline">¶</a></h1>
+<p>Two Hop Contribution Analysis is simply an extension to the Single Hop Contribution Analysis. While Single Hop Contribution Analysis investigates the weight a single entity has on the survival time semantics of our ingested patients, Two Hop Contribution Analysis uses the single entity weights to direct a secondary entity’s effect on survival time. This is currently only used in our gene→gene edge. A more accurate representation of this edge would be a gene→drug→gene two-hop query, though we’ve condensed this down to simply gene→gene. The drug in this case is the single entity we use as a proxy to guide the secondary entity’s (gene) effects on survival time. We decompose this problem into two one-hop queries, gene→drug and drug→gene. The first one-hop, gene→drug, uses our One Hop Contribution Analysis setup to determine a set of weighted drugs that effect survival time. This set is often truncated to produce the top n number of contributing drugs. The second hop investigtes the secondary piece of evidence using the truncated drug set as a narrowed context scope. Following the previous example from One Hop Contribution Analysis we can now explore some new expanded evidence using our ranked drugs:</p>
+<div class="math">
+\[\begin{equation} \label{eq4}
+\begin{split}
+\theta_{1}=\set{Survival Time = [0, 3000], Drug_{1} = True, Gene_{1}^{Mutated}=True}
+\end{split}
+\end{equation}\]</div>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq5}
+\begin{split}
+\theta_{2}= \set{Survival Time = [0, 3000], Drug_{2} = True, Gene_{1}^{Mutated}=True} \\
+\end{split}
+\end{equation}\end{split}\]</div>
+<p><span class="math">\(\quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \vdots\)</span></p>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq6}
+\begin{split}
+\theta_{n}= \set{Survival Time = [0, 3000], Drug_{n} = True, Gene_{1}^{Mutated}=True} \\
+\end{split}
+\end{equation}\end{split}\]</div>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq7}
+\begin{split}
+\theta_{n+1}= \set{Survival Time = [3000, 6000], Drug_{1} = True, Gene_{1}^{Mutated}=True} \\
+\end{split}
+\end{equation}\end{split}\]</div>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq8}
+\begin{split}
+\theta_{n+2}= \set{Survival Time = [3000, 6000], Drug_{2} = True, Gene_{1}^{Mutated}=True} \\
+\end{split}
+\end{equation}\end{split}\]</div>
+<p><span class="math">\(\quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \vdots\)</span></p>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq9}
+\begin{split}
+\theta_{2n}= \set{Survival Time = [3000, 6000], Drug_{n} = True, Gene_{1}^{Mutated}=True} \\
+\end{split}
+\end{equation}\end{split}\]</div>
+<p>With our expanded context we can then build relative contributions over some secondary gene, <span class="math">\(Gene_{2}^{Mutated}=True\)</span> by, again by calculating the contributions w.r.t each theta and summing over the theta that are in agreement on the instantiation of Survival Time. Let <span class="math">\(\theta_{ST=[0,3000]}\)</span> be the set of all thetas in agreement on the instantiation of Survival Time. In this case, <span class="math">\(\theta_{ST=[0,3000]} = \set{\theta_1, \theta_2, ..., \theta_n}\)</span>. We can then define the contribution of <span class="math">\(Gene_{2}^{Mutated}=True \: w.r.t \: \theta_{ST=[0, 3000]}\)</span> as:</p>
+<div class="math">
+\[\begin{equation} \label{eq10}
+\begin{split}
+c(Gene_{2}^{Mutated}=True) \: w.r.t \: \theta_{ST=[0, 3000]} = \sum_{\theta \in \theta_{ST=[0,3000]}} c(Gene_{2}^{Mutated}=True) \: w.r.t \: \theta
+\end{split}
+\end{equation}\]</div>
+<p>Our relative contribution over this secondary entity in this example is then:</p>
+<div class="math">
+\[\begin{split}\begin{equation} \label{eq11}
+\begin{split}
+relc(Gene_{2}^{Mutated}=True) &amp; = \: c(Gene_{2}^{Mutated}=True) \: w.r.t \: \theta_{ST=[3000, 6000]} \\
+        &amp; - c(Gene_{2}^{Mutated}=True) \: w.r.t \: \theta_{ST=[0, 3000]}
+\end{split}
+\end{equation}\end{split}\]</div>
+<p>This follows the same [-1,1] semantics described in the One Hope Contribution Analysis. Returned are a ranked list of genes by <span class="math">\(relc\)</span> magnitudes.
+The intuition behind this analysis is that gene→drug captures some mechanism that affects survival time over the patients in our data. By truncating the most contributing drugs and then using this narrower context, we can hone in on the further interaction of other genes.</p>
+<div class="section" id="references">
+<h2>References:<a class="headerlink" href="#references" title="Permalink to this headline">¶</a></h2>
+<p>Santos, E., Jr. and Santos, E. S. (1999) A framework for building knowledge-bases under uncertainty. Journal of Experimental and Theoretical Artificial Intelligence, 11, 265-286.</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright .
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'2.4.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
