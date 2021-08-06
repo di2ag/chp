@@ -180,6 +180,14 @@ class BaseHandler:
                     description='The Cancer Genome Atlas provided by the GDC Data Portal.',
                     attribute_source='infores:gdc',
                     )
+            kedge.add_attribute(
+                    attribute_type_id=BIOLINK_SUPPORTING_DATA_SOURCE_ENTITY.get_curie(),
+                    value='infores:tcga',
+                    value_type_id=BIOLINK_INFORMATION_RESOURCE_ENTITY.get_curie(),
+                    value_url='https://di2ag.github.io/chp/chp_documentation#chp-single-hop-contribution-analysis',
+                    description='Documents how Connections Hypothesis Provider builds ranked contribution values over tcga data.',
+                    attribute_source='infores:connections-hypothesis',
+                    )
         return query
 
     def _get_curie_name(self, entity_type, curie):
