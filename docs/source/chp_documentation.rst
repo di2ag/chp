@@ -13,7 +13,7 @@ Table of Content
 2. `CHP Data`_
 3. `CHP System Architecture`_
 4. `CHP Single Hop Contribution Analysis`_
-5. `CHP Two Hope Contribution Analysis`_
+5. `CHP Two Hop Contribution Analysis`_
 
 Preliminaries
 ===========================================
@@ -36,7 +36,7 @@ The TCGA dataset is entirely composed of tabular patient data. For our purposes 
     :height: 275
     :align: center
 
-Through fusion the resulting BKB is one that allows for frequentist statistics to be calculated over patients, whilst still provided the individual patient level semantics for provenance. We build unique BKBs for each disease we have ingested as well as a universal BKB that composes all patients from all disease types.
+Through fusion the resulting BKB is one that allows for frequentest statistics to be calculated over patients, whilst still provided the individual patient level semantics for provenance. We build unique BKBs for each disease we have ingested as well as a universal BKB that composes all patients from all disease types.
 Our primary form of belief updating comes from the following probabilistic semantics:
 
 .. math::
@@ -94,9 +94,9 @@ and
 
 This results in :math:`relc(Drug_{ChEMBL88=True}) = \frac{2}{3}` and :math:`relc(Drug_{ChEMBL1201585=True}) = -\frac{1}{6}`. Intuitively, this metric produces values between [-1,1] where values closer to 1 are indicative of having some natural skew towards a longer survival time and values closer to -1 are indicative of having some natural skew towards a shorter survival time. Contribution values for drugs are organized by magnitude and presented back to the user. We compute these types of rankings in our gene→disease edge, our drug→disease edge and our gene→drug edge.
 
-CHP Two Hope Contribution Analysis
+CHP Two Hop Contribution Analysis
 ===========================================
-Two Hop Contribution Analysis is simply an extension to the Single Hop Contribution Analysis. While Single Hop Contribution Analysis investigates the weight a single entity has on the survival time semantics of our ingested patients, Two Hop Contribution Analysis uses the single entity weights to direct a secondary entity’s effect on survival time. This is currently only used in our gene→gene edge. A more accurate representation of this edge would be a gene→drug→gene two-hop query, though we’ve condensed this down to simply gene→gene. The drug in this case is the single entity we use as a proxy to guide the secondary entity’s (gene) effects on survival time. We decompose this problem into two one-hop queries, gene→drug and drug→gene. The first one-hop, gene→drug, uses our One Hop Contribution Analysis setup to determine a set of weighted drugs that effect survival time. This set is often truncated to produce the top n number of contributing drugs. The second hop investigtes the secondary piece of evidence using the truncated drug set as a narrowed context scope. Following the previous example from One Hop Contribution Analysis we can now explore some new expanded evidence using our ranked drugs:
+Two Hop Contribution Analysis is simply an extension to the Single Hop Contribution Analysis. While Single Hop Contribution Analysis investigates the weight a single entity has on the survival time semantics of our ingested patients, Two Hop Contribution Analysis uses the single entity weights to direct a secondary entity’s effect on survival time. This is currently only used in our gene→gene edge. A more accurate representation of this edge would be a gene→drug→gene two-hop query, though we’ve condensed this down to simply gene→gene. The drug in this case is the single entity we use as a proxy to guide the secondary entity’s (gene) effects on survival time. We decompose this problem into two one-hop queries, gene→drug and drug→gene. The first one-hop, gene→drug, uses our One Hop Contribution Analysis setup to determine a set of weighted drugs that effect survival time. This set is often truncated to produce the top n number of contributing drugs. The second hop investigates the secondary piece of evidence using the truncated drug set as a narrowed context scope. Following the previous example from One Hop Contribution Analysis we can now explore some new expanded evidence using our ranked drugs:
 
 .. math::
 
@@ -171,7 +171,7 @@ Our relative contribution over this secondary entity in this example is then:
     \end{split}
     \end{equation}
 
-This follows the same [-1,1] semantics described in the One Hope Contribution Analysis. Returned are a ranked list of genes by :math:`relc` magnitudes.
+This follows the same [-1,1] semantics described in the One Hop Contribution Analysis. Returned are a ranked list of genes by :math:`relc` magnitudes.
 The intuition behind this analysis is that gene→drug captures some mechanism that affects survival time over the patients in our data. By truncating the most contributing drugs and then using this narrower context, we can hone in on the further interaction of other genes.
 
 

@@ -87,7 +87,7 @@
 <li><a class="reference internal" href="#chp-data">CHP Data</a></li>
 <li><a class="reference internal" href="#chp-system-architecture">CHP System Architecture</a></li>
 <li><a class="reference internal" href="#chp-single-hop-contribution-analysis">CHP Single Hop Contribution Analysis</a></li>
-<li><a class="reference internal" href="#chp-two-hope-contribution-analysis">CHP Two Hope Contribution Analysis</a><ul>
+<li><a class="reference internal" href="#chp-two-hop-contribution-analysis">CHP Two Hop Contribution Analysis</a><ul>
 <li><a class="reference internal" href="#references">References:</a></li>
 </ul>
 </li>
@@ -146,7 +146,7 @@
 <li><a class="reference internal" href="#chp-data">CHP Data</a></li>
 <li><a class="reference internal" href="#chp-system-architecture">CHP System Architecture</a></li>
 <li><a class="reference internal" href="#chp-single-hop-contribution-analysis">CHP Single Hop Contribution Analysis</a></li>
-<li><a class="reference internal" href="#chp-two-hope-contribution-analysis">CHP Two Hope Contribution Analysis</a></li>
+<li><a class="reference internal" href="#chp-two-hop-contribution-analysis">CHP Two Hop Contribution Analysis</a></li>
 </ol>
 </div>
 <div class="section" id="preliminaries">
@@ -163,7 +163,7 @@
 <h1>CHP System Architecture<a class="headerlink" href="#chp-system-architecture" title="Permalink to this headline">¶</a></h1>
 <p>The TCGA dataset is entirely composed of tabular patient data. For our purposes this data is anonymized and from each patient record a Bayesian Knowledge Fragment (BKF) is composed. A BKF represents an individual BKB fragment of knowledge supported by some source (in this case a patient identifier). BKFs can be fused together to form a larger BKB that maintains sound probabilistic semantics over the sources (even if they are conflicting). Figure 1 shows a collected set of patient data containing patient survival time, drugs they were prescribed and gene mutations. The nodes reflecting different random variable instantiations are the I-Nodes, which are supported by the black nodes, or the S-Nodes. These S-Nodes maintain the probabilities over these outcomes.</p>
 <a class="reference internal image-reference" href="_images/fig1.PNG"><img alt="_images/fig1.PNG" class="align-center" src="_images/fig1.PNG" style="width: 600px; height: 275px;" /></a>
-<p>Through fusion the resulting BKB is one that allows for frequentist statistics to be calculated over patients, whilst still provided the individual patient level semantics for provenance. We build unique BKBs for each disease we have ingested as well as a universal BKB that composes all patients from all disease types.
+<p>Through fusion the resulting BKB is one that allows for frequentest statistics to be calculated over patients, whilst still provided the individual patient level semantics for provenance. We build unique BKBs for each disease we have ingested as well as a universal BKB that composes all patients from all disease types.
 Our primary form of belief updating comes from the following probabilistic semantics:</p>
 <div class="math">
 \[\begin{split}\begin{equation} \label{eq1}
@@ -201,9 +201,9 @@ relc(Drug_{ChEMBL1201585=True}) = &amp; \frac{c(Drug_{ChEMBL1201585}=True)\: w.r
 \end{equation}\end{split}\]</div>
 <p>This results in <span class="math">\(relc(Drug_{ChEMBL88=True}) = \frac{2}{3}\)</span> and <span class="math">\(relc(Drug_{ChEMBL1201585=True}) = -\frac{1}{6}\)</span>. Intuitively, this metric produces values between [-1,1] where values closer to 1 are indicative of having some natural skew towards a longer survival time and values closer to -1 are indicative of having some natural skew towards a shorter survival time. Contribution values for drugs are organized by magnitude and presented back to the user. We compute these types of rankings in our gene→disease edge, our drug→disease edge and our gene→drug edge.</p>
 </div>
-<div class="section" id="chp-two-hope-contribution-analysis">
-<h1>CHP Two Hope Contribution Analysis<a class="headerlink" href="#chp-two-hope-contribution-analysis" title="Permalink to this headline">¶</a></h1>
-<p>Two Hop Contribution Analysis is simply an extension to the Single Hop Contribution Analysis. While Single Hop Contribution Analysis investigates the weight a single entity has on the survival time semantics of our ingested patients, Two Hop Contribution Analysis uses the single entity weights to direct a secondary entity’s effect on survival time. This is currently only used in our gene→gene edge. A more accurate representation of this edge would be a gene→drug→gene two-hop query, though we’ve condensed this down to simply gene→gene. The drug in this case is the single entity we use as a proxy to guide the secondary entity’s (gene) effects on survival time. We decompose this problem into two one-hop queries, gene→drug and drug→gene. The first one-hop, gene→drug, uses our One Hop Contribution Analysis setup to determine a set of weighted drugs that effect survival time. This set is often truncated to produce the top n number of contributing drugs. The second hop investigtes the secondary piece of evidence using the truncated drug set as a narrowed context scope. Following the previous example from One Hop Contribution Analysis we can now explore some new expanded evidence using our ranked drugs:</p>
+<div class="section" id="chp-two-hop-contribution-analysis">
+<h1>CHP Two Hop Contribution Analysis<a class="headerlink" href="#chp-two-hop-contribution-analysis" title="Permalink to this headline">¶</a></h1>
+<p>Two Hop Contribution Analysis is simply an extension to the Single Hop Contribution Analysis. While Single Hop Contribution Analysis investigates the weight a single entity has on the survival time semantics of our ingested patients, Two Hop Contribution Analysis uses the single entity weights to direct a secondary entity’s effect on survival time. This is currently only used in our gene→gene edge. A more accurate representation of this edge would be a gene→drug→gene two-hop query, though we’ve condensed this down to simply gene→gene. The drug in this case is the single entity we use as a proxy to guide the secondary entity’s (gene) effects on survival time. We decompose this problem into two one-hop queries, gene→drug and drug→gene. The first one-hop, gene→drug, uses our One Hop Contribution Analysis setup to determine a set of weighted drugs that effect survival time. This set is often truncated to produce the top n number of contributing drugs. The second hop investigates the secondary piece of evidence using the truncated drug set as a narrowed context scope. Following the previous example from One Hop Contribution Analysis we can now explore some new expanded evidence using our ranked drugs:</p>
 <div class="math">
 \[\begin{equation} \label{eq4}
 \begin{split}
@@ -257,7 +257,7 @@ relc(Gene_{2}^{Mutated}=True) &amp; = \: c(Gene_{2}^{Mutated}=True) \: w.r.t \: 
         &amp; - c(Gene_{2}^{Mutated}=True) \: w.r.t \: \theta_{ST=[0, 3000]}
 \end{split}
 \end{equation}\end{split}\]</div>
-<p>This follows the same [-1,1] semantics described in the One Hope Contribution Analysis. Returned are a ranked list of genes by <span class="math">\(relc\)</span> magnitudes.
+<p>This follows the same [-1,1] semantics described in the One Hop Contribution Analysis. Returned are a ranked list of genes by <span class="math">\(relc\)</span> magnitudes.
 The intuition behind this analysis is that gene→drug captures some mechanism that affects survival time over the patients in our data. By truncating the most contributing drugs and then using this narrower context, we can hone in on the further interaction of other genes.</p>
 <div class="section" id="references">
 <h2>References:<a class="headerlink" href="#references" title="Permalink to this headline">¶</a></h2>
