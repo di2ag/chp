@@ -63,6 +63,7 @@ class OneHopHandlerMixin:
             wildcard genes to return.
         :type max_results: int
     """
+
     def _setup_handler(self):
         self.default_survival_target = {
             "EFO:0000714": {
@@ -72,7 +73,7 @@ class OneHopHandlerMixin:
         }
 
         # Only do the rest of this if a query is passed
-        if self.messages is not None:
+        if self.queries is not None:
             # Setup queries
             self._setup_messages()
 
@@ -89,9 +90,9 @@ class OneHopHandlerMixin:
                     num_processes_per_host=self.num_processes_per_host)
 
     def _setup_messages(self):
-        self.message_dict = defaultdict(list)
-        for message in self.messages:
-            self.message_dict[self._get_onehop_type(message)].append(message)
+        self.queries_dict = defaultdict(list)
+        for query in self.queries:
+            self.queries_dict[self._get_onehop_type(query.message)].append(query)
 
     def _get_onehop_type(self, message):
         wildcard_type = None
@@ -188,7 +189,10 @@ class OneHopHandlerMixin:
                     raise ValueError('Unsupported context type: {}'.format(context_curie))
         return chp_query
 
-    def _extract_chp_query(self, message, message_type):
+    def _extract_chp_query(self, query, message_type):
+        # Extract Message
+        message = query.message
+
         # Initialize CHP BKB Query
         chp_query = ChpQuery(reasoning_type='updating')
 
@@ -382,8 +386,10 @@ class OneHopHandlerMixin:
 
         return chp_query
 
-    def _construct_trapi_message(self, chp_query, message, query_type):
+    def _construct_trapi_message(self, chp_query, query, query_type):
 
+        # Helpful short cuts
+        message = query.message
         qg = message.query_graph
         kg = message.knowledge_graph
 
@@ -493,4 +499,4 @@ class OneHopHandlerMixin:
                         _edge_bindings,
                         )
         
-        return message
+        return query

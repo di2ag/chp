@@ -42,19 +42,12 @@ class BaseHandler:
     """
 
     def __init__(self,
-                 messages,
-                 query,
                  hosts_filename=None,
                  num_processes_per_host=0,
                  bkb_handler=None,
                  joint_reasoner=None,
                  dynamic_reasoner=None,
                  max_results=10):
-        # Save initial passed query(s)
-        self.messages = messages
-        self.query = query
-        if query is not None:
-            self.query = query.get_copy()
         # Instantiate handler is one was not passed
         if bkb_handler is None:
             self.bkb_data_handler = BkbDataHandler(
@@ -90,7 +83,7 @@ class BaseHandler:
                 return True, is_inverse
         return False, False
 
-    def _handler_setup(self):
+    def _setup_handler(self):
         pass
 
     def _setup_queries(self):
@@ -111,9 +104,9 @@ class BaseHandler:
             :rtype: dict
         """
         self.chp_query_dict = defaultdict(list)
-        for message_type, messages in self.message_dict.items():
-            for _message in messages:
-                self.chp_query_dict[message_type].append(self._extract_chp_query(_message, message_type))
+        for message_type, queries in self.queries_dict.items():
+            for _query in queries:
+                self.chp_query_dict[message_type].append(self._extract_chp_query(_query, message_type))
         return self.chp_query_dict
 
     def _extract_chp_query(self, query, query_type):
@@ -136,19 +129,20 @@ class BaseHandler:
             for chp_query in chp_queries:
                 self.results[message_type].append(self._run_query(chp_query, message_type))
 
-    def construct_trapi_response(self):
+    def construct_trapi_responses(self):
         """ Constructs the trapi responses for each query in correspondance with each handlers
             _construct_trapi_response function.
         """
-        responses = defaultdict(list)
-        for (query_type, chp_queries), (_, messages) in zip(self.results.items(), self.message_dict.items()):
-            for chp_query, message in zip(chp_queries, messages):
-                responses[query_type].append(self._construct_trapi_message(chp_query, message, query_type))
-        response_query = self.merge_messages(responses)
-        # Add provenance information
-        #TODO: This will become more complex as more data is integrated.
-        response_query_with_provenance = self.add_provenance_attributes(response_query)
-        return response_query_with_provenance
+        responses = []
+        for (query_type, chp_queries), (_, queries) in zip(self.results.items(), self.queries_dict.items()):
+            for chp_query, query in zip(chp_queries, queries):
+                # Construct Message
+                _response = self._construct_trapi_message(chp_query, query, query_type)
+                # Add provenance
+                _response = self.add_provenance_attributes(_response)
+                # Add to list of responses
+                responses.append(_response)
+        return responses
 
     def merge_messages(self, responses):
         new_query = self.query.get_copy()
@@ -205,11 +199,24 @@ class BaseHandler:
 
 # Handler Mixins
 
-class DefaultHandler(DefaultHandlerMixin, BaseHandler):
-    pass
-
-class WildCardHandler(WildCardHandlerMixin, BaseHandler):
-    pass
-
 class OneHopHandler(OneHopHandlerMixin, BaseHandler):
-    pass
+    def __init__(
+            self,
+            queries=None, 
+            hosts_filename=None,
+            num_processes_per_host=0,
+            bkb_handler=None,
+            joint_reasoner=None,
+            dynamic_reasoner=None,
+            max_results=10,
+            ):
+        self.queries = queries
+
+        super(OneHopHandler, self).__init__(
+            hosts_filename=hosts_filename,
+            num_processes_per_host=num_processes_per_host,
+            bkb_handler=bkb_handler,
+            joint_reasoner=joint_reasoner,
+            dynamic_reasoner=dynamic_reasoner,
+            max_results=max_results,
+            )

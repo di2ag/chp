@@ -4,6 +4,11 @@ from chp.mixins.trapi_handler.mixin_exceptions import *
 # General Trapi Handler Exceptions
 ###########################################
 
+class NoSupportedQueriesFound(Exception):
+    
+    def __str__(self):
+        return 'No CHP core supported queries where found in passed query.'
+
 class UnidentifiedQueryType(Exception):
 
     def __str__(self):
