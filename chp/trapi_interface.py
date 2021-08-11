@@ -77,6 +77,87 @@ class TrapiInterface:
             raise NoSupportedQueriesFound
         return queries_dict
 
+    def _get_biolink_entity_if_supported_prefix(self, curie_prefix):
+        for biolink_entity, meta_node in self.meta_knowledge_graph.nodes.items():
+            if curie_prefix in meta_node.id_prefixes:
+                return biolink_entity
+        return None
+
+    def _get_more_specific_biolink_entity(self, *biolink_entities):
+        unsorted_entities = []
+        for entity in biolink_entities:
+            unsorted_entities.append((len(entity.get_ancestors()), entity))
+        return sorted(unsorted_entities, reverse=True)[0][1]
+
+    def _get_preferred_curie(self, normalized_node_dict):
+        biolink_entities = normalized_node_dict["types"]
+        normalized_curie_list = normalized_node_dict["equivalent_identifiers"]
+        supported_biolink_entity = set.intersection(
+                *[
+                    set(biolink_entities),
+                    set(self.meta_knowledge_graph.nodes.keys()),
+                    ]
+            )
+        # Biolink category isn't supported
+        if len(supported_biolink_entity) == 0:
+            return None
+        # If multiple supported biolink categories take the most specific.
+        if len(supported_biolink_entity) > 1:
+            supported_biolink_entity = self._get_more_specific_biolink_entity(*supported_biolink_type)
+        # If there is only one supported entity just take that.
+        else:
+            supported_biolink_entity = supported_biolink_entity[0]
+        preferred_prefix = self.meta_knowledge_graph.nodes[supported_biolink_entity].id_prefixes[0]
+        for curie in normalized_curie_list:
+            prefix = curie.split(':')[0]
+            if prefix == preferred_prefix:
+                return curie
+        return None
+
+    def _node_normalize_message(self, message):
+        client = SriNodeNormalizerApiClient()
+        # Collect node curies that need to be normalized
+        node_curies = []
+        for node_id, node in message.query_graph.items():
+            # Grab curie prefix
+            node_prefix = node.ids[0].split(':')[0]
+            # Check CHP support
+            curie_biolink_entity = self._get_biolink_entity_if_supported_prefix(node_prefix)
+            # If curie prefix is not supported
+            if curie_biolink_entity is None:
+                node_curies.append(node.ids[0])
+            # Check query category and supported category alignment
+            elif curie_biolink_entity != node.categories[0]:
+                if node.categories is None:
+                    self.query.info('Interpretting node: {} as having category {}.'.format(node_id, curie_biolink_entity.get_curie()))
+                else:
+                    self.query.info(
+                            'Mismatch in passed category for node {}. \
+                                    Passed {} but deduced {}. Using deduced \
+                                    category {} for reasoning.'.format(
+                                        node_id,
+                                        node.categories[0].get_curie(),
+                                        curie_biolink_entity.get_curie(),
+                                        curie_biolink_entity.get_curie(),
+                                        )
+                                    )
+                node.categories[0] = curie_biolink_entity
+        if len(node_curies) == 0:
+            return message
+        # Query the Node Normalizer
+        normalized_nodes = client.get_normalized_nodes(node_curies)
+        for origin_curie, normalized_node_dict in normalized_nodes.items():
+            normalized_preferred_curie = self._get_preferred_curie(normalized_node_dict)
+            if normalized_preferred_curie is None:
+                self.query.info('Could not find a preferred curie in normalization of curie {}'.format(origin_curie))
+                continue
+            # Run Find and Replace over message
+            message.find_and_replace(origin_curie, normalized_preferred_curie)
+            # Save out curie mappings
+            self.node_normalizer_mappings[origin_curie] = normalized_preferred_curie
+            self.node_normalizer_inverse_mappings[normalized_preferred_curie] = origin_curie
+        return message
+            
     def _determine_message_type(self, message):
         """ checks for query message types. First checks node requirements to check for query type,
             then checks structures under the assumption of query type. Also updates error
