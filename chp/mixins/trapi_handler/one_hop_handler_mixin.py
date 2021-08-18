@@ -427,7 +427,6 @@ class OneHopHandlerMixin:
                         node_bindings[qedge.subject][0],
                         node_bindings[qedge.object][0],
                         predicate=qedge.predicates[0].get_curie(),
-                        relation=qedge.relation,
                         )
                 edge_bindings[qedge_key] = [kedge_key]
                 # Add Attribute
@@ -485,7 +484,6 @@ class OneHopHandlerMixin:
                             _node_bindings[qedge.subject][0],
                             _node_bindings[qedge.object][0],
                             predicate=qedge.predicates[0],
-                            relation=qedge.relation,
                             )
                     kg.edges[kedge_id].add_attribute(
                             attribute_type_id='Contribution',
