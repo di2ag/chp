@@ -26,8 +26,7 @@ from chp.mixins.trapi_handler.one_hop_handler_mixin import OneHopHandlerMixin
 # Base TRAPI Handler
 
 class BaseHandler:
-    """WildCardHandler is the handler for gene wildcards. That is
-        query graphs (QGs) that consists of 4 nodes and 3 edges.
+    """ Current there is only the one-hop handler.
 
         :param query: the query graph sent by the ARA.
         :type query: dict

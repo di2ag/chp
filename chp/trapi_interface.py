@@ -157,24 +157,21 @@ class TrapiInterface:
             self.node_normalizer_mappings[origin_curie] = normalized_preferred_curie
             self.node_normalizer_inverse_mappings[normalized_preferred_curie] = origin_curie
         return message
-            
-    def _determine_message_type(self, message):
-        """ checks for query message types. First checks node requirements to check for query type,
-            then checks structures under the assumption of query type. Also updates error
-            message for return to user
 
-            :returns: a query type or None if there is a failure in matching query type
+    def _determine_message_type(self, message):
+        """ Currently only allows for one-hop queries between gene-drug, gene-disease and
+            drug-disease relationships.
+
+            :returns: a query type (currently only onehops)
             :rtype: string or None
         """
         if message is None:
             raise UnidentifiedQueryType
         query_graph = message.query_graph
 
-        # Check for standard or wildcard multihop query.
         gene_nodes = []
         disease_nodes = []
         drug_nodes = []
-        phenotype_nodes = []
         wildcard_node_count = 0
         wildcard_node = None
 
@@ -206,31 +203,17 @@ class TrapiInterface:
                                     raise(UnidentifiedDrugCurie(node.ids))
                     elif node.categories[0] == BIOLINK_DISEASE_ENTITY:
                         disease_nodes.append(node_id)
-                    elif node.categories[0] == BIOLINK_PHENOTYPIC_FEATURE_ENTITY:
-                        phenotype_nodes.append(node_id)
-                        for curie in node.ids:
-                            if curie in self.curies[BIOLINK_PHENOTYPIC_FEATURE_ENTITY]:
-                                qg.nodes[node_id].set_ids(curie)
-                            else:
-                                raise(UnidentifiedPhenotypeCurie(node.ids))
-                    else:
-                        raise(UnidentifiedNode(node.categories[0]))
 
-            num_total_nodes = len(gene_nodes) + len(disease_nodes) + len(drug_nodes) + len(phenotype_nodes)
+            num_total_nodes = len(gene_nodes) + len(disease_nodes) + len(drug_nodes)
 
             if wildcard_node_count > 1:
                 raise(TooManyContributionNodes)
-            if len(disease_nodes) > 1:
-                raise(TooManyDiseaseNodes)
-            if len(phenotype_nodes) > 1:
-                raise(TooManyPhenotypeNodes)
 
-            if num_total_nodes == 2 and len(phenotype_nodes) == 0:
-                if self._check_one_hop_query(qg, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
-                    return 'onehop'
+            if num_total_nodes == 2:
+                return 'onehop'
             else:
                 raise(UnidentifiedQueryType)
-    
+
     def get_conflation_map(self):
         return self.conflation_map
 
@@ -238,7 +221,7 @@ class TrapiInterface:
         return ConflationMap(conflation_map_filename=self.bkb_handler.conflation_map_path)
 
     def get_curies(self):
-        return self.curies_db
+        return self.curies
 
     def _get_curies(self):
         """ Returns the available curies and their associated names.
@@ -271,54 +254,6 @@ class TrapiInterface:
                 is_inverse = True
                 return True, is_inverse
         return False, False
-
-    def _check_one_hop_query(self, query_graph, gene_nodes, drug_nodes, disease_nodes, wildcard_node):
-        for edge_id, edge in query_graph.edges.items():
-
-            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENE_ASSOCIATED_WITH_CONDITION_ENTITY)
-            if is_valid:
-                if is_inverse:
-                    if edge.subject not in disease_nodes  or edge.object not in gene_nodes or (wildcard_node is not None and edge.subject == wildcard_node):
-                        raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
-                else:
-                    if edge.subject not in gene_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
-                        raise(MalformedSubjectObjectOnGeneToDisease(edge_id))
-                continue
-
-            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_TREATS_ENTITY)
-            if is_valid:
-                if is_inverse:
-                    if edge.subject not in disease_nodes or edge.object not in drug_nodes or (wildcard_node is not None and edge.subject == wildcard_node):
-                        raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
-                else:
-                    if edge.subject not in drug_nodes or edge.object not in disease_nodes or (wildcard_node is not None and edge.object == wildcard_node):
-                        raise(MalformedSubjectObjectOnDrugToDisease(edge_id))
-                continue
-
-            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_GENETICALLY_INTERACTS_WITH_ENTITY)
-            if is_valid:
-                if is_inverse:
-                    if edge.subject not in gene_nodes or edge.object not in gene_nodes:
-                        raise(MalformedSubjectObjectOnGeneToGene(edge_id))
-                else:
-                    if edge.subject not in gene_nodes or edge.object not in gene_nodes:
-                        raise(MalformedSubjectObjectOnGeneToGene(edge_id))
-
-                continue
-
-            is_valid, is_inverse = self.check_predicate_support(edge.predicates[0], BIOLINK_INTERACTS_WITH_ENTITY)
-            if is_valid:
-                if is_inverse:
-                    if len(gene_nodes) != len(drug_nodes):
-                        raise(MalformedSubjectObjectOnDrugGene(edge_id))
-                else:
-                    if len(gene_nodes) != len(drug_nodes):
-                        raise(MalformedSubjectObjectOnDrugGene(edge_id))
-                continue
-
-            # unexpected edge
-            raise(UnexpectedEdgeType(edge_id))
-        return True
 
     def _get_handler(self, message_type=None):
         if message_type == 'onehop':
