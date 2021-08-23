@@ -42,8 +42,6 @@ class TestBaseHandler(unittest.TestCase):
                 joint_reasoner=self.joint_reasoner,
                 )
         curies = interface.get_curies()
-        print(type(curies))
-        print(curies)
         self.assertIsInstance(curies, dict)
 
     def test_meta_knowledge_graph(self):
