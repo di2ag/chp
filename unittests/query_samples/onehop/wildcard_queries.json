@@ -23,7 +23,7 @@
             "edges": {
               "e0": {
                 "predicates": [
-                  "biolink:gene_associated_with_condition"
+                  "biolink:has_real_world_evidence_of_association_with"
                 ],
                 "relation": null,
                 "subject": "n0",
