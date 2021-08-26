@@ -221,7 +221,7 @@ class TrapiInterface:
         return ConflationMap(conflation_map_filename=self.bkb_handler.conflation_map_path)
 
     def get_curies(self):
-        return self.curies
+        return self.curies_db
 
     def _get_curies(self):
         """ Returns the available curies and their associated names.
