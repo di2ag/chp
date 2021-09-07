@@ -51,7 +51,7 @@ class BaseHandler:
         if bkb_handler is None:
             self.bkb_data_handler = BkbDataHandler(
                 bkb_major_version='darwin',
-                bkb_minor_version='1.0',
+                bkb_minor_version='2.0',
                 disease='tcga',
             )
         else:
