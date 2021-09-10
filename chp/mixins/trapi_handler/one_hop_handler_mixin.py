@@ -254,69 +254,46 @@ class OneHopHandlerMixin:
             return chp_query
         else:
             # Do this if a disease node is present
-            if len(chp_query.meta_evidence.keys()) == 0:
-                # probability of survival
-                chp_query = self.joint_reasoner.run_query(chp_query)
-                if len(chp_query.result) > 0:
-                    # If a probability was found for the truth target
-                    if chp_query.truth_target in chp_query.result:
-                        total_unnormalized_prob = 0
-                        for target, contrib in chp_query.result.items():
-                            prob = max(0, contrib)
-                            total_unnormalized_prob += prob
-                        chp_query.truth_prob = max([0, chp_query.result[(chp_query.truth_target)]])/total_unnormalized_prob
-                    else:
-                        chp_query.truth_prob = 0
-                else:
-                    chp_query.truth_prob = -1
-                
-                # patient_contributions
-                num_all = len(self.joint_reasoner.patient_data)
-                num_matched = chp_query.truth_prob * num_all
-                patient_contributions = defaultdict(lambda: defaultdict(int))
-                for patient, feature_dict in self.joint_reasoner.patient_data.items():
-                    for predicate_proxy, proxy_info in chp_query.dynamic_targets.items():
-                        proxy_op_str = proxy_info["op"]
-                        proxy_op = get_operator(proxy_op_str)
-                        proxy_opp_op = get_opposite_operator(proxy_op_str)
-                        proxy_value = proxy_info["value"]
-                        if proxy_op(feature_dict[predicate_proxy], proxy_value):
-                            if num_matched == 0:
-                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op_str, proxy_value))][patient] = 0
-                            else:
-                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_op_str, proxy_value))][patient] = chp_query.truth_prob/num_matched
-                        else:
-                            if num_matched == 0:
-                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = 1/num_all
-                            else:
-                                patient_contributions[(predicate_proxy, '{} {}'.format(proxy_opp_op, proxy_value))][patient] = (1-chp_query.truth_prob)/(num_all-num_matched)
+            if query_type == 'gene' or query_type == 'drug_two_hop':
+                chp_query = self.joint_reasoner.run_query(chp_query, bkb_type='drug')
+                chp_query2 = self.dynamic_reasoner.run_query(copy.deepcopy(chp_query), bkb_type='drug')
+            elif query_type == 'drug' or query_type == 'gene_two_hop':
+                chp_query = self.joint_reasoner.run_query(chp_query, bkb_type='gene')
+                chp_query2 = self.dynamic_reasoner.run_query(copy.deepcopy(chp_query), bkb_type='gene')
 
-            else:
-                if query_type == 'gene' or query_type == 'drug_two_hop':
-                    chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='drug')
-                elif query_type == 'drug' or query_type == 'gene_two_hop':
-                    chp_query = self.dynamic_reasoner.run_query(chp_query, bkb_type='gene')
-                chp_res_dict = chp_query.result.process_updates()
-                chp_res_norm_dict = chp_query.result.process_updates(normalize=True)
-                #chp_query.result.summary()
-                chp_res_contributions = chp_query.result.process_inode_contributions()
-                chp_query.truth_prob = max([0, chp_res_norm_dict[chp_query.truth_target[0]][chp_query.truth_target[1]]])
+            chp_res_dict = chp_query.result
+            chp_res_dict2 = chp_query2.result.process_updates(normalize=True)
+            print("probabilities")
+            print(chp_res_dict)
+            print(chp_res_dict2)
 
-                # Collect all source inodes and process patient hashes
-                patient_contributions = defaultdict(lambda: defaultdict(int))
-                for target, contrib_dict in chp_res_contributions.items():
-                    target_comp_name, target_state_name = target
-                    for inode, contrib in contrib_dict.items():
-                        comp_name, state_name = inode
-                        if '_Source_' in comp_name:
-                            # Split source state name to get patient hashes
-                            source_hashes_str = state_name.split('_')[-1]
-                            source_hashes = [int(source_hash) for source_hash in source_hashes_str.split(',')]
-                            hash_len = len(source_hashes)
-                            # Process patient contributions
-                            for _hash in source_hashes:
-                                # Normalize to get relative contribution
-                                patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
+            #chp_query.result.summary()
+            chp_res_contributions = chp_query2.result.process_inode_contributions()
+            print("contributions")
+            print(chp_query.contributions)
+            print(chp_res_contributions)
+
+            chp_query.truth_prob = chp_res_dict[chp_query.truth_target]
+
+            # Collect all source inodes and process patient hashes
+            patient_contributions = defaultdict(lambda: defaultdict(int))
+            for target, contrib_dict in chp_res_contributions.items():
+                target_comp_name, target_state_name = target
+                for inode, contrib in contrib_dict.items():
+                    comp_name, state_name = inode
+                    if '_Source_' in comp_name:
+                        # Split source state name to get patient hashes
+                        source_hashes_str = state_name.split('_')[-1]
+                        source_hashes = [int(source_hash) for source_hash in source_hashes_str.split(',')]
+                        hash_len = len(source_hashes)
+                        # Process patient contributions
+                        for _hash in source_hashes:
+                            # Normalize to get relative contribution
+                            patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
+
+            print("patient contributions")
+            print(patient_contributions)
+
         # Now iterate through the patient data to translate patient contributions to drug/gene contributions
         wildcard_contributions = defaultdict(lambda: defaultdict(int))
         for target, patient_contrib_dict in patient_contributions.items():
