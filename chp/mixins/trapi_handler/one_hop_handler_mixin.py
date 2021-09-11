@@ -269,9 +269,9 @@ class OneHopHandlerMixin:
 
             #chp_query.result.summary()
             chp_res_contributions = chp_query2.result.process_inode_contributions()
-            print("contributions")
-            print(chp_query.contributions)
-            print(chp_res_contributions)
+            #print("contributions")
+            #print(chp_query.contributions)
+            #print(chp_res_contributions)
 
             chp_query.truth_prob = chp_res_dict[chp_query.truth_target]
 
@@ -291,8 +291,8 @@ class OneHopHandlerMixin:
                             # Normalize to get relative contribution
                             patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
 
-            print("patient contributions")
-            print(patient_contributions)
+            #print("patient contributions")
+            #print(patient_contributions)
 
         # Now iterate through the patient data to translate patient contributions to drug/gene contributions
         wildcard_contributions = defaultdict(lambda: defaultdict(int))
@@ -304,6 +304,11 @@ class OneHopHandlerMixin:
                 elif query_type == 'drug' or query_type == 'gene_two_hop':
                     for drug_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["drug_curies"]:
                         wildcard_contributions[drug_curie][target] += contrib
+
+        print('old school contributions')
+        print(wildcard_contributions)
+        print('new')
+        print(chp_query.contributions)
 
         # normalize gene contributions by the target and take relative difference
         for curie in wildcard_contributions.keys():

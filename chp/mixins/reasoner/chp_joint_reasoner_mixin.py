@@ -28,12 +28,20 @@ class ChpJointReasonerMixin:
 
     def run_query(self, query, bkb_type='gene'):
         # Compute joint probability
+        if bkb_type == 'gene':
+            contribution_feature_type = 'ENSEMBL'
+        elif bkb_type == 'drug':
+            contribution_feature_type = 'CHEMBL.COMPOUND'
+        else:
+            contribution_feature_type = None
+
         evidence = query.compose_evidence(with_dynamic=False, meta_tag=False)
         res, contrib = self.joint_reasoner.compute_joint(
             evidence,
             query.targets,
             continuous_evidence=query.dynamic_evidence,
             continuous_targets=query.dynamic_targets,
+            contribution_features=contribution_feature_type,
             interp_type=bkb_type
         )
         # Set query parameters
