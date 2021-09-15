@@ -236,7 +236,7 @@ class OneHopHandlerMixin:
             their true/false target assignments.
         """
         if query_type == 'standard':
-            chp_query = self.joint_reasoner.run_query(chp_query)
+            chp_query = self.joint_reasoner.run_query(chp_query, interpolation_type='gene')
             # If a probability was found for the target
             if len(chp_query.result) > 0:
                 # If a probability was found for the truth target
@@ -255,61 +255,37 @@ class OneHopHandlerMixin:
         else:
             # Do this if a disease node is present
             if query_type == 'gene' or query_type == 'drug_two_hop':
-                chp_query = self.joint_reasoner.run_query(chp_query, bkb_type='drug')
-                chp_query2 = self.dynamic_reasoner.run_query(copy.deepcopy(chp_query), bkb_type='drug')
+                chp_query = self.joint_reasoner.run_query(chp_query, interpolation_type='drug', contribution_type='gene')
             elif query_type == 'drug' or query_type == 'gene_two_hop':
-                chp_query = self.joint_reasoner.run_query(chp_query, bkb_type='gene')
-                chp_query2 = self.dynamic_reasoner.run_query(copy.deepcopy(chp_query), bkb_type='gene')
+                chp_query = self.joint_reasoner.run_query(chp_query, interpolation_type='gene', contribution_type='drug')
 
             chp_res_dict = chp_query.result
-            chp_res_dict2 = chp_query2.result.process_updates(normalize=True)
-            print("probabilities")
-            print(chp_res_dict)
-            print(chp_res_dict2)
+            if chp_query.truth_target in chp_res_dict:
+                unnormalized_truth_prob = chp_res_dict[chp_query.truth_target]
+            else:
+                unnormalized_truth_prob = 0
 
-            #chp_query.result.summary()
-            chp_res_contributions = chp_query2.result.process_inode_contributions()
-            #print("contributions")
-            #print(chp_query.contributions)
-            #print(chp_res_contributions)
+            normalize = 0
+            for target, prob in chp_res_dict.items():
+                normalize += prob
+            unnormalized_false_prob = normalize - unnormalized_truth_prob
 
-            chp_query.truth_prob = chp_res_dict[chp_query.truth_target]
+            for target in chp_res_dict.keys():
+                chp_res_dict[target] /= normalize
 
-            # Collect all source inodes and process patient hashes
-            patient_contributions = defaultdict(lambda: defaultdict(int))
-            for target, contrib_dict in chp_res_contributions.items():
-                target_comp_name, target_state_name = target
-                for inode, contrib in contrib_dict.items():
-                    comp_name, state_name = inode
-                    if '_Source_' in comp_name:
-                        # Split source state name to get patient hashes
-                        source_hashes_str = state_name.split('_')[-1]
-                        source_hashes = [int(source_hash) for source_hash in source_hashes_str.split(',')]
-                        hash_len = len(source_hashes)
-                        # Process patient contributions
-                        for _hash in source_hashes:
-                            # Normalize to get relative contribution
-                            patient_contributions[target][_hash] += contrib/hash_len #/ chp_res_dict[target_comp_name][target_state_name]
+            if chp_query.truth_target in chp_res_dict:
+                chp_query.truth_prob = chp_res_dict[chp_query.truth_target]
+            else:
+               chp_query.truth_target = 0
 
-            #print("patient contributions")
-            #print(patient_contributions)
-
-        # Now iterate through the patient data to translate patient contributions to drug/gene contributions
+        # organize the contributions over curie then target
         wildcard_contributions = defaultdict(lambda: defaultdict(int))
-        for target, patient_contrib_dict in patient_contributions.items():
-            for patient, contrib in patient_contrib_dict.items():
-                if query_type == 'gene' or query_type == 'drug_two_hop':
-                    for gene_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["gene_curies"]:
-                        wildcard_contributions[gene_curie][target] += contrib
-                elif query_type == 'drug' or query_type == 'gene_two_hop':
-                    for drug_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["drug_curies"]:
-                        wildcard_contributions[drug_curie][target] += contrib
+        for target, curies in chp_query.contributions.items():
+            for curie, contrib in curies.items():
+                if curie[1] == 'True':
+                    wildcard_contributions[curie[0]][target] = contrib
 
-        print('old school contributions')
-        print(wildcard_contributions)
-        print('new')
-        print(chp_query.contributions)
-
+        #for curie in wildcard_contributions.keys():
         # normalize gene contributions by the target and take relative difference
         for curie in wildcard_contributions.keys():
             truth_target_gene_contrib = 0
@@ -317,9 +293,9 @@ class OneHopHandlerMixin:
             for target, contrib in wildcard_contributions[curie].items():
                 try:
                     if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
-                        truth_target_gene_contrib += contrib / chp_query.truth_prob
+                        truth_target_gene_contrib += contrib / unnormalized_truth_prob
                     else:
-                        nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
+                        nontruth_target_gene_contrib += contrib / unnormalized_false_prob
                 except ZeroDivisionError:
                     continue
             wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
@@ -332,36 +308,46 @@ class OneHopHandlerMixin:
             truncated_sorted_wildcard_contributions = [(contrib,wildcard) for contrib, wildcard in sorted(unsorted_wildcard_contributions, key=lambda x: abs(x[0]), reverse=True)][:self.max_results]
             truncated_contribution_list = [curie[1] for curie in truncated_sorted_wildcard_contributions]
 
-            # Now iterate through the patient data to translate patient contributions for opposite type (i.e. drug_two_hop yields drug contributions and gene_two_hop yields gene contributions)
+            chp_query.contributions = None
             wildcard_contributions = defaultdict(lambda: defaultdict(int))
-            for target, patient_contrib_dict in patient_contributions.items():
-                for patient, contrib in patient_contrib_dict.items():
-                    if query_type == 'gene_two_hop':
-                        pat_drug_curies = self.dynamic_reasoner.raw_patient_data[int(patient)]["drug_curies"]
-                        for drug_curie in truncated_contribution_list:
-                            if drug_curie in pat_drug_curies:
-                                for gene_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["gene_curies"]:
-                                    wildcard_contributions[gene_curie][target] += contrib
-                    elif query_type == 'drug_two_hop':
-                        pat_gene_curies = self.dynamic_reasoner.raw_patient_data[int(patient)]["gene_curies"]
-                        for gene_curie in truncated_contribution_list:
-                            if gene_curie in pat_gene_curies:
-                                for drug_curie in self.dynamic_reasoner.raw_patient_data[int(patient)]["drug_curies"]:
-                                    wildcard_contributions[drug_curie][target] += contrib
+            for contrib in truncated_contribution_list:
+                chp_query_extended = copy.deepcopy(chp_query)
+                chp_query_extended.add_meta_evidence(contrib, 'True')
+                if query_type == 'drug_two_hop':
+                    chp_query_extended = self.joint_reasoner.run_query(chp_query_extended, contribution_type='drug')
+                else:
+                    chp_query_extended = self.joint_reasoner.run_query(chp_query_extended, contribution_type='gene')
 
-            # normalize gene contributions by the target and take relative difference
-            for curie in wildcard_contributions.keys():
-                truth_target_gene_contrib = 0
-                nontruth_target_gene_contrib = 0
-                for target, contrib in wildcard_contributions[curie].items():
-                    try:
-                        if target[0] == chp_query.truth_target[0] and target[1] == chp_query.truth_target[1]:
-                            truth_target_gene_contrib += contrib / chp_query.truth_prob
-                        else:
-                            nontruth_target_gene_contrib += contrib / (1 - chp_query.truth_prob)
-                    except ZeroDivisionError:
-                        continue
-                wildcard_contributions[curie]['relative'] = truth_target_gene_contrib - nontruth_target_gene_contrib
+                chp_res_dict = chp_query_extended.result
+                if chp_query_extended.truth_target in chp_res_dict:
+                    extended_unnormalized_truth_prob = chp_res_dict[chp_query_extended.truth_target]
+                else:
+                    extended_unnormalized_truth_prob = 0
+                normalize = 0
+                for target, prob in chp_res_dict.items():
+                    normalize += prob
+                extended_unnormalized_false_prob = normalize - extended_unnormalized_truth_prob
+
+                # organize the contributions over curie then target
+                extended_wildcard_contributions = defaultdict(lambda: defaultdict(int))
+                for target, curies in chp_query_extended.contributions.items():
+                    for curie, contrib in curies.items():
+                        if curie[1] == 'True':
+                            extended_wildcard_contributions[curie[0]][target] = contrib
+
+                # normalize gene contributions by the target and take relative difference
+                for curie in extended_wildcard_contributions.keys():
+                    truth_target_gene_contrib = 0
+                    nontruth_target_gene_contrib = 0
+                    for target, contrib in extended_wildcard_contributions[curie].items():
+                        try:
+                            if target[0] == chp_query_extended.truth_target[0] and target[1] == chp_query_extended.truth_target[1]:
+                                truth_target_gene_contrib += contrib / extended_unnormalized_truth_prob * unnormalized_truth_prob
+                            else:
+                                nontruth_target_gene_contrib += contrib / extended_unnormalized_false_prob * unnormalized_false_prob
+                        except ZeroDivisionError:
+                            continue
+                    wildcard_contributions[curie]['relative'] += (truth_target_gene_contrib - nontruth_target_gene_contrib)
 
         chp_query.report = None
         chp_query.wildcard_contributions = wildcard_contributions
@@ -477,6 +463,5 @@ class OneHopHandlerMixin:
                 message.results.add_result(
                         _node_bindings,
                         _edge_bindings,
-                        )
-        
+                        ) 
         return query

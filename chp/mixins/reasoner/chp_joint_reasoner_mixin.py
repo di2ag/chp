@@ -26,11 +26,19 @@ class ChpJointReasonerMixin:
                                             drug_interpolations=drug_interpolations)
         logger.info('Setup Joint Reasoner.')
 
-    def run_query(self, query, bkb_type='gene'):
+    def run_query(self, query, interpolation_type=None, contribution_type=None):
         # Compute joint probability
+        '''
         if bkb_type == 'gene':
-            contribution_feature_type = 'ENSEMBL'
+            if return_contributions:
+                contribution_feature_type = 'ENSEMBL'
         elif bkb_type == 'drug':
+            if return_contributions:
+                contribution_feature_type = 'CHEMBL.COMPOUND'
+        '''
+        if contribution_type == 'gene':
+            contribution_feature_type = 'ENSEMBL'
+        elif contribution_type == 'drug':
             contribution_feature_type = 'CHEMBL.COMPOUND'
         else:
             contribution_feature_type = None
@@ -42,7 +50,7 @@ class ChpJointReasonerMixin:
             continuous_evidence=query.dynamic_evidence,
             continuous_targets=query.dynamic_targets,
             contribution_features=contribution_feature_type,
-            interp_type=bkb_type
+            interpolation_type=interpolation_type
         )
         # Set query parameters
         query.result = res
