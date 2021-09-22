@@ -36,7 +36,7 @@ class TrapiInterface:
                  bkb_handler=None,
                  joint_reasoner=None,
                  dynamic_reasoner=None,
-                 trapi_version='1.1',
+                 trapi_version='1.2',
                 ):
         self.hosts_filename = hosts_filename
         self.num_processes_per_host = num_processes_per_host
