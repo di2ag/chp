@@ -230,6 +230,7 @@ class TrapiInterface:
         return curies_db
 
     def get_meta_knowledge_graph(self):
+        print(type(self.meta_knowledge_graph))
         return self.meta_knowledge_graph
 
     def _get_meta_knowledge_graph(self):
