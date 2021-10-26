@@ -1,7 +1,11 @@
 from chp.trapi_interface import TrapiInterface
 from chp.app.apps import *
+from collections import defaultdict
+from time import time
+from trapi_model.biolink.constants import *
+import json
 
-def get_app_config():
+def get_app_config(query):
     return ChpApiConfig
 
 def get_trapi_interface(chp_config=None):
@@ -29,7 +33,9 @@ def get_response(consistent_queries):
     app_logs = []
     try:
         interface_dict = setup_queries_based_on_disease_interfaces(consistent_queries)
+        print(interface_dict)
     except ValueError as ex:
+        print("ex reachedc",ex)
         responses = []
         status = 'Bad request. See description.'
         description = 'Problem during setup. ' + str(ex)
@@ -60,7 +66,7 @@ def get_response(consistent_queries):
         response = []
         status = 'Bad request. See description.'
         description = 'Problem during CHP query building. '+ str(ex)
-        return responses, app_logs, status, description
+        return response, app_logs, status, description
 
     logger.info('Built Queries.')
     # Run queries
@@ -78,7 +84,7 @@ def get_response(consistent_queries):
         description = 'Problem during reasoning. ' + str(ex)
         # Report critical error to logs
         logger.critical('Error during reasoning. Check query: {}'.format(query_copy.id))
-        return responses, app_logs, status, description
+        return response, app_logs, status, description
 
     # Construct Response
     responses = []
@@ -125,6 +131,7 @@ def setup_queries_based_on_disease_interfaces(queries):
     config_dict = defaultdict(list)
     for query in queries:
         disease_nodes = get_disease_nodes(query)
+        print(disease_nodes)
         if disease_nodes is not None:
             if len(disease_nodes) > 1:
                 query.info('Using {} config.'.format(ChpApiConfig.name))
