@@ -1,7 +1,7 @@
 from chp.trapi_interface import TrapiInterface
 from chp.app.apps import *
 from collections import defaultdict
-from time import time
+import time
 from trapi_model.biolink.constants import *
 import json
 
@@ -30,12 +30,10 @@ def get_meta_knowledge_graph():
 def get_response(consistent_queries):
     """ Should return app responses plus app_logs, status, and description information.
     """
-    app_logs = []
+    app_logs:list = []
     try:
-        interface_dict = setup_queries_based_on_disease_interfaces(consistent_queries)
-        print(interface_dict)
+        interface_dict:defaultdict = setup_queries_based_on_disease_interfaces(consistent_queries)
     except ValueError as ex:
-        print("ex reachedc",ex)
         responses = []
         status = 'Bad request. See description.'
         description = 'Problem during setup. ' + str(ex)
@@ -127,21 +125,20 @@ def get_disease_specific_config(disease_node):
         chp_config = ChpApiConfig
     return chp_config
 
-def setup_queries_based_on_disease_interfaces(queries):
+def setup_queries_based_on_disease_interfaces(consistent_queries):
     config_dict = defaultdict(list)
-    for query in queries:
-        disease_nodes = get_disease_nodes(query)
-        print(disease_nodes)
+    for consistent_query in consistent_queries:
+        disease_nodes = get_disease_nodes(consistent_query)
         if disease_nodes is not None:
             if len(disease_nodes) > 1:
-                query.info('Using {} config.'.format(ChpApiConfig.name))
-                config_dict[ChpApiConfig].append(query)
+                consistent_query.info('Using {} config.'.format(ChpApiConfig.name))
+                config_dict[ChpApiConfig].append(consistent_query)
                 continue
             chp_config = get_disease_specific_config(disease_nodes[0])
-            query.info('Using {} config.'.format(chp_config.name))
-            config_dict[chp_config].append(query)
+            consistent_query.info('Using {} config.'.format(chp_config.name))
+            config_dict[chp_config].append(consistent_query)
         else:
-            config_dict[ChpApiConfig].append(query)
+            config_dict[ChpApiConfig].append(consistent_query)
             continue
     interface_dict = {get_trapi_interface(chp_config): _queries for chp_config, _queries in config_dict.items()}
     return interface_dict
