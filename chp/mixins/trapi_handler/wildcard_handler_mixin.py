@@ -395,6 +395,7 @@ class WildCardHandlerMixin:
                             attribute_type_id='Contribution',
                             value=contrib,
                             value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
+                            description='Inference is derived from cancer data. Contribution reflects sensitivity of nodes to patient survival time. Contribution values closer to 1 are correlated with longer survival time and contribution values closer to -1 are correlated with shorter survival time.'
                             )
                     _edge_bindings[qedge_id] = [kedge_id]
                 elif query_type == 'gene' and self.check_predicate_support(qedge.predicates[0], BIOLINK_CONDITION_ASSOCIATED_WITH_GENE_ENTITY) and qg.nodes[object_node].categories[0] == BIOLINK_GENE_ENTITY:
@@ -408,6 +409,7 @@ class WildCardHandlerMixin:
                             attribute_type_id='Contribution',
                             value=contrib,
                             value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
+                            description='Inference is derived from cancer data. Contribution reflects sensitivity of nodes to patient survival time. Contribution values closer to 1 are correlated with longer survival time and contribution values closer to -1 are correlated with shorter survival time.'
                             )
                     _edge_bindings[qedge_id] = [kedge_id]
                 elif query_type == 'drug' and self.check_predicate_support(qedge.predicates[0], BIOLINK_TREATS_ENTITY) and qg.nodes[subject_node].categories[0] == BIOLINK_DRUG_ENTITY:
@@ -421,6 +423,7 @@ class WildCardHandlerMixin:
                             attribute_type_id='Contribution',
                             value=contrib,
                             value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
+                            description='Inference is derived from cancer data. Contribution reflects sensitivity of nodes to patient survival time. Contribution values closer to 1 are correlated with longer survival time and contribution values closer to -1 are correlated with shorter survival time.'
                             )
                     _edge_bindings[qedge_id] = [kedge_id]
                 elif query_type == 'drug' and self.check_predicate_support(qedge.predicates[0], BIOLINK_TREATED_BY_ENTITY) and qg.nodes[object_node].categories[0] == BIOLINK_DRUG_ENTITY:
@@ -434,6 +437,7 @@ class WildCardHandlerMixin:
                             attribute_type_id='Contribution',
                             value=contrib,
                             value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
+                            description='Inference is derived from cancer data. Contribution reflects sensitivity of nodes to patient survival time. Contribution values closer to 1 are correlated with longer survival time and contribution values closer to -1 are correlated with shorter survival time.'
                             )
                     _edge_bindings[qedge_id] = [kedge_id]
                 else:

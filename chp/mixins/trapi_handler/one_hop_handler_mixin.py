@@ -457,6 +457,7 @@ class OneHopHandlerMixin:
                             attribute_type_id='Contribution',
                             value=contrib,
                             value_type_id=BIOLINK_HAS_EVIDENCE_ENTITY.get_curie(),
+                            description='Inference is derived from cancer data. Contribution reflects sensitivity of nodes to patient survival time. Contribution values closer to 1 are correlated with longer survival time and contribution values closer to -1 are correlated with shorter survival time.'
                             )
                     _edge_bindings[qedge_id] = [kedge_id]
                 # Process node and edge binding results

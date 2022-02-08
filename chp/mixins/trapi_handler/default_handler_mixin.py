@@ -233,6 +233,7 @@ class DefaultHandlerMixin:
                         attribute_type_id='Probability of Survival',
                         value=chp_query.truth_prob,
                         value_type_id=BIOLINK_HAS_CONFIDENCE_LEVEL_ENTITY.get_curie(),
+                        description='Inference is derived from cancer data. Probability of Survival captures the likelihood of a patient surviving x number of days (default 970 days) under the context of factors linked in this relation.' 
                         )
         # Proces results
         message.results.add_result(
