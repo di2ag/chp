@@ -19,7 +19,7 @@ setup(
     author='Chase Yakaboski',
     author_email='chase.th@dartmouth.edu',
     description='NCATS Connections Hypothesis Provider',
-    packages=find_packages(),
+    packages=find_packages().append('chp.app'),
     install_requires=REQUIRED_PACKAGES,
     python_requires='>=3.8',
     dependency_links=[
