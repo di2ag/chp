@@ -39,6 +39,12 @@ def get_response(consistent_queries):
         description = 'Problem during setup. ' + str(ex)
         return responses, app_logs, status, description
 
+    if len(interface_dict.keys()) == 0:
+        responses = []
+        status = 'Bad request. See description.'
+        description = 'Disease Curies are invalid or can not be handled.'
+        return responses, app_logs, status, description
+
     # Setup for CHP inferencing
     try:
         setup_time = time.time()
@@ -114,7 +120,8 @@ def get_disease_nodes(query):
 
 def get_disease_specific_config(disease_node):
     if disease_node.ids is None:
-        raise ValueError('Do not support Disease wildcards. Must specify a disease curie.')
+        return None
+        #raise ValueError('Do not support Disease wildcards. Must specify a disease curie.')
     if disease_node.ids[0] == 'MONDO:0005061':
         chp_config = ChpLungApiConfig
     elif disease_node.ids[0] == 'MONDO:0001657':
@@ -122,7 +129,8 @@ def get_disease_specific_config(disease_node):
     elif disease_node.ids[0] == 'MONDO:0007254':
         chp_config = ChpBreastApiConfig
     else:
-        chp_config = ChpApiConfig
+        return None
+        #chp_config = ChpApiConfig
     return chp_config
 
 def setup_queries_based_on_disease_interfaces(consistent_queries):
@@ -135,8 +143,9 @@ def setup_queries_based_on_disease_interfaces(consistent_queries):
                 config_dict[ChpApiConfig].append(consistent_query)
                 continue
             chp_config = get_disease_specific_config(disease_nodes[0])
-            consistent_query.info('Using {} config.'.format(chp_config.name))
-            config_dict[chp_config].append(consistent_query)
+            if chp_config is not None:
+                consistent_query.info('Using {} config.'.format(chp_config.name))
+                config_dict[chp_config].append(consistent_query)
         else:
             config_dict[ChpApiConfig].append(consistent_query)
             continue
