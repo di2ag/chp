@@ -303,3 +303,6 @@ class TrapiInterface:
             logger.info('Constructing TRAPI response(s) for {} type message(s).'.format(message_type))
             responses.extend(handler.construct_trapi_responses())
         return responses
+
+    def get_name(self):
+        return 'chp_core'
